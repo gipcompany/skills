@@ -1,5 +1,7 @@
 # skills
 
+[![Skills](https://www.skills.sh/b/gipcompany/skills)](https://www.skills.sh/gipcompany/skills)
+
 A collection of agent skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and other agents that support the [SKILL.md format](https://skills.sh).
 
 ## Skills
