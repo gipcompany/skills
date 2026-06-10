@@ -92,7 +92,7 @@ The skill never deletes the backup branch and never pushes to a remote — both 
 
 - Reordering or squashing multiple existing commits → `git rebase -i`
 - Splitting uncommitted changes → `git add -p`
-- Managing stacked PRs → [gh-stack](https://github.com/timothyandrew/gh-stack)
+- Managing stacked PRs → [spr](https://github.com/ejoffe/spr)
 
 ## License
 
