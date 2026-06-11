@@ -5,6 +5,8 @@
 
 A collection of agent skills for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) and other agents that support the [SKILL.md format](https://skills.sh).
 
+**Featured:** [`carve-it`](#carve-it) — **split a large commit into smaller, review-sized commits.** Break up one big commit into a sequence of small, atomic, Conventional-Commits-pure commits that each pass CI on their own, without changing your branch's final state.
+
 ## Skills
 
 | Skill | Description |
@@ -25,7 +27,7 @@ npx skills add https://github.com/gipcompany/skills
 
 ## carve-it
 
-You wrote (or generated) one big commit. Reviewers hate it. `carve-it` rewrites it into a sequence of small, semantically pure commits without changing the final state of your branch.
+**Split one large commit into multiple smaller commits.** You wrote (or generated) one big commit — maybe an AI agent produced a sprawling diff — and reviewers hate it. `carve-it` rewrites it into a sequence of small, semantically pure commits (atomic commits, one logical change each) without changing the final state of your branch. Useful whenever you want to break up a commit, make a huge diff reviewable, keep history bisectable, or enforce clean Conventional Commits boundaries.
 
 ### Usage
 
