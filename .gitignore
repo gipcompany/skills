@@ -1,0 +1,4 @@
+# Local agent / tooling scratch (not part of the published skill)
+.discoverability/
+.claude/
+.serena/
