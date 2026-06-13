@@ -1,6 +1,16 @@
 ---
 name: carve-it
-description: 'Replace a single large commit on the current branch, in place, with a sequence of small review-sized commits, each of which passes CI on its own. Every commit is 100% pure in its Conventional Commits type (refactor means zero behavior change). Automatically creates a timestamped backup branch before rewriting, and fully preserves the original commit''s author, dates, and tree. Descendant commits are restacked automatically. Triggers: "split this commit", "break this commit into reviewable pieces", "split this commit into semantic units", "split this commit into meaningful units", "carve". Do not use for: reordering/squashing multiple existing commits → git rebase / splitting uncommitted changes → git add -p / managing stacked PRs → gh-stack.'
+description: "Use when replace a single large commit on the current branch, in
+  place, with a sequence of small review-sized commits, each of which passes CI
+  on its own. Every commit is 100% pure in its Conventional Commits type
+  (refactor means zero behavior change). Automatically creates a timestamped
+  backup branch before rewriting, and fully preserves the original commit's
+  author, dates, and tree. Descendant commits are restacked automatically.
+  Triggers: \"split this commit\", \"break this commit into reviewable pieces\",
+  \"split this commit into semantic units\", \"split this commit into meaningful
+  units\", \"carve\". Do not use for: reordering/squashing multiple existing
+  commits → git rebase / splitting uncommitted changes → git add -p / managing
+  stacked PRs → gh-stack."
 ---
 
 # Split Large Commit into Logical Sequence
