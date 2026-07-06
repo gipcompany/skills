@@ -26,8 +26,23 @@ fi
 
 branch="${1:-$(git symbolic-ref --short HEAD)}"
 
-latest="$(git for-each-ref --sort=-refname \
-  --format='%(refname:short)' "refs/heads/backup/${branch}/" | head -n1)"
+# Backups this branch owns are exactly backup/<branch>/<YYYYMMDD-HHMMSS>. A
+# prefix match on refs/heads/backup/<branch>/ ALSO catches a nested branch's
+# backups (backup/<branch>/<sub>/<ts>, e.g. when both 'feature' and
+# 'feature/notifications' were carved), and such a nested name can sort
+# lexically ABOVE our own timestamps — which would roll back onto the wrong
+# branch. Walk the prefix newest-first and take the first DIRECT child whose
+# leaf is a timestamp, skipping anything nested. (No pipe to `head`, so a
+# large backup set can't trip pipefail via SIGPIPE either.)
+prefix="backup/${branch}/"
+latest=""
+while IFS= read -r ref; do
+  case "${ref#"${prefix}"}" in
+    */*) continue ;;  # a nested branch's backup — not ours
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9][0-9][0-9]) latest="${ref}"; break ;;
+  esac
+done < <(git for-each-ref --sort=-refname \
+  --format='%(refname:short)' "refs/heads/${prefix}")
 
 if [ -z "${latest}" ]; then
   echo "restore.sh: no backup found under backup/${branch}/" >&2
