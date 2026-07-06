@@ -117,7 +117,7 @@ Arbitrary web URLs, GitHub PR bodies, Gists, and bare issue-number shorthand are
 
 ### Requires `/grilling`
 
-kabeuchi **delegates the entire interview to a `/grilling` skill and does not bundle it.** `/grilling` is a standalone, relentless one-question-at-a-time design-interview skill — install it into your skills directory first. If it is unavailable at startup, kabeuchi stops and tells you how to get it rather than falling back to an ad-hoc interview.
+kabeuchi **delegates the entire interview to a `/grilling` skill and does not bundle it.** `/grilling` is a standalone, relentless one-question-at-a-time design-interview skill — install it into your skills directory first (from [mattpocock/skills](https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md)). If it is unavailable at startup, kabeuchi stops and tells you how to get it rather than falling back to an ad-hoc interview.
 
 ### How it stays safe
 
