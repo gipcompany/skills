@@ -1,0 +1,91 @@
+---
+name: kabeuchi
+description: "Use when you want a relentless /grilling (kabeuchi / 壁打ち) session
+  whose conclusions are continuously written back, in place, into one specific
+  writable markdown target — a GitHub issue body or a local markdown file — so
+  the target always reflects the current agreed spec. Invoked explicitly as
+  /kabeuchi <target>. Requires the /grilling skill (referenced, not bundled). Not
+  for read-only targets, arbitrary web URLs, GitHub PR bodies, Gists, or
+  issue-number shorthand."
+disable-model-invocation: true
+---
+
+# Kabeuchi — Grill a spec, write the conclusions back into it
+
+Run a relentless interview about a target markdown document and, **every time a point is settled, reflect that conclusion back into the target in place** — so the target is never a log of the discussion but always a clean spec of the current agreed state.
+
+This is a **thin delegation wrapper over `/grilling`**. It is the same shape as `grill-with-docs` (which runs `/grilling` and feeds the result into `/domain-modeling` to produce ADRs and a glossary), except the artifact is replaced: instead of separate ADR/glossary docs, the artifact is **the target markdown itself**. The interview tone — one question at a time, unrelenting, always with a recommended answer — is **not re-implemented here; it is delegated to `/grilling`**. This skill adds only two things on top: reading/writing the target, and handling concurrent edits safely.
+
+## Usage
+
+```
+/kabeuchi <target>
+```
+
+`<target>` must be **writable markdown**. Exactly two kinds are supported (v1):
+
+- **A GitHub issue URL** — `https://github.com/<owner>/<repo>/issues/<N>`, any repo you can reach via `gh`. The **issue body only** is the target; comments are never read and never posted.
+- **A local markdown file path** — resolved relative to the current working directory.
+
+Out of scope for v1 (reject these): arbitrary web URLs, GitHub **PR** bodies, Gists, and bare issue-number shorthand.
+
+`$ARGUMENTS` is the target. If it matches `https://github.com/.../issues/<N>` treat it as a GitHub issue; otherwise treat it as a local markdown path.
+
+## Requires `/grilling`
+
+kabeuchi delegates the entire interview to the **`/grilling`** skill and does **not** bundle it. It is referenced, not vendored.
+
+**Preflight:** at startup, confirm `/grilling` is available. If it is not, **stop and tell the user how to install it** — do not silently fall back to an ad-hoc interview. Install it from
+<https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md>
+into your skills directory (e.g. `~/.claude/skills/grilling/SKILL.md`), then re-run kabeuchi.
+
+**Related skills.** `grill-me` and `grill-with-docs` are neighbors that also run a relentless interview. kabeuchi specifically requires the `/grilling` entrypoint and adds write-back to the target. If you only have `grill-me`, use it directly — kabeuchi is not a drop-in over it.
+
+## Phase 1: Resolve the target and run preflight
+
+Classify the target, then verify you can actually **write** it before spending the session — the point is to avoid grilling for an hour and only then discovering the conclusions cannot be saved.
+
+**GitHub issue target** — read the body and metadata (body only — never touch comments), and check writability/lock state up front:
+
+```bash
+gh issue view "$URL" --json body,state,closed,url --jq '{state, closed, url}'
+gh issue view "$URL" --json body --jq .body                 # the target body
+gh api "repos/OWNER/REPO"          --jq .permissions.push   # can I write?  (true/false)
+gh api "repos/OWNER/REPO/issues/N" --jq .locked             # is it locked? (true/false)
+```
+
+(`gh issue view --json` has no `locked` field, so read `locked` via the REST API.)
+
+**Local file target** — if the file exists, read it. If it does not, ask whether to create it (a from-scratch spec is a legitimate use). Reject anything that is not text markdown.
+
+**Then** establish the sync baseline: normalize the body through `scripts/normalize.sh` and keep the normalized *text* as `last_synced` (it is the merge base for conflict resolution, so keep the text, not only a hash).
+
+See **`references/gotchas.md`** for the full preflight edge-case table (404, locked, closed-but-writable, empty → from-scratch mode, etc.).
+
+## Phase 2: Grill, and reflect each conclusion in place
+
+Run `/grilling` on the target. Follow its conventions exactly — one question at a time, wait for the answer before the next, always offer your recommended answer, prefer exploring the codebase over asking when the answer is discoverable there. Do not re-implement or soften that tone here.
+
+**Each time a point is settled**, reflect it into the target: **rewrite the target in place** into the current agreed spec — an `Edit`-style overwrite of the affected section — **not** appending, not keeping a changelog, not logging the Q&A. **Before every write, present the concrete diff**; if the user objects, roll it back.
+
+Concurrency is handled the way `git` merges non-conflicting hunks — **optimistic detection, conservative resolution, no locks**. Immediately before each write, re-fetch and normalize the target and compare to `last_synced`; if it changed, run a 3-way merge; after writing, read the target back and verify it matches what you intended. The two helper scripts do the deterministic work:
+
+- **`scripts/normalize.sh`** — canonicalize a body (LF, strip trailing whitespace/newlines) for every read, comparison, and read-back.
+- **`scripts/merge3.sh <base> <mine> <theirs>`** — 3-way text merge in a self-cleaning temp dir. Exit `0` = clean (auto-integrate, and call out the folded-in external change), `1` = conflict (markers on stdout → a human resolves it, never auto-write), `2` = usage error.
+
+The full write-back loop, the flowchart, and the detect/resolve/verify detail live in **`references/conflict-resolution.md`**. Read it before your first write-back.
+
+**Writing:** GitHub issue → `gh issue edit "$URL" --body-file <file>` (use `--body-file`, not `--body`). Local file → write the file; kabeuchi performs **no git operations** (no `add`, `commit`, or `push`).
+
+## Phase 3: Finish
+
+- **Keep going until the user confirms** a shared understanding has been reached — the standard `/grilling` exit condition. Do not enact anything beyond updating the target.
+- **Summarize what was written back** to the target at the end.
+- **Do not wander** into adjacent work on your own initiative.
+- The target must contain **only the current agreed state** — never a change-history or discussion-log section.
+
+## Non-goals (v1)
+
+- No comment I/O on issues, no PR/Gist/arbitrary-URL targets, no issue-number shorthand.
+- No git side effects on local files.
+- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the two deterministic text helpers in `scripts/`; their tests live in `tests/` (`bash tests/run.sh`).
