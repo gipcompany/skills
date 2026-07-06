@@ -92,11 +92,43 @@ echo "restore.sh"
   assert_eq "dry-run reports the newest backup" "backup/work/20200102-000000" "$latest"
   assert_eq "dry-run does not move work" "$c2" "$(git -C "$d" rev-parse work)"
 
+  # The --run branch guard must be exercised via a branch that HAS a backup but
+  # is NOT checked out. (Targeting a backup-less branch would exit 1 through the
+  # earlier 'no backup found' path instead, leaving the destructive-reset guard
+  # untested.) 'work' stays checked out; we target 'other', which owns a backup.
+  git -C "$d" branch other "$c2"
+  git -C "$d" branch backup/other/20200101-000000 "$c1"
+  err="$(cd "$d" && bash "$SCRIPTS/restore.sh" --run other 2>&1 1>/dev/null)" && rc=0 || rc=$?
+  assert_eq "--run on a branch that isn't checked out refuses (exit 1)" "1" "$rc"
+  case "$err" in
+    *"current branch is 'work'"*) ok "refusal hits the current-branch guard, not 'no backup'" ;;
+    *) bad "refusal should hit the current-branch guard (got: ${err})" ;;
+  esac
+  assert_eq "guarded --run leaves the target branch untouched" "$c2" "$(git -C "$d" rev-parse other)"
+
+  # The distinct 'no backup found' refusal path (also exit 1).
   rc=0; (cd "$d" && bash "$SCRIPTS/restore.sh" --run nope) >/dev/null 2>&1 || rc=$?
-  assert_eq "--run on a non-checked-out branch refuses (exit 1)" "1" "$rc"
+  assert_eq "--run on a branch with no backup exits 1" "1" "$rc"
 
   (cd "$d" && bash "$SCRIPTS/restore.sh" --run work) >/dev/null 2>&1
   assert_eq "--run resets work to the newest backup" "$c1" "$(git -C "$d" rev-parse work)"
+  rm -rf "$d"
+}
+
+echo "restore.sh (nested-branch backup isolation)"
+{
+  d="$(new_repo)"
+  git -C "$d" branch -m work feature
+  c1="$(git -C "$d" rev-parse feature)"
+  git -C "$d" branch backup/feature/20200101-000000 "$c1"
+  # A leftover backup that BELONGS TO 'feature/notifications' (a different
+  # branch). 'notifications' sorts lexically above any digit, so a naive prefix
+  # match on backup/feature/ would surface it first and roll 'feature' back onto
+  # the wrong branch's snapshot. restore.sh must ignore nested backups.
+  git -C "$d" branch backup/feature/notifications/20991231-235959 "$c1"
+  out="$(cd "$d" && bash "$SCRIPTS/restore.sh" feature)"
+  latest="$(printf '%s\n' "$out" | sed -n 's/^latest backup: //p')"
+  assert_eq "dry-run ignores a nested branch's backup" "backup/feature/20200101-000000" "$latest"
   rm -rf "$d"
 }
 
