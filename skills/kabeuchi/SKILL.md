@@ -49,8 +49,10 @@ status is `true`'s, not mark.sh's — a mark.sh that is missing, unreadable, or
 broken outright still cannot stop `/kabeuchi` from starting. (`|| true` on the
 command itself does *not* work: combined with the heredoc it defeats the
 permission checker's static analysis, and an unanalyzable command aborts the
-invocation just as a failing one does. `Bash(true)` is in `allowed-tools` so the
-trailing statement is covered by the same grant.)
+invocation just as a failing one does. `Bash(true)` is in `allowed-tools` as
+insurance rather than necessity — the trailing statement passes the permission
+check without it today, but the grant confers nothing and its absence would
+abort every invocation if that ever tightened.)
 
 A marker that outlives its session cannot mislead anyone — it is keyed by
 session id, and the next session has a different one — but it should still not
@@ -152,6 +154,13 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   line keeps claiming a grilling that has ended, and a bar that lies is worse
   than no bar. Clearing it also silences the per-turn hook for the rest of the
   session.
+
+  **The grilling is over only when the user says it is** — the exit condition at
+  the top of this phase. Ending your turn to wait for an answer is not the end of
+  the grilling, and neither is being told to stop talking: you end a turn after
+  every single question. Clear the marker on either of those and the bar goes
+  dark after your first question, which is the one thing this whole mechanism
+  exists to prevent.
 
 ## Non-goals (v1)
 
