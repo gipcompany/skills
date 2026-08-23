@@ -71,24 +71,39 @@ Exit status is non-zero if any assertion fails; the last line reports
 ## CI
 
 `.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
-request that touches `skills/kabeuchi/**`. `shellcheck` ships preinstalled on the
-`ubuntu-latest` runner, and all four scripts plus this test file are clean at its
-default severity.
+request that touches `skills/kabeuchi/**` or the workflow itself. `shellcheck`
+ships preinstalled on the `ubuntu-latest` runner, and all four scripts plus this
+test file are clean at its default severity.
 
 ```yaml
 name: kabeuchi tests
 on:
   push:
-    paths: ['skills/kabeuchi/**']
+    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
   pull_request:
-    paths: ['skills/kabeuchi/**']
+    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: helper-script tests
         run: bash skills/kabeuchi/tests/run.sh
       - name: shellcheck
         run: shellcheck skills/kabeuchi/scripts/*.sh skills/kabeuchi/tests/*.sh
 ```
+
+The trigger is `pull_request`, never `pull_request_target`: a fork's PR runs the
+fork's code, so it must run with a read-only token and no access to secrets.
+`permissions: contents: read` narrows that token further, `persist-credentials:
+false` keeps it out of `.git/config` where the test steps could read it, and
+`timeout-minutes` caps how long a fork's code can hold a runner. The action is
+pinned to a commit rather than a tag, since a tag can be moved to point at
+different code.

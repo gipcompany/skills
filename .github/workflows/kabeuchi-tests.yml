@@ -15,8 +15,19 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Two shell scripts on a preinstalled toolchain; a minute is generous. The
+    # cap matters because `pull_request` runs a fork's code on the runner, and
+    # the default is six hours of someone else's compute.
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to a commit, not a tag: a tag is a movable pointer, so `@v4`
+      # means "whatever actions/checkout points v4 at the moment this runs".
+      # 11d5960 is v4.4.0. Bump it deliberately, with the tag in the comment.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # checkout leaves the job's token in .git/config by default, where
+          # every later step can read it. Nothing here pushes or calls the API.
+          persist-credentials: false
 
       - name: helper-script tests
         run: bash skills/kabeuchi/tests/run.sh
