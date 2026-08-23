@@ -8,6 +8,12 @@ description: "Use when you want a relentless /grilling (kabeuchi / 壁打ち) se
   for read-only targets, arbitrary web URLs, GitHub PR bodies, Gists, or
   issue-number shorthand."
 disable-model-invocation: true
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/mark.sh *) Bash(true)
+hooks:
+  UserPromptSubmit:
+    - hooks:
+        - type: command
+          command: 'for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh" "${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
 ---
 
 # Kabeuchi — Grill a spec, write the conclusions back into it
@@ -15,6 +21,101 @@ disable-model-invocation: true
 Run a relentless interview about a target markdown document and, **every time a point is settled, reflect that conclusion back into the target in place** — so the target is never a log of the discussion but always a clean spec of the current agreed state.
 
 This is a **thin delegation wrapper over `/grilling`**. It is the same shape as `grill-with-docs` (which runs `/grilling` and feeds the result into `/domain-modeling` to produce ADRs and a glossary), except the artifact is replaced: instead of separate ADR/glossary docs, the artifact is **the target markdown itself**. The interview tone — one question at a time, unrelenting, always with a recommended answer — is **not re-implemented here; it is delegated to `/grilling`**. This skill adds only two things on top: reading/writing the target, and handling concurrent edits safely.
+
+## Session marker (runs before you read this)
+
+```!
+${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} '(resolving target)'
+true
+```
+
+The command above already ran — injected commands run before this content reaches
+you — so a marker for this session now exists at `~/.claude/kabeuchi/${CLAUDE_SESSION_ID}`.
+It is what makes the grilling visible from outside the conversation: the status
+line grows a second row reading `kabeuchi in progress · <target>` for as long as
+the marker exists, and the `UserPromptSubmit` hook in the frontmatter re-states
+the target and this skill's two rules on every turn. Both survive you forgetting
+to mention them, which is the point — a kabeuchi runs for dozens of turns.
+
+**Nothing the user typed appears on that command line.** The marker is seeded
+with a placeholder and Phase 1 replaces it with the resolved target a moment
+later, which is the whole reason the placeholder exists. `$ARGUMENTS` is
+substituted as *text* into the command line before the shell parses it, so a
+target that reached this line would be shell syntax: a quote or a `;` breaks the
+command apart and fails the permission check, which aborts the whole invocation.
+Quoting does not rescue it, because the quoting construct's own terminator is
+part of the substituted text — a `<<'EOF'` heredoc ends early on a target that
+contains its delimiter on a line of its own, and everything after that line runs
+as commands, with the trailing `true` below hiding the non-zero exit. Keeping
+`$ARGUMENTS` off the command line is the only thing that closes the class, and
+it costs one placeholder on screen. **Do not "improve" this by passing the
+target here.**
+
+`mark.sh` also exits `0` on every path, and the block ends with a bare `true` on
+its own line so that the block's exit status is `true`'s, not mark.sh's — a
+mark.sh that is missing, unreadable, or broken outright still cannot stop
+`/kabeuchi` from starting. (`Bash(true)` is in `allowed-tools` as insurance
+rather than necessity — the trailing statement passes the permission check
+without it today, but the grant confers nothing and its absence would abort
+every invocation if that ever tightened.)
+
+The `hooks:` block resolves `prompt-hook.sh` at run time rather than through
+`${CLAUDE_SKILL_DIR}`, which is not substituted there. It walks the four places
+this skill gets installed, in that order:
+
+1. `$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/...` — a plugin install, laid out the way
+   the docs describe: that variable is the plugin's root, and skills live under
+   `skills/<name>/`.
+2. `$CLAUDE_PLUGIN_ROOT/scripts/...` — the same variable, read as the *skill's own*
+   directory. Both forms are tried because the observed value for a
+   skill-registered hook has been the skill directory itself, which the docs do
+   not describe. Guessing wrong is free here: the marker check below rejects the
+   miss and the loop moves on.
+3. `$HOME/.claude/skills/kabeuchi/...` — a personal install.
+4. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo. The
+   variable stays pinned to the project root the session started in even after
+   Claude enters a worktree, which is what we want: the worktree shares the
+   checkout's copy.
+
+Plugin forms first, then **user over project** — deliberately the reverse of
+Claude Code's own skill precedence. The candidates are not equally sourced: a
+repository you cloned supplies candidate 4, while only you supply candidate 3.
+This hook then runs unattended on every prompt for the rest of the session, and
+unlike a hook declared in a project's `.claude/settings.json` it never surfaces
+for review, so the tie goes to the copy you installed yourself. The project
+checkout stays on the list, last, because a repo-only install — no plugin, no
+personal copy — is the case it was added for and still resolves.
+
+Each candidate is **grepped for the `kabeuchi-prompt-hook` marker before it is
+run**. A path is not an identity: these variables are read fresh from the environment
+on every turn, and a script sitting at the same relative path under some other
+plugin's root is not this skill's — without the check the hook would run it on
+every prompt the user submits for the rest of the session. The check also makes
+the fall-through correct rather than merely safe: an unrelated `$CLAUDE_PLUGIN_ROOT`
+simply fails to match and the loop moves on to the next candidate.
+
+**That marker is a collision guard, not an authentication check.** It is a
+literal string published in this repository, so anything that wants to be taken
+for this script can carry it, and git preserves the executable bit that would
+let it run. What the check rules out is the accident: an unrelated plugin or
+checkout that happens to keep a `prompt-hook.sh` at the same relative path. What
+it cannot rule out is a repository that planted a matching one on purpose —
+which is the whole reason candidate 4 sits below candidate 3. Invoking
+`/kabeuchi` inside a repository you do not trust is still trusting that
+repository.
+
+The `:+` (not `:-`) matters too — with `:-` an unset variable resolves its
+candidate to `/scripts/prompt-hook.sh` or `/.claude/skills/...`, at the
+filesystem root.
+
+A marker that outlives its session cannot mislead anyone — it is keyed by
+session id, and the next session has a different one — but it should still not
+pile up, so `mark.sh` records the owning process alongside the target and drops
+any marker whose owner has exited on the next `set`. That collects the markers a
+session-end hook would miss: a closed terminal, a crash, a `kill -9`.
+
+You own two calls on top of all this, both listed in their phases below: refresh
+the marker once the target is resolved, and clear it when the grilling ends.
 
 ## Usage
 
@@ -60,6 +161,29 @@ gh api "repos/OWNER/REPO/issues/N" --jq .locked             # is it locked? (tru
 
 **Then** establish the sync baseline: normalize the body through `scripts/normalize.sh` and keep the normalized *text* as `last_synced` (it is the merge base for conflict resolution, so keep the text, not only a hash).
 
+**Then** refresh the session marker with the resolved target, so the status line
+names the real thing instead of the placeholder it was seeded with:
+
+```bash
+${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} '<resolved target>'
+```
+
+**Single quotes, never double.** Inside double quotes a target containing
+`$(...)` or a backtick is command substitution, and this command matches the
+`Bash(.../mark.sh *)` rule in `allowed-tools` — so it can be pre-approved and run
+without anyone being asked. Inside single quotes nothing expands. If the target
+itself contains a single quote, end the quote, escape it, and reopen:
+`'it'\''s.md'`. Unlike the seeding call above, you have the resolved target in
+front of you here and can see what you are quoting, which is exactly why that
+call gets a placeholder and this one gets the real thing.
+
+Use the canonical form — the full issue URL, or the path as the user gave it.
+The status line shortens `https://github.com/OWNER/REPO/issues/N` to
+`OWNER/REPO#N` itself; do not pre-shorten it, since the hook quotes the target
+back to you verbatim. If the preflight **rejects** the target, clear the marker
+(see Phase 3) before you stop, so the bar does not claim a grilling that never
+started.
+
 See **`references/gotchas.md`** for the full preflight edge-case table (404, locked, closed-but-writable, empty → from-scratch mode, etc.).
 
 ## Phase 2: Grill, and reflect each conclusion in place
@@ -83,9 +207,26 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 - **Summarize what was written back** to the target at the end.
 - **Do not wander** into adjacent work on your own initiative.
 - The target must contain **only the current agreed state** — never a change-history or discussion-log section.
+- **Clear the session marker** once the grilling is over, as the last step:
+
+  ```bash
+  ${CLAUDE_SKILL_DIR}/scripts/mark.sh clear ${CLAUDE_SESSION_ID}
+  ```
+
+  Do this even when the session continues into other work — otherwise the status
+  line keeps claiming a grilling that has ended, and a bar that lies is worse
+  than no bar. Clearing it also silences the per-turn hook for the rest of the
+  session.
+
+  **The grilling is over only when the user says it is** — the exit condition at
+  the top of this phase. Ending your turn to wait for an answer is not the end of
+  the grilling, and neither is being told to stop talking: you end a turn after
+  every single question. Clear the marker on either of those and the bar goes
+  dark after your first question, which is the one thing this whole mechanism
+  exists to prevent.
 
 ## Non-goals (v1)
 
 - No comment I/O on issues, no PR/Gist/arbitrary-URL targets, no issue-number shorthand.
 - No git side effects on local files.
-- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the two deterministic text helpers in `scripts/`; their tests live in `tests/` (`bash tests/run.sh`).
+- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the two text helpers plus `mark.sh`; their tests live in `tests/` (`bash tests/run.sh`).

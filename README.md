@@ -123,6 +123,29 @@ kabeuchi **delegates the entire interview to a `/grilling` skill and does not bu
 
 Multiple terminals — or a human editing the issue in a browser / the file in an editor — can change the target mid-session. kabeuchi uses **optimistic detection, conservative resolution, and no locks**: before each write it re-fetches the target and compares a normalized SHA256 against the last synced state; disjoint external edits are auto-merged (3-way), overlapping ones are handed back to you to resolve, and every write is confirmed by reading it back. It always shows you the concrete diff before writing, and performs **no git operations** on local files — committing is left to you.
 
+### How it stays visible
+
+A kabeuchi runs for dozens of turns, and over that distance it is easy to lose track of which window is grilling and against which target, or for the interview to drift off its two rules. So the moment `/kabeuchi` is invoked — before Claude has read a word of the skill — it drops a marker file at `~/.claude/kabeuchi/<session-id>` naming the target, and registers a `UserPromptSubmit` hook that restates the target and the rules on every turn. Neither depends on Claude remembering to do anything.
+
+The marker is also there for your status line to read. Have `~/.claude/statusline.sh` print a second row when the file for the current session exists, and it shows up only while a grilling is running:
+
+```
+Opus · ⚡xhigh · ~/git/path · 5h: [███░░░░░░░] 28% ↻2h10m
+kabeuchi in progress · gipcompany/path#125
+```
+
+Because the marker is keyed by session id it can never light up a different window's bar, and it records the owning process so a session that dies without clearing it is collected on the next run. Clearing it is the skill's own last step.
+
+### What it runs on your machine
+
+Two things here go beyond reading and writing the target, and you should know about both before installing this — reviewing what a checked-in skill grants itself is the recommended habit, not a special precaution for this one.
+
+**Invoking `/kabeuchi` registers a `UserPromptSubmit` hook for the rest of the session.** From that point Claude Code runs a shell command every time you submit a prompt, until the session ends. It is declared in `skills/kabeuchi/SKILL.md`'s frontmatter and it does one thing: look for this session's marker file and, if there is one, print a single reminder line. With no marker it prints nothing. The command locates `scripts/prompt-hook.sh` by walking the places the skill gets installed — a plugin root, then your personal `~/.claude/skills`, then the project's `.claude/skills` — and **greps each candidate for an identity marker before executing it**, so a script that merely *happens* to sit at the same path under some other plugin or checkout is not run. Be clear on what that marker is worth: it is a literal string published in this repo, so it catches the accidental collision, not a repository that planted a matching script on purpose. Your own install is therefore checked before the project's, and the project candidate is last — but invoking `/kabeuchi` inside a repo you don't trust is still trusting that repo. `/kabeuchi` is `disable-model-invocation: true`, so none of this can be set up by Claude deciding on its own — you have to type the command.
+
+**The target string is fed into Claude's context verbatim on every turn.** That is the reminder line's whole job. `mark.sh` strips control characters and caps the target at 200 characters, so it cannot inject ANSI escapes into your status line or smuggle in a wall of text — but it is still text of your choosing entering the model's context repeatedly, and anything that can write to `~/.claude/kabeuchi/` can change it. Treat a target string pasted from somewhere you don't trust the way you'd treat any other untrusted input.
+
+The skill also pre-approves `Bash(<skill-dir>/scripts/mark.sh *)` so the marker can be written without a prompt. That grant covers only that one script and lasts a single turn.
+
 ### When not to use
 
 - Read-only targets, or you just want to stress-test a plan without saving → use `/grilling` directly.
