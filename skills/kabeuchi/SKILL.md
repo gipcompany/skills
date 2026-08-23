@@ -13,7 +13,7 @@ hooks:
   UserPromptSubmit:
     - hooks:
         - type: command
-          command: 'for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
+          command: 'for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/prompt-hook.sh}" "${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
 ---
 
 # Kabeuchi — Grill a spec, write the conclusions back into it
@@ -60,20 +60,26 @@ without it today, but the grant confers nothing and its absence would abort
 every invocation if that ever tightened.)
 
 The `hooks:` block resolves `prompt-hook.sh` at run time rather than through
-`${CLAUDE_SKILL_DIR}`, which is not substituted there. It walks the three places
+`${CLAUDE_SKILL_DIR}`, which is not substituted there. It walks the four places
 this skill gets installed, in that order:
 
-1. `$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/...` — a plugin install. That variable
-   being set is the strongest signal available, since a plugin-provided skill is
-   what put the hook here.
-2. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo. The
+1. `$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/...` — a plugin install, laid out the way
+   the docs describe: that variable is the plugin's root, and skills live under
+   `skills/<name>/`.
+2. `$CLAUDE_PLUGIN_ROOT/scripts/...` — the same variable, read as the *skill's own*
+   directory. Both forms are tried because the observed value for a
+   skill-registered hook has been the skill directory itself, which the docs do
+   not describe. Guessing wrong is free here: the marker check below rejects the
+   miss and the loop moves on.
+3. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo. The
    variable stays pinned to the project root the session started in even after
    Claude enters a worktree, which is what we want: the worktree shares the
    checkout's copy.
-3. `$HOME/.claude/skills/kabeuchi/...` — a personal install.
+4. `$HOME/.claude/skills/kabeuchi/...` — a personal install.
 
-Order 1-2-3 mirrors Claude Code's own project-over-user precedence. Each
-candidate is **grepped for the `kabeuchi-prompt-hook` marker before it is run**.
+Plugin forms first, then project over user, mirroring Claude Code's own
+precedence. Each candidate is **grepped for the `kabeuchi-prompt-hook` marker
+before it is run**.
 A path is not an identity: these variables are read fresh from the environment
 on every turn, and a script sitting at the same relative path under some other
 plugin's root is not this skill's — without the check the hook would run it on

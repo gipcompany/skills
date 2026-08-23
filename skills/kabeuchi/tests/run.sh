@@ -286,8 +286,11 @@ echo "SKILL.md (UserPromptSubmit hook command)"
       *)          bad "an unset $var yields no candidate path" ;;
     esac
   done
-  # All three install locations are searched: plugin, project checkout, personal.
-  for frag in "skills/kabeuchi/scripts/prompt-hook.sh" \
+  # Every install location is searched: both readings of the plugin root (the
+  # documented plugin dir and the skill dir it has been observed to hold), the
+  # project checkout, and the personal install.
+  for frag in "CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh" \
+              "CLAUDE_PLUGIN_ROOT/scripts/prompt-hook.sh" \
               ".claude/skills/kabeuchi/scripts/prompt-hook.sh"; do
     case "$hook_cmd" in
       *"$frag"*) ok  "the hook looks for .../$frag" ;;
@@ -333,6 +336,18 @@ echo "SKILL.md (UserPromptSubmit hook command)"
     "kabeuchi in progress. Target: docs/spec.md."*) ok "a project-local .claude/skills copy is found" ;;
     *) bad "a project-local .claude/skills copy is found (got: $out)" ;;
   esac
+
+  # The skill-dir reading of the plugin root also resolves, since that is what a
+  # skill-registered hook has been observed to get.
+  rm -f "$project/prompt-hook.sh"
+  mkdir -p "$d/plugin-as-skill/scripts"
+  cp "$PROMPT_HOOK" "$d/plugin-as-skill/scripts/prompt-hook.sh"
+  out="$(run_hook "$d/plugin-as-skill" "")"
+  case "$out" in
+    "kabeuchi in progress. Target: docs/spec.md."*) ok "a plugin root pointing at the skill dir also resolves" ;;
+    *) bad "a plugin root pointing at the skill dir also resolves (got: $out)" ;;
+  esac
+  cp "$PROMPT_HOOK" "$project/prompt-hook.sh"
 
   # Both present: the plugin root wins, mirroring skill resolution precedence.
   # The project copy is made distinguishable while keeping the identity marker.
