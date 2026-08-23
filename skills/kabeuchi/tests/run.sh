@@ -279,9 +279,11 @@ echo "merge3.sh (leaves no temp litter in the working directory)"
   # merged files into the caller's working tree and never cleaned them up.
   work="$(mktemp -d)"
   printf 'a\n' > "$work/base"; printf 'a\n' > "$work/mine"; printf 'a\n' > "$work/theirs"
-  before="$(ls -A "$work" | sort | tr '\n' ' ')"
+  # find, not ls: ls output is not safe to parse for arbitrary filenames (SC2012).
+  list_dir() { find "$1" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort | tr '\n' ' '; }
+  before="$(list_dir "$work")"
   ( cd "$work" && bash "$MERGE3" base mine theirs >/dev/null 2>&1 )
-  after="$(ls -A "$work" | sort | tr '\n' ' ')"
+  after="$(list_dir "$work")"
   assert_eq "merge leaves no extra files in CWD" "$before" "$after"
   rm -rf "$work"
 }
