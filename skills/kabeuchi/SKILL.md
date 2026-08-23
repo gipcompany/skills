@@ -147,9 +147,24 @@ Out of scope for v1 (reject these): arbitrary web URLs, GitHub **PR** bodies, Gi
 
 kabeuchi delegates the entire interview to the **`/grilling`** skill and does **not** bundle it. It is referenced, not vendored.
 
-**Preflight:** at startup, confirm `/grilling` is available. If it is not, **stop and tell the user how to install it** — do not silently fall back to an ad-hoc interview. Install it from
+**kabeuchi never installs it for you.** There is no download step anywhere in this
+skill — no `curl`, no `git clone`, no package install, no network fetch of any
+kind. The preflight only *checks* whether `/grilling` is already in your skills
+directory, and stops if it is not. Putting it there is a deliberate act you
+perform outside this skill, on a file you have read.
+
+**Preflight:** at startup, confirm `/grilling` is available. If it is not, **stop and tell the user how to install it** — do not silently fall back to an ad-hoc interview, and do not install it on their behalf. Upstream it is a single `SKILL.md` with no scripts and no executables, short enough to read in full before you trust it:
 <https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md>
-into your skills directory (e.g. `~/.claude/skills/grilling/SKILL.md`), then re-run kabeuchi.
+Once it sits at e.g. `~/.claude/skills/grilling/SKILL.md`, re-run kabeuchi.
+
+**What the delegation grants.** `/grilling` supplies the interview tone and
+nothing else. It asks questions and reads answers inside this same session, with
+exactly the tools you had already granted that session — kabeuchi passes it no
+credentials, widens no permissions on its behalf, and keeps the write-back, the
+only step that touches your issue or your file, in Phase 2 of *this* skill behind
+a diff you approve. If you would rather not run a third-party skill at all, then
+kabeuchi is not for you: that is why the dependency is named in the description
+instead of surfacing at run time.
 
 **Related skills.** `grill-me` and `grill-with-docs` are neighbors that also run a relentless interview. kabeuchi specifically requires the `/grilling` entrypoint and adds write-back to the target. If you only have `grill-me`, use it directly — kabeuchi is not a drop-in over it.
 
