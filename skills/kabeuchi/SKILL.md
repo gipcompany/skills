@@ -13,7 +13,7 @@ hooks:
   UserPromptSubmit:
     - hooks:
         - type: command
-          command: 'p="${CLAUDE_PLUGIN_ROOT:-}/scripts/prompt-hook.sh"; [ -x "$p" ] || p="$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh"; [ -x "$p" ] && "$p"; exit 0'
+          command: 'for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
 ---
 
 # Kabeuchi — Grill a spec, write the conclusions back into it
@@ -25,9 +25,7 @@ This is a **thin delegation wrapper over `/grilling`**. It is the same shape as 
 ## Session marker (runs before you read this)
 
 ```!
-${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} <<'KABEUCHI_TARGET_EOF'
-$ARGUMENTS
-KABEUCHI_TARGET_EOF
+${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} '(resolving target)'
 true
 ```
 
@@ -39,20 +37,53 @@ the marker exists, and the `UserPromptSubmit` hook in the frontmatter re-states
 the target and this skill's two rules on every turn. Both survive you forgetting
 to mention them, which is the point — a kabeuchi runs for dozens of turns.
 
-`mark.sh` takes the target on **stdin through a quoted heredoc**, never as a
-shell-parsed argument, because `$ARGUMENTS` is substituted as text into the
-command line before the shell sees it: a target carrying a quote or a `;` would
-otherwise break the command apart and fail the permission check, which aborts
-the whole invocation. It also exits `0` on every path for the same reason, and
-the block ends with a bare `true` on its own line so that the block's exit
-status is `true`'s, not mark.sh's — a mark.sh that is missing, unreadable, or
-broken outright still cannot stop `/kabeuchi` from starting. (`|| true` on the
-command itself does *not* work: combined with the heredoc it defeats the
-permission checker's static analysis, and an unanalyzable command aborts the
-invocation just as a failing one does. `Bash(true)` is in `allowed-tools` as
-insurance rather than necessity — the trailing statement passes the permission
-check without it today, but the grant confers nothing and its absence would
-abort every invocation if that ever tightened.)
+**Nothing the user typed appears on that command line.** The marker is seeded
+with a placeholder and Phase 1 replaces it with the resolved target a moment
+later, which is the whole reason the placeholder exists. `$ARGUMENTS` is
+substituted as *text* into the command line before the shell parses it, so a
+target that reached this line would be shell syntax: a quote or a `;` breaks the
+command apart and fails the permission check, which aborts the whole invocation.
+Quoting does not rescue it, because the quoting construct's own terminator is
+part of the substituted text — a `<<'EOF'` heredoc ends early on a target that
+contains its delimiter on a line of its own, and everything after that line runs
+as commands, with the trailing `true` below hiding the non-zero exit. Keeping
+`$ARGUMENTS` off the command line is the only thing that closes the class, and
+it costs one placeholder on screen. **Do not "improve" this by passing the
+target here.**
+
+`mark.sh` also exits `0` on every path, and the block ends with a bare `true` on
+its own line so that the block's exit status is `true`'s, not mark.sh's — a
+mark.sh that is missing, unreadable, or broken outright still cannot stop
+`/kabeuchi` from starting. (`Bash(true)` is in `allowed-tools` as insurance
+rather than necessity — the trailing statement passes the permission check
+without it today, but the grant confers nothing and its absence would abort
+every invocation if that ever tightened.)
+
+The `hooks:` block resolves `prompt-hook.sh` at run time rather than through
+`${CLAUDE_SKILL_DIR}`, which is not substituted there. It walks the three places
+this skill gets installed, in that order:
+
+1. `$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/...` — a plugin install. That variable
+   being set is the strongest signal available, since a plugin-provided skill is
+   what put the hook here.
+2. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo. The
+   variable stays pinned to the project root the session started in even after
+   Claude enters a worktree, which is what we want: the worktree shares the
+   checkout's copy.
+3. `$HOME/.claude/skills/kabeuchi/...` — a personal install.
+
+Order 1-2-3 mirrors Claude Code's own project-over-user precedence. Each
+candidate is **grepped for the `kabeuchi-prompt-hook` marker before it is run**.
+A path is not an identity: these variables are read fresh from the environment
+on every turn, and a script sitting at the same relative path under some other
+plugin's root is not this skill's — without the check the hook would run it on
+every prompt the user submits for the rest of the session. The check also makes
+the fall-through correct rather than merely safe: an unrelated `$CLAUDE_PLUGIN_ROOT`
+simply fails to match and the loop moves on to the next candidate.
+
+The `:+` (not `:-`) matters too — with `:-` an unset variable resolves its
+candidate to `/scripts/prompt-hook.sh` or `/.claude/skills/...`, at the
+filesystem root.
 
 A marker that outlives its session cannot mislead anyone — it is keyed by
 session id, and the next session has a different one — but it should still not
@@ -111,8 +142,17 @@ gh api "repos/OWNER/REPO/issues/N" --jq .locked             # is it locked? (tru
 names the real thing instead of the placeholder it was seeded with:
 
 ```bash
-${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} "<resolved target>"
+${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} '<resolved target>'
 ```
+
+**Single quotes, never double.** Inside double quotes a target containing
+`$(...)` or a backtick is command substitution, and this command matches the
+`Bash(.../mark.sh *)` rule in `allowed-tools` — so it can be pre-approved and run
+without anyone being asked. Inside single quotes nothing expands. If the target
+itself contains a single quote, end the quote, escape it, and reopen:
+`'it'\''s.md'`. Unlike the seeding call above, you have the resolved target in
+front of you here and can see what you are quoting, which is exactly why that
+call gets a placeholder and this one gets the real thing.
 
 Use the canonical form — the full issue URL, or the path as the user gave it.
 The status line shortens `https://github.com/OWNER/REPO/issues/N` to

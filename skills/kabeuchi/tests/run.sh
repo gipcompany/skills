@@ -194,7 +194,164 @@ echo "mark.sh"
     bad "a recent marker with no pid line is kept"
   fi
 
+  # THE SWEEP DELETES FILES, and KABEUCHI_DIR is caller-settable: point it at a
+  # directory holding anything else and an unscoped age sweep would take that
+  # too. Only session-id shaped names may ever be collected.
+  for stranger in "settings.json" "CLAUDE.md" "notes"; do
+    printf 'not a marker\n' > "$KABEUCHI_DIR/$stranger"
+    touch -t 200001010000 "$KABEUCHI_DIR/$stranger"
+  done
+  # A stranger carrying a dead pid on line 2 must survive the pid sweep as well.
+  ( exit 0 ) & stranger_pid=$!; wait "$stranger_pid" 2>/dev/null
+  printf 'not a marker\npid=%s\n' "$stranger_pid" > "$KABEUCHI_DIR/config.toml"
+  CLAUDE_PID=$$ bash "$MARK" set "$SID" "owned" >/dev/null 2>&1
+  survived=true
+  for stranger in "settings.json" "CLAUDE.md" "notes" "config.toml"; do
+    [ -e "$KABEUCHI_DIR/$stranger" ] || survived=false
+  done
+  assert_eq "a non-marker file in the marker dir is never swept" "true" "$survived"
+
   unset KABEUCHI_DIR
+  rm -rf "$d"
+}
+
+echo "SKILL.md (injected command)"
+{
+  SKILL_MD="${HERE}/../SKILL.md"
+
+  # $ARGUMENTS is substituted as text into the injected command line before the
+  # shell parses it, so the user's target would arrive as shell syntax — and no
+  # quoting construct saves it, because the construct's own terminator is part
+  # of that text (a quoted heredoc ends early on a target containing its
+  # delimiter, and the rest runs as commands). The marker is seeded with a
+  # placeholder and Phase 1 fills in the real target instead.
+  block="$(awk '/^```!$/{f=1;next} f&&/^```$/{f=0} f' "$SKILL_MD")"
+
+  case "$block" in
+    "") bad "an injected command block exists in SKILL.md" ;;
+    *)  ok  "an injected command block exists in SKILL.md" ;;
+  esac
+  case "$block" in
+    *\$ARGUMENTS*) bad "the injected command must not interpolate \$ARGUMENTS" ;;
+    *)             ok  "the injected command does not interpolate \$ARGUMENTS" ;;
+  esac
+  case "$block" in
+    *"mark.sh set"*) ok  "the injected command still seeds the session marker" ;;
+    *)               bad "the injected command still seeds the session marker" ;;
+  esac
+
+  # Phase 1 refreshes the marker with the resolved target. Double quotes there
+  # would make a target containing $(...) or a backtick command substitution,
+  # and the command matches the Bash(.../mark.sh *) rule in allowed-tools, so it
+  # can be pre-approved and run unasked. Single quotes expand nothing.
+  refresh="$(grep -F "mark.sh set \${CLAUDE_SESSION_ID} " "$SKILL_MD" | grep -v '^```')"
+  case "$refresh" in
+    "")   bad "SKILL.md documents a marker refresh call" ;;
+    *'"'*) bad "the marker refresh must not double-quote the target" ;;
+    *)    ok  "the marker refresh single-quotes the target" ;;
+  esac
+}
+
+echo "SKILL.md (UserPromptSubmit hook command)"
+{
+  SKILL_MD="${HERE}/../SKILL.md"
+  hook_cmd="$(sed -n "s/^ *command: '\(.*\)'$/\1/p" "$SKILL_MD" | head -n 1)"
+
+  case "$hook_cmd" in
+    "") bad "the frontmatter registers a hook command" ;;
+    *)  ok  "the frontmatter registers a hook command" ;;
+  esac
+
+  # The hook locates the script by path, and $CLAUDE_PLUGIN_ROOT is read fresh
+  # from the environment every turn. Verify identity before executing.
+  case "$hook_cmd" in
+    *"grep -q kabeuchi-prompt-hook"*) ok  "the hook verifies the script's identity before running it" ;;
+    *)                                bad "the hook verifies the script's identity before running it" ;;
+  esac
+  # :+ yields nothing when the variable is unset. :- would resolve the candidate
+  # to /scripts/prompt-hook.sh or /.claude/skills/..., at the filesystem root.
+  for var in CLAUDE_PLUGIN_ROOT CLAUDE_PROJECT_DIR; do
+    case "$hook_cmd" in
+      *"$var:-"*) bad "an unset $var yields no candidate path (uses :-)" ;;
+      *"$var:+"*) ok  "an unset $var yields no candidate path" ;;
+      *)          bad "an unset $var yields no candidate path" ;;
+    esac
+  done
+  # All three install locations are searched: plugin, project checkout, personal.
+  for frag in "skills/kabeuchi/scripts/prompt-hook.sh" \
+              ".claude/skills/kabeuchi/scripts/prompt-hook.sh"; do
+    case "$hook_cmd" in
+      *"$frag"*) ok  "the hook looks for .../$frag" ;;
+      *)         bad "the hook looks for .../$frag" ;;
+    esac
+  done
+  if grep -q "kabeuchi-prompt-hook" "$PROMPT_HOOK"; then
+    ok "prompt-hook.sh still carries the marker the hook greps for"
+  else
+    bad "prompt-hook.sh still carries the marker the hook greps for"
+  fi
+
+  # ── Run the hook command for real, with every candidate under our control. ──
+  # CLAUDE_PROJECT_DIR is set explicitly in each run (empty where the case needs
+  # it absent) so that a real one in the ambient environment cannot leak in.
+  d="$(mktemp -d)"
+  plugin="$d/plugin/skills/kabeuchi/scripts"
+  project="$d/project/.claude/skills/kabeuchi/scripts"
+  mkdir -p "$plugin" "$project" "$d/home/.claude/kabeuchi"
+  SID="3186bc75-4165-4b4d-bc2c-a4b5d697a9f6"
+  printf 'docs/spec.md\n' > "$d/home/.claude/kabeuchi/$SID"
+  run_hook() { # run_hook <plugin_root> <project_dir>
+    CLAUDE_PLUGIN_ROOT="$1" CLAUDE_PROJECT_DIR="$2" HOME="$d/home" \
+      CLAUDE_CODE_SESSION_ID="$SID" KABEUCHI_DIR="$d/home/.claude/kabeuchi" \
+      sh -c "$hook_cmd" 2>&1
+  }
+
+  # A decoy at the same relative path under each root: right path, wrong script.
+  for decoy in "$plugin" "$project"; do
+    printf '#!/bin/sh\necho DECOY-RAN\n' > "$decoy/prompt-hook.sh"
+    chmod +x "$decoy/prompt-hook.sh"
+  done
+  out="$(run_hook "$d/plugin" "$d/project")"; rc=$?
+  assert_eq "a same-path script under a foreign plugin/project root is not executed" "" "$out"
+  assert_eq "the hook still exits 0 when nothing is runnable" "0" "$rc"
+
+  # The project checkout alone: this is the case the candidate list was extended
+  # for — a kabeuchi committed to .claude/skills/ with no plugin and no install.
+  rm -f "$plugin/prompt-hook.sh"
+  cp "$PROMPT_HOOK" "$project/prompt-hook.sh"
+  out="$(run_hook "" "$d/project")"
+  case "$out" in
+    "kabeuchi in progress. Target: docs/spec.md."*) ok "a project-local .claude/skills copy is found" ;;
+    *) bad "a project-local .claude/skills copy is found (got: $out)" ;;
+  esac
+
+  # Both present: the plugin root wins, mirroring skill resolution precedence.
+  # The project copy is made distinguishable while keeping the identity marker.
+  sed 's/kabeuchi in progress\./FROM-PROJECT./' "$PROMPT_HOOK" > "$project/prompt-hook.sh"
+  chmod +x "$project/prompt-hook.sh"
+  cp "$PROMPT_HOOK" "$plugin/prompt-hook.sh"
+  out="$(run_hook "$d/plugin" "$d/project")"
+  case "$out" in
+    "kabeuchi in progress. Target: docs/spec.md."*) ok "the plugin root is preferred over the project checkout" ;;
+    *) bad "the plugin root is preferred over the project checkout (got: $out)" ;;
+  esac
+
+  # And the project checkout is preferred over the personal install.
+  rm -f "$plugin/prompt-hook.sh"
+  mkdir -p "$d/home/.claude/skills/kabeuchi/scripts"
+  cp "$PROMPT_HOOK" "$d/home/.claude/skills/kabeuchi/scripts/prompt-hook.sh"
+  out="$(run_hook "" "$d/project")"
+  case "$out" in
+    "FROM-PROJECT. Target: docs/spec.md."*) ok "the project checkout is preferred over the personal install" ;;
+    *) bad "the project checkout is preferred over the personal install (got: $out)" ;;
+  esac
+
+  # With no plugin and no project, the personal install still answers.
+  out="$(run_hook "" "")"
+  case "$out" in
+    "kabeuchi in progress. Target: docs/spec.md."*) ok "the personal install is the last resort" ;;
+    *) bad "the personal install is the last resort (got: $out)" ;;
+  esac
   rm -rf "$d"
 }
 

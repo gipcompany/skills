@@ -31,12 +31,19 @@
 # for the sake of a decoration. Every path therefore ends in `exit 0`, and
 # success prints nothing so the injected text stays empty.
 #
-# When SKILL.md invokes `set`, the target arrives on STDIN through a quoted
-# heredoc, never as a shell-parsed argument. `$ARGUMENTS` is substituted as text
-# into the command line before the shell sees it, so a target carrying a quote,
-# a `;` or a `$` would otherwise break the command apart — and, worse, fail the
-# permission check, which aborts the invocation. Inside `<<'EOF'` nothing is
-# expanded and nothing can terminate the word early.
+# SKILL.md's injected `set` passes NO target at all — only a literal placeholder
+# — and Phase 1 refreshes the marker once the real target is resolved. That is
+# deliberate: `$ARGUMENTS` is substituted as text into the command line before
+# the shell sees it, so anything the user typed becomes shell syntax. A quote or
+# a `;` breaks the command apart and fails the permission check, which aborts the
+# invocation; and no quoting construct helps, because the construct's own
+# terminator is part of the substituted text — a quoted heredoc ends early on a
+# target containing its delimiter, and the rest of the argument runs as commands.
+# Keeping the target off that command line is the only thing that closes the
+# class, and it costs nothing here: the placeholder is on screen for a moment.
+#
+# `set` still accepts a target on stdin or as an argument. Phase 1 and the tests
+# use it; the injected command does not.
 #
 # Exit codes:
 #   0  always
@@ -93,6 +100,26 @@ owner_pid() {
   esac
 }
 
+# THE SWEEP DELETES FILES, so it must be able to prove that a file is one of
+# ours before touching it. The marker directory is caller-settable through
+# KABEUCHI_DIR, and a sweep that trusted that variable would cheerfully delete
+# whatever else lived there — point it at ~/.claude and a week-old settings.json
+# is gone. A marker's name is a session id, and Claude Code session ids are
+# UUIDs, so require that shape and skip everything else. `valid_session` is the
+# wrong test here: it accepts `settings.json` too, because writing a file under a
+# name is safe in ways that deleting one is not.
+#
+# A marker named outside that shape is therefore never collected. That is the
+# direction to fail in: a stray file that lingers costs a directory entry, a
+# stray file that is deleted costs someone their data.
+session_shaped() {
+  case "${1:-}" in
+    *[!0-9A-Fa-f-]* ) return 1 ;;
+    *-*-*-*-* ) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Drop markers whose owning session is gone. This catches the cases a session-end
 # hook cannot — a closed terminal, a crash, a kill -9 — because it asks the OS
 # whether the process still exists rather than trusting anyone to clean up.
@@ -100,12 +127,16 @@ sweep_stale() {
   local dir="$1" f pid
   for f in "$dir"/*; do
     [ -f "$f" ] || continue
+    session_shaped "${f##*/}" || continue
     pid="$(sed -n '2s/^pid=\([0-9][0-9]*\)$/\1/p' "$f" 2>/dev/null)"
-    [ -n "$pid" ] || continue
-    kill -0 "$pid" 2>/dev/null || rm -f "$f" 2>/dev/null
+    if [ -n "$pid" ]; then
+      kill -0 "$pid" 2>/dev/null || rm -f "$f" 2>/dev/null
+      continue
+    fi
+    # Backstop for markers written without an owner pid, scoped to this one file
+    # so the age test can never reach a name we did not just approve.
+    find "$f" -maxdepth 0 -type f -mtime "+${STALE_DAYS}" -delete 2>/dev/null || true
   done
-  # Backstop for markers written without an owner pid.
-  find "$dir" -maxdepth 1 -type f -mtime "+${STALE_DAYS}" -delete 2>/dev/null || true
 }
 
 action="${1:-}"

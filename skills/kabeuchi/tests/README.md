@@ -33,10 +33,34 @@ Exit status is non-zero if any assertion fails; the last line reports
   back to `$CLAUDE_CODE_SESSION_ID` and then to the `session_id` in hook JSON on
   stdin; the owning process id is recorded on a second line and a marker whose
   owner has exited is swept on the next `set`, with an age sweep after a week as
-  the backstop for markers carrying no pid. Above all,
+  the backstop for markers carrying no pid. The sweep deletes files and
+  `KABEUCHI_DIR` is caller-settable, so it is scoped to session-id shaped names:
+  **a non-marker file sharing the directory is never collected**, whatever its
+  age and whatever it has on its second line. Above all,
   **every call exits 0** — bad arguments, no arguments, an unwritable marker
   directory — because the script runs from an injected `` !`...` `` command in
   `SKILL.md`, where a non-zero exit aborts the entire `/kabeuchi` invocation.
+- **`SKILL.md`'s injected command** — the block still calls `mark.sh set`, and it
+  **does not interpolate `$ARGUMENTS`**. That substitution is textual and happens
+  before the shell parses the line, so a target reaching it arrives as shell
+  syntax that no quoting construct contains — a `<<'EOF'` heredoc ends early on a
+  target carrying its delimiter, and the rest of the argument runs as commands.
+  The marker is seeded with a placeholder and Phase 1 refreshes it instead. That
+  refresh call **single-quotes the target**, since inside double quotes a
+  `$(...)` in the target would be command substitution on a command line the
+  `allowed-tools` rule can pre-approve.
+- **`SKILL.md`'s `UserPromptSubmit` hook command** — it searches the three places
+  the skill gets installed (plugin root, `$CLAUDE_PROJECT_DIR/.claude/skills`,
+  `$HOME/.claude/skills`), guards both variables with `:+` (with `:-`, an unset
+  variable resolves its candidate to a path at the filesystem root), and **greps
+  each candidate for the `kabeuchi-prompt-hook` marker before executing it**.
+  The command is then run for real, with every candidate under the test's
+  control: a decoy planted at the right relative path under a foreign plugin
+  *and* project root must not run (and the command must still exit 0); a
+  project-local copy must be found on its own; and precedence must hold —
+  plugin over project, project over personal, personal as the last resort.
+  `prompt-hook.sh` is checked for the marker too, since losing it turns the hook
+  into a silent no-op.
 - **`prompt-hook.sh`** — silent when the session has no marker; otherwise prints
   the one reminder line naming the target verbatim; another session's marker
   never leaks in; and it exits 0 on every payload, since a `UserPromptSubmit`
