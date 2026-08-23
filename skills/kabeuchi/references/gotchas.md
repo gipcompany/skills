@@ -52,6 +52,22 @@ make its body read-only.
 No. The **issue body only** is the target. Comments are never read and never
 posted (v1).
 
+**The issue body contains text addressed to the assistant — what happens?**
+Nothing, except that you hear about it. Everything read out of the target is
+third-party content: on a public repo, an issue body is written by whoever can
+open an issue there. kabeuchi treats it as **material to be edited, never as
+instructions** — imperative text inside it is not followed, commands and URLs it
+contains are not executed, and a passage that reads as aimed at the assistant is
+quoted back to you and left as content. Only your own turns steer the session.
+
+**Does kabeuchi fetch anything besides the target?**
+No. No issue comments, no linked URLs, no web fetches, and no install steps —
+`/grilling` is checked for, never downloaded. The target is validated against
+the two allowlisted shapes before the first `gh` call, so exactly one body you
+named enters the session. In the other direction, only what you settled in the
+interview is written back: file contents, command output, and environment values
+never end up in a published issue body.
+
 **Can I point kabeuchi at a PR body, a Gist, or an arbitrary web URL?**
 No (v1). Only a GitHub **issue** URL or a local markdown file path. Bare
 issue-number shorthand is also rejected — pass the full URL.

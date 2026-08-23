@@ -5,16 +5,21 @@
 # kabeuchi-prompt-hook
 #
 # ^ DO NOT REMOVE OR RENAME that marker. The `hooks:` block in ../SKILL.md greps
-# for it before executing this file. That block searches the three places this
-# skill gets installed — a plugin root, a project's .claude/skills, a personal
-# ~/.claude/skills — and a path is not an identity: `$CLAUDE_PLUGIN_ROOT` and
-# `$CLAUDE_PROJECT_DIR` are read fresh from the environment on every turn, and a
-# script sitting at the same relative path under some other plugin or project is
-# not this one. The hook would otherwise execute it on every prompt the user
-# submits, for the rest of the session. The marker is also what lets the search
-# fall through correctly rather than merely safely: an unrelated plugin root
-# fails to match and the next candidate gets its turn. tests/run.sh asserts the
-# marker is still here, and exercises each candidate against a decoy.
+# for it before executing this file. That block searches the places this skill
+# gets installed — a plugin root, then a personal ~/.claude/skills — and a path
+# is not an identity: `$CLAUDE_PLUGIN_ROOT` is read fresh from the environment on
+# every turn, and a script sitting at the same relative path under some other
+# plugin is not this one. The hook would otherwise execute it on every prompt the
+# user submits, for the rest of the session. The marker is also what lets the
+# search fall through correctly rather than merely safely: an unrelated plugin
+# root fails to match and the next candidate gets its turn. tests/run.sh asserts
+# the marker is still here, and exercises each candidate against a decoy.
+#
+# A project's own .claude/skills copy is a fourth candidate, but it is gated on
+# KABEUCHI_ALLOW_PROJECT_HOOK being 1/true/yes: that one arrives with a cloned
+# repository rather than with you, and executing it unattended on every prompt is
+# broader trust than editing a markdown target needs. Without the opt-in a
+# repo-only install still works — it just gets no per-turn reminder line.
 #
 # Registered by the `hooks:` block in ../SKILL.md, which means it is installed
 # only when /kabeuchi is actually invoked and stays for the rest of that session.

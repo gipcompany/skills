@@ -297,15 +297,35 @@ echo "SKILL.md (UserPromptSubmit hook command)"
       *)         bad "the hook looks for .../$frag" ;;
     esac
   done
-  # Order, not just presence: a repository supplies the $CLAUDE_PROJECT_DIR
-  # candidate, so the personal install has to be offered the turn first. The
-  # identity marker is a published string and cannot settle a deliberate
-  # collision; being asked first is what does.
+  # The project checkout is the one candidate a cloned repository can supply, and
+  # running it unattended on every prompt is broader trust than editing a
+  # markdown target needs — so it is behind an explicit opt-in, not merely last.
   # The `$`-names below are literal text inside the hook command being matched,
   # not variables this script wants expanded.
   # shellcheck disable=SC2016
   case "$hook_cmd" in
-    *'$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh'*'$CLAUDE_PROJECT_DIR/.claude/skills'*)
+    *'KABEUCHI_ALLOW_PROJECT_HOOK'*'$CLAUDE_PROJECT_DIR/.claude/skills'*)
+      ok  "the project checkout candidate is gated on KABEUCHI_ALLOW_PROJECT_HOOK" ;;
+    *)
+      bad "the project checkout candidate is gated on KABEUCHI_ALLOW_PROJECT_HOOK" ;;
+  esac
+  # The gate wants an affirmative value, not merely a non-empty one: with :+ a
+  # stray KABEUCHI_ALLOW_PROJECT_HOOK=0 would switch the candidate on.
+  # shellcheck disable=SC2016
+  case "$hook_cmd" in
+    *'case "${KABEUCHI_ALLOW_PROJECT_HOOK:-}" in 1|true|yes)'*)
+      ok  "the opt-in matches affirmative values only" ;;
+    *)
+      bad "the opt-in matches affirmative values only" ;;
+  esac
+  # Order within the search loop itself: the personal install is offered the turn
+  # before the project checkout even when the opt-in is on. The identity marker is
+  # a published string and cannot settle a deliberate collision; being asked first
+  # is what does.
+  loop_list="${hook_cmd#*for c in }"
+  # shellcheck disable=SC2016
+  case "$loop_list" in
+    *'$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh'*'"$p"'*)
       ok  "the personal install is tried before the project checkout" ;;
     *)
       bad "the personal install is tried before the project checkout" ;;
@@ -325,8 +345,11 @@ echo "SKILL.md (UserPromptSubmit hook command)"
   mkdir -p "$plugin" "$project" "$d/home/.claude/kabeuchi"
   SID="3186bc75-4165-4b4d-bc2c-a4b5d697a9f6"
   printf 'docs/spec.md\n' > "$d/home/.claude/kabeuchi/$SID"
-  run_hook() { # run_hook <plugin_root> <project_dir>
+  # The third argument is KABEUCHI_ALLOW_PROJECT_HOOK: empty (the default) means
+  # the project checkout candidate is never even assembled.
+  run_hook() { # run_hook <plugin_root> <project_dir> [allow_project]
     CLAUDE_PLUGIN_ROOT="$1" CLAUDE_PROJECT_DIR="$2" HOME="$d/home" \
+      KABEUCHI_ALLOW_PROJECT_HOOK="${3:-}" \
       CLAUDE_CODE_SESSION_ID="$SID" KABEUCHI_DIR="$d/home/.claude/kabeuchi" \
       sh -c "$hook_cmd" 2>&1
   }
@@ -336,19 +359,37 @@ echo "SKILL.md (UserPromptSubmit hook command)"
     printf '#!/bin/sh\necho DECOY-RAN\n' > "$decoy/prompt-hook.sh"
     chmod +x "$decoy/prompt-hook.sh"
   done
-  out="$(run_hook "$d/plugin" "$d/project")"; rc=$?
+  out="$(run_hook "$d/plugin" "$d/project" 1)"; rc=$?
   assert_eq "a same-path script under a foreign plugin/project root is not executed" "" "$out"
   assert_eq "the hook still exits 0 when nothing is runnable" "0" "$rc"
 
-  # The project checkout alone: this is the case the candidate list was extended
-  # for — a kabeuchi committed to .claude/skills/ with no plugin and no install.
+  # The project checkout alone, opted in: this is the case the candidate list was
+  # extended for — a kabeuchi committed to .claude/skills/ with no plugin and no
+  # personal install.
   rm -f "$plugin/prompt-hook.sh"
   cp "$PROMPT_HOOK" "$project/prompt-hook.sh"
-  out="$(run_hook "" "$d/project")"
+  out="$(run_hook "" "$d/project" 1)"
   case "$out" in
-    "kabeuchi in progress. Target: docs/spec.md."*) ok "a project-local .claude/skills copy is found" ;;
-    *) bad "a project-local .claude/skills copy is found (got: $out)" ;;
+    "kabeuchi in progress. Target: docs/spec.md."*) ok "a project-local .claude/skills copy is found when opted in" ;;
+    *) bad "a project-local .claude/skills copy is found when opted in (got: $out)" ;;
   esac
+
+  # ...and the same setup stays silent without the opt-in. This is the whole
+  # point of the gate: a cloned repository's script is not executed unattended.
+  out="$(run_hook "" "$d/project")"; rc=$?
+  assert_eq "a project-local copy is NOT executed by default" "" "$out"
+  assert_eq "the hook still exits 0 when the project candidate is gated off" "0" "$rc"
+  for val in 0 "" no maybe; do
+    out="$(run_hook "" "$d/project" "$val")"
+    assert_eq "KABEUCHI_ALLOW_PROJECT_HOOK=${val:-(empty)} does not enable the project candidate" "" "$out"
+  done
+  for val in 1 true yes; do
+    out="$(run_hook "" "$d/project" "$val")"
+    case "$out" in
+      "kabeuchi in progress. Target: docs/spec.md."*) ok "KABEUCHI_ALLOW_PROJECT_HOOK=$val enables the project candidate" ;;
+      *) bad "KABEUCHI_ALLOW_PROJECT_HOOK=$val enables the project candidate (got: $out)" ;;
+    esac
+  done
 
   # The skill-dir reading of the plugin root also resolves, since that is what a
   # skill-registered hook has been observed to get.
@@ -367,7 +408,7 @@ echo "SKILL.md (UserPromptSubmit hook command)"
   sed 's/kabeuchi in progress\./FROM-PROJECT./' "$PROMPT_HOOK" > "$project/prompt-hook.sh"
   chmod +x "$project/prompt-hook.sh"
   cp "$PROMPT_HOOK" "$plugin/prompt-hook.sh"
-  out="$(run_hook "$d/plugin" "$d/project")"
+  out="$(run_hook "$d/plugin" "$d/project" 1)"
   case "$out" in
     "kabeuchi in progress. Target: docs/spec.md."*) ok "the plugin root is preferred over the project checkout" ;;
     *) bad "the plugin root is preferred over the project checkout (got: $out)" ;;
@@ -379,23 +420,24 @@ echo "SKILL.md (UserPromptSubmit hook command)"
   rm -f "$plugin/prompt-hook.sh"
   mkdir -p "$d/home/.claude/skills/kabeuchi/scripts"
   cp "$PROMPT_HOOK" "$d/home/.claude/skills/kabeuchi/scripts/prompt-hook.sh"
-  out="$(run_hook "" "$d/project")"
+  out="$(run_hook "" "$d/project" 1)"
   case "$out" in
     "kabeuchi in progress. Target: docs/spec.md."*) ok "the personal install is preferred over the project checkout" ;;
     *) bad "the personal install is preferred over the project checkout (got: $out)" ;;
   esac
 
-  # A planted copy carrying the marker still loses to the personal install: the
-  # marker is a published string, so ordering is what decides this, not identity.
-  out="$(run_hook "" "$d/project")"
+  # A planted copy carrying the marker still loses to the personal install, even
+  # with the opt-in on: the marker is a published string, so ordering is what
+  # decides this, not identity.
+  out="$(run_hook "" "$d/project" 1)"
   case "$out" in
     "FROM-PROJECT."*) bad "a marker-carrying project copy cannot displace the personal install" ;;
     *) ok "a marker-carrying project copy cannot displace the personal install" ;;
   esac
 
-  # With no plugin and no personal install, the project checkout still answers.
+  # With no plugin and no personal install, the opted-in project checkout answers.
   rm -f "$d/home/.claude/skills/kabeuchi/scripts/prompt-hook.sh"
-  out="$(run_hook "" "$d/project")"
+  out="$(run_hook "" "$d/project" 1)"
   case "$out" in
     "FROM-PROJECT. Target: docs/spec.md."*) ok "the project checkout is the last resort" ;;
     *) bad "the project checkout is the last resort (got: $out)" ;;

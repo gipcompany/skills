@@ -49,22 +49,25 @@ Exit status is non-zero if any assertion fails; the last line reports
   refresh call **single-quotes the target**, since inside double quotes a
   `$(...)` in the target would be command substitution on a command line the
   `allowed-tools` rule can pre-approve.
-- **`SKILL.md`'s `UserPromptSubmit` hook command** — it searches the three places
-  the skill gets installed (plugin root, `$HOME/.claude/skills`,
-  `$CLAUDE_PROJECT_DIR/.claude/skills`), guards both variables with `:+` (with
-  `:-`, an unset variable resolves its candidate to a path at the filesystem
-  root), and **greps each candidate for the `kabeuchi-prompt-hook` marker before
-  executing it**. The command is then run for real, with every candidate under
-  the test's control: a decoy planted at the right relative path under a foreign
-  plugin *and* project root must not run (and the command must still exit 0); a
-  project-local copy must be found on its own; and precedence must hold —
-  plugin first, then the personal install, with the project checkout last. That
-  last pair is deliberately the reverse of Claude Code's skill precedence: the
-  project candidate is the only one a cloned repository can supply, and the
-  marker is a published string that a planted copy can carry, so a test asserts
-  a marker-carrying project copy still loses to the personal install.
-  `prompt-hook.sh` is checked for the marker too, since losing it turns the hook
-  into a silent no-op.
+- **`SKILL.md`'s `UserPromptSubmit` hook command** — it searches the places the
+  skill gets installed (plugin root, `$HOME/.claude/skills`, and — only on an
+  explicit opt-in — `$CLAUDE_PROJECT_DIR/.claude/skills`), guards both variables
+  with `:+` (with `:-`, an unset variable resolves its candidate to a path at the
+  filesystem root), and **greps each candidate for the `kabeuchi-prompt-hook`
+  marker before executing it**. The project candidate is the only one a cloned
+  repository can supply, so tests assert it is assembled **only** when
+  `KABEUCHI_ALLOW_PROJECT_HOOK` is an affirmative `1`/`true`/`yes` — `0`, `no`,
+  and an unset variable all leave it out, which rules out the `:+` spelling where
+  `0` would switch it on. The command is then run for real, with every candidate
+  under the test's control: a decoy planted at the right relative path under a
+  foreign plugin *and* project root must not run (and the command must still exit
+  0); a project-local copy must be silent by default and found once opted in; and
+  precedence must hold — plugin first, then the personal install, with the project
+  checkout last. That last pair is deliberately the reverse of Claude Code's skill
+  precedence, and the marker is a published string that a planted copy can carry,
+  so a test asserts a marker-carrying project copy still loses to the personal
+  install even with the opt-in on. `prompt-hook.sh` is checked for the marker too,
+  since losing it turns the hook into a silent no-op.
 - **`prompt-hook.sh`** — silent when the session has no marker; otherwise prints
   the one reminder line naming the target verbatim; another session's marker
   never leaks in; and it exits 0 on every payload, since a `UserPromptSubmit`
