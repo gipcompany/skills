@@ -2,6 +2,21 @@
 #
 # mark.sh — place or remove the "kabeuchi in progress" marker for one session.
 #
+# kabeuchi-mark-sh
+#
+# ^ DO NOT REMOVE OR RENAME that marker, and see prompt-hook.sh for the same one
+# on that script. A `SessionEnd` hook — the one that clears a marker for a
+# session Claude never got to finish — has to find this file by path, and a path
+# is not an identity: it searches a plugin root, a project's .claude/skills and
+# a personal ~/.claude/skills in turn, and `$CLAUDE_PLUGIN_ROOT` /
+# `$CLAUDE_PROJECT_DIR` are whatever the environment says they are at the moment
+# the session ends. Grepping for this marker is what stops the hook running some
+# other project's `scripts/mark.sh`, which matters more here than for the prompt
+# hook: this one is invoked to DELETE something. tests/run.sh asserts it is here.
+#
+# The hook lives in the user's settings.json rather than this skill's
+# frontmatter, because a `SessionEnd` hook declared by a skill never fires.
+#
 # Usage:
 #   mark.sh set   [session_id] [target]   # no target arg -> read it from stdin
 #   mark.sh clear [session_id]

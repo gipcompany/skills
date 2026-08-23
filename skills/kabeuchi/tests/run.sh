@@ -211,6 +211,15 @@ echo "mark.sh"
   done
   assert_eq "a non-marker file in the marker dir is never swept" "true" "$survived"
 
+  # The SessionEnd hook in the user's settings.json finds this script by path and
+  # greps for the marker before running it, because the thing it runs it for is a
+  # deletion. Losing the marker silently disables that cleanup.
+  if grep -q "kabeuchi-mark-sh" "$MARK"; then
+    ok "mark.sh carries the marker the SessionEnd hook greps for"
+  else
+    bad "mark.sh carries the marker the SessionEnd hook greps for"
+  fi
+
   unset KABEUCHI_DIR
   rm -rf "$d"
 }
