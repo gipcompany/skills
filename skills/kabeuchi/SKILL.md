@@ -8,6 +8,12 @@ description: "Use when you want a relentless /grilling (kabeuchi / 壁打ち) se
   for read-only targets, arbitrary web URLs, GitHub PR bodies, Gists, or
   issue-number shorthand."
 disable-model-invocation: true
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/mark.sh *) Bash(true)
+hooks:
+  UserPromptSubmit:
+    - hooks:
+        - type: command
+          command: 'p="${CLAUDE_PLUGIN_ROOT:-}/scripts/prompt-hook.sh"; [ -x "$p" ] || p="$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh"; [ -x "$p" ] && "$p"; exit 0'
 ---
 
 # Kabeuchi — Grill a spec, write the conclusions back into it
@@ -15,6 +21,45 @@ disable-model-invocation: true
 Run a relentless interview about a target markdown document and, **every time a point is settled, reflect that conclusion back into the target in place** — so the target is never a log of the discussion but always a clean spec of the current agreed state.
 
 This is a **thin delegation wrapper over `/grilling`**. It is the same shape as `grill-with-docs` (which runs `/grilling` and feeds the result into `/domain-modeling` to produce ADRs and a glossary), except the artifact is replaced: instead of separate ADR/glossary docs, the artifact is **the target markdown itself**. The interview tone — one question at a time, unrelenting, always with a recommended answer — is **not re-implemented here; it is delegated to `/grilling`**. This skill adds only two things on top: reading/writing the target, and handling concurrent edits safely.
+
+## Session marker (runs before you read this)
+
+```!
+${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} <<'KABEUCHI_TARGET_EOF'
+$ARGUMENTS
+KABEUCHI_TARGET_EOF
+true
+```
+
+The command above already ran — injected commands run before this content reaches
+you — so a marker for this session now exists at `~/.claude/kabeuchi/${CLAUDE_SESSION_ID}`.
+It is what makes the grilling visible from outside the conversation: the status
+line grows a second row reading `kabeuchi in progress · <target>` for as long as
+the marker exists, and the `UserPromptSubmit` hook in the frontmatter re-states
+the target and this skill's two rules on every turn. Both survive you forgetting
+to mention them, which is the point — a kabeuchi runs for dozens of turns.
+
+`mark.sh` takes the target on **stdin through a quoted heredoc**, never as a
+shell-parsed argument, because `$ARGUMENTS` is substituted as text into the
+command line before the shell sees it: a target carrying a quote or a `;` would
+otherwise break the command apart and fail the permission check, which aborts
+the whole invocation. It also exits `0` on every path for the same reason, and
+the block ends with a bare `true` on its own line so that the block's exit
+status is `true`'s, not mark.sh's — a mark.sh that is missing, unreadable, or
+broken outright still cannot stop `/kabeuchi` from starting. (`|| true` on the
+command itself does *not* work: combined with the heredoc it defeats the
+permission checker's static analysis, and an unanalyzable command aborts the
+invocation just as a failing one does. `Bash(true)` is in `allowed-tools` so the
+trailing statement is covered by the same grant.)
+
+A marker that outlives its session cannot mislead anyone — it is keyed by
+session id, and the next session has a different one — but it should still not
+pile up, so `mark.sh` records the owning process alongside the target and drops
+any marker whose owner has exited on the next `set`. That collects the markers a
+session-end hook would miss: a closed terminal, a crash, a `kill -9`.
+
+You own two calls on top of all this, both listed in their phases below: refresh
+the marker once the target is resolved, and clear it when the grilling ends.
 
 ## Usage
 
@@ -60,6 +105,20 @@ gh api "repos/OWNER/REPO/issues/N" --jq .locked             # is it locked? (tru
 
 **Then** establish the sync baseline: normalize the body through `scripts/normalize.sh` and keep the normalized *text* as `last_synced` (it is the merge base for conflict resolution, so keep the text, not only a hash).
 
+**Then** refresh the session marker with the resolved target, so the status line
+names the real thing instead of the placeholder it was seeded with:
+
+```bash
+${CLAUDE_SKILL_DIR}/scripts/mark.sh set ${CLAUDE_SESSION_ID} "<resolved target>"
+```
+
+Use the canonical form — the full issue URL, or the path as the user gave it.
+The status line shortens `https://github.com/OWNER/REPO/issues/N` to
+`OWNER/REPO#N` itself; do not pre-shorten it, since the hook quotes the target
+back to you verbatim. If the preflight **rejects** the target, clear the marker
+(see Phase 3) before you stop, so the bar does not claim a grilling that never
+started.
+
 See **`references/gotchas.md`** for the full preflight edge-case table (404, locked, closed-but-writable, empty → from-scratch mode, etc.).
 
 ## Phase 2: Grill, and reflect each conclusion in place
@@ -83,9 +142,19 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 - **Summarize what was written back** to the target at the end.
 - **Do not wander** into adjacent work on your own initiative.
 - The target must contain **only the current agreed state** — never a change-history or discussion-log section.
+- **Clear the session marker** once the grilling is over, as the last step:
+
+  ```bash
+  ${CLAUDE_SKILL_DIR}/scripts/mark.sh clear ${CLAUDE_SESSION_ID}
+  ```
+
+  Do this even when the session continues into other work — otherwise the status
+  line keeps claiming a grilling that has ended, and a bar that lies is worse
+  than no bar. Clearing it also silences the per-turn hook for the rest of the
+  session.
 
 ## Non-goals (v1)
 
 - No comment I/O on issues, no PR/Gist/arbitrary-URL targets, no issue-number shorthand.
 - No git side effects on local files.
-- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the two deterministic text helpers in `scripts/`; their tests live in `tests/` (`bash tests/run.sh`).
+- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the two text helpers plus `mark.sh`; their tests live in `tests/` (`bash tests/run.sh`).
