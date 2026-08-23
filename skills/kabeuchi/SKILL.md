@@ -13,7 +13,7 @@ hooks:
   UserPromptSubmit:
     - hooks:
         - type: command
-          command: 'for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/prompt-hook.sh}" "${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
+          command: 'for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh" "${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
 ---
 
 # Kabeuchi — Grill a spec, write the conclusions back into it
@@ -71,21 +71,38 @@ this skill gets installed, in that order:
    skill-registered hook has been the skill directory itself, which the docs do
    not describe. Guessing wrong is free here: the marker check below rejects the
    miss and the loop moves on.
-3. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo. The
+3. `$HOME/.claude/skills/kabeuchi/...` — a personal install.
+4. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo. The
    variable stays pinned to the project root the session started in even after
    Claude enters a worktree, which is what we want: the worktree shares the
    checkout's copy.
-4. `$HOME/.claude/skills/kabeuchi/...` — a personal install.
 
-Plugin forms first, then project over user, mirroring Claude Code's own
-precedence. Each candidate is **grepped for the `kabeuchi-prompt-hook` marker
-before it is run**.
-A path is not an identity: these variables are read fresh from the environment
+Plugin forms first, then **user over project** — deliberately the reverse of
+Claude Code's own skill precedence. The candidates are not equally sourced: a
+repository you cloned supplies candidate 4, while only you supply candidate 3.
+This hook then runs unattended on every prompt for the rest of the session, and
+unlike a hook declared in a project's `.claude/settings.json` it never surfaces
+for review, so the tie goes to the copy you installed yourself. The project
+checkout stays on the list, last, because a repo-only install — no plugin, no
+personal copy — is the case it was added for and still resolves.
+
+Each candidate is **grepped for the `kabeuchi-prompt-hook` marker before it is
+run**. A path is not an identity: these variables are read fresh from the environment
 on every turn, and a script sitting at the same relative path under some other
 plugin's root is not this skill's — without the check the hook would run it on
 every prompt the user submits for the rest of the session. The check also makes
 the fall-through correct rather than merely safe: an unrelated `$CLAUDE_PLUGIN_ROOT`
 simply fails to match and the loop moves on to the next candidate.
+
+**That marker is a collision guard, not an authentication check.** It is a
+literal string published in this repository, so anything that wants to be taken
+for this script can carry it, and git preserves the executable bit that would
+let it run. What the check rules out is the accident: an unrelated plugin or
+checkout that happens to keep a `prompt-hook.sh` at the same relative path. What
+it cannot rule out is a repository that planted a matching one on purpose —
+which is the whole reason candidate 4 sits below candidate 3. Invoking
+`/kabeuchi` inside a repository you do not trust is still trusting that
+repository.
 
 The `:+` (not `:-`) matters too — with `:-` an unset variable resolves its
 candidate to `/scripts/prompt-hook.sh` or `/.claude/skills/...`, at the

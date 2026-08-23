@@ -297,6 +297,19 @@ echo "SKILL.md (UserPromptSubmit hook command)"
       *)         bad "the hook looks for .../$frag" ;;
     esac
   done
+  # Order, not just presence: a repository supplies the $CLAUDE_PROJECT_DIR
+  # candidate, so the personal install has to be offered the turn first. The
+  # identity marker is a published string and cannot settle a deliberate
+  # collision; being asked first is what does.
+  # The `$`-names below are literal text inside the hook command being matched,
+  # not variables this script wants expanded.
+  # shellcheck disable=SC2016
+  case "$hook_cmd" in
+    *'$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh'*'$CLAUDE_PROJECT_DIR/.claude/skills'*)
+      ok  "the personal install is tried before the project checkout" ;;
+    *)
+      bad "the personal install is tried before the project checkout" ;;
+  esac
   if grep -q "kabeuchi-prompt-hook" "$PROMPT_HOOK"; then
     ok "prompt-hook.sh still carries the marker the hook greps for"
   else
@@ -360,21 +373,32 @@ echo "SKILL.md (UserPromptSubmit hook command)"
     *) bad "the plugin root is preferred over the project checkout (got: $out)" ;;
   esac
 
-  # And the project checkout is preferred over the personal install.
+  # And the personal install is preferred over the project checkout — the one
+  # place this deviates from Claude Code's own precedence, because the project
+  # candidate is the only one a cloned repository can supply.
   rm -f "$plugin/prompt-hook.sh"
   mkdir -p "$d/home/.claude/skills/kabeuchi/scripts"
   cp "$PROMPT_HOOK" "$d/home/.claude/skills/kabeuchi/scripts/prompt-hook.sh"
   out="$(run_hook "" "$d/project")"
   case "$out" in
-    "FROM-PROJECT. Target: docs/spec.md."*) ok "the project checkout is preferred over the personal install" ;;
-    *) bad "the project checkout is preferred over the personal install (got: $out)" ;;
+    "kabeuchi in progress. Target: docs/spec.md."*) ok "the personal install is preferred over the project checkout" ;;
+    *) bad "the personal install is preferred over the project checkout (got: $out)" ;;
   esac
 
-  # With no plugin and no project, the personal install still answers.
-  out="$(run_hook "" "")"
+  # A planted copy carrying the marker still loses to the personal install: the
+  # marker is a published string, so ordering is what decides this, not identity.
+  out="$(run_hook "" "$d/project")"
   case "$out" in
-    "kabeuchi in progress. Target: docs/spec.md."*) ok "the personal install is the last resort" ;;
-    *) bad "the personal install is the last resort (got: $out)" ;;
+    "FROM-PROJECT."*) bad "a marker-carrying project copy cannot displace the personal install" ;;
+    *) ok "a marker-carrying project copy cannot displace the personal install" ;;
+  esac
+
+  # With no plugin and no personal install, the project checkout still answers.
+  rm -f "$d/home/.claude/skills/kabeuchi/scripts/prompt-hook.sh"
+  out="$(run_hook "" "$d/project")"
+  case "$out" in
+    "FROM-PROJECT. Target: docs/spec.md."*) ok "the project checkout is the last resort" ;;
+    *) bad "the project checkout is the last resort (got: $out)" ;;
   esac
   rm -rf "$d"
 }

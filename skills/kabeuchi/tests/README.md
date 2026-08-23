@@ -50,15 +50,19 @@ Exit status is non-zero if any assertion fails; the last line reports
   `$(...)` in the target would be command substitution on a command line the
   `allowed-tools` rule can pre-approve.
 - **`SKILL.md`'s `UserPromptSubmit` hook command** — it searches the three places
-  the skill gets installed (plugin root, `$CLAUDE_PROJECT_DIR/.claude/skills`,
-  `$HOME/.claude/skills`), guards both variables with `:+` (with `:-`, an unset
-  variable resolves its candidate to a path at the filesystem root), and **greps
-  each candidate for the `kabeuchi-prompt-hook` marker before executing it**.
-  The command is then run for real, with every candidate under the test's
-  control: a decoy planted at the right relative path under a foreign plugin
-  *and* project root must not run (and the command must still exit 0); a
+  the skill gets installed (plugin root, `$HOME/.claude/skills`,
+  `$CLAUDE_PROJECT_DIR/.claude/skills`), guards both variables with `:+` (with
+  `:-`, an unset variable resolves its candidate to a path at the filesystem
+  root), and **greps each candidate for the `kabeuchi-prompt-hook` marker before
+  executing it**. The command is then run for real, with every candidate under
+  the test's control: a decoy planted at the right relative path under a foreign
+  plugin *and* project root must not run (and the command must still exit 0); a
   project-local copy must be found on its own; and precedence must hold —
-  plugin over project, project over personal, personal as the last resort.
+  plugin first, then the personal install, with the project checkout last. That
+  last pair is deliberately the reverse of Claude Code's skill precedence: the
+  project candidate is the only one a cloned repository can supply, and the
+  marker is a published string that a planted copy can carry, so a test asserts
+  a marker-carrying project copy still loses to the personal install.
   `prompt-hook.sh` is checked for the marker too, since losing it turns the hook
   into a silent no-op.
 - **`prompt-hook.sh`** — silent when the session has no marker; otherwise prints
