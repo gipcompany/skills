@@ -13,7 +13,7 @@ hooks:
   UserPromptSubmit:
     - hooks:
         - type: command
-          command: 'for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh" "${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
+          command: 'p=""; case "${KABEUCHI_ALLOW_PROJECT_HOOK:-}" in 1|true|yes) p="${CLAUDE_PROJECT_DIR:+$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/scripts/prompt-hook.sh}" ;; esac; for c in "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/scripts/prompt-hook.sh}" "${CLAUDE_PLUGIN_ROOT:+$CLAUDE_PLUGIN_ROOT/scripts/prompt-hook.sh}" "$HOME/.claude/skills/kabeuchi/scripts/prompt-hook.sh" "$p"; do [ -n "$c" ] && [ -x "$c" ] && grep -q kabeuchi-prompt-hook "$c" && { "$c"; break; }; done; exit 0'
 ---
 
 # Kabeuchi — Grill a spec, write the conclusions back into it
@@ -60,8 +60,8 @@ without it today, but the grant confers nothing and its absence would abort
 every invocation if that ever tightened.)
 
 The `hooks:` block resolves `prompt-hook.sh` at run time rather than through
-`${CLAUDE_SKILL_DIR}`, which is not substituted there. It walks the four places
-this skill gets installed, in that order:
+`${CLAUDE_SKILL_DIR}`, which is not substituted there. It walks the places this
+skill gets installed, in that order:
 
 1. `$CLAUDE_PLUGIN_ROOT/skills/kabeuchi/...` — a plugin install, laid out the way
    the docs describe: that variable is the plugin's root, and skills live under
@@ -72,19 +72,29 @@ this skill gets installed, in that order:
    not describe. Guessing wrong is free here: the marker check below rejects the
    miss and the loop moves on.
 3. `$HOME/.claude/skills/kabeuchi/...` — a personal install.
-4. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo. The
-   variable stays pinned to the project root the session started in even after
-   Claude enters a worktree, which is what we want: the worktree shares the
-   checkout's copy.
+4. `$CLAUDE_PROJECT_DIR/.claude/skills/kabeuchi/...` — checked into a repo.
+   **Off unless you opt in.** This candidate is assembled only when
+   `KABEUCHI_ALLOW_PROJECT_HOOK` is `1`, `true`, or `yes` in the environment;
+   unset — the default — and the loop never looks at the project checkout at
+   all. (`0` and every other value leave it off too: the gate wants an
+   affirmative answer, not a non-empty one.) When it is on, the variable stays
+   pinned to the project root the session started in even after Claude enters a
+   worktree, which is what we want: the worktree shares the checkout's copy.
 
-Plugin forms first, then **user over project** — deliberately the reverse of
-Claude Code's own skill precedence. The candidates are not equally sourced: a
-repository you cloned supplies candidate 4, while only you supply candidate 3.
-This hook then runs unattended on every prompt for the rest of the session, and
-unlike a hook declared in a project's `.claude/settings.json` it never surfaces
-for review, so the tie goes to the copy you installed yourself. The project
-checkout stays on the list, last, because a repo-only install — no plugin, no
-personal copy — is the case it was added for and still resolves.
+Candidates 1-3 are all copies **you** installed. Candidate 4 is not — it arrives
+with a repository you cloned, and this hook then runs unattended on every prompt
+for the rest of the session; unlike a hook declared in a project's
+`.claude/settings.json`, it never surfaces for review. Running a script out of
+someone else's checkout on that footing is broader trust than "interview me about
+this markdown file and save the conclusions" needs, so it is not something the
+skill grants itself.
+
+**A repo-only install still works without the opt-in.** The skill, the session
+marker, and the status line all resolve through `${CLAUDE_SKILL_DIR}`, which does
+not go through this list. The single thing the gate costs you is the per-turn
+reminder line, and a reminder is a poor reason to execute an unreviewed script on
+every prompt. Set the variable only for a repository whose
+`.claude/skills/kabeuchi/scripts/prompt-hook.sh` you have actually read.
 
 Each candidate is **grepped for the `kabeuchi-prompt-hook` marker before it is
 run**. A path is not an identity: these variables are read fresh from the environment
@@ -100,9 +110,10 @@ for this script can carry it, and git preserves the executable bit that would
 let it run. What the check rules out is the accident: an unrelated plugin or
 checkout that happens to keep a `prompt-hook.sh` at the same relative path. What
 it cannot rule out is a repository that planted a matching one on purpose —
-which is the whole reason candidate 4 sits below candidate 3. Invoking
+which is the whole reason candidate 4 is opt-in rather than merely last. Invoking
 `/kabeuchi` inside a repository you do not trust is still trusting that
-repository.
+repository; the gate keeps that from also meaning "and run its script on every
+prompt".
 
 The `:+` (not `:-`) matters too — with `:-` an unset variable resolves its
 candidate to `/scripts/prompt-hook.sh` or `/.claude/skills/...`, at the
