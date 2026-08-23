@@ -1,0 +1,26 @@
+name: kabeuchi tests
+
+# Scoped to skills/kabeuchi so unrelated pushes don't burn a runner. carve-it is
+# not covered yet: its tests source a fixture, which shellcheck reports as SC1091
+# unless it is run with -x, so wiring it up is a separate change.
+on:
+  push:
+    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+  pull_request:
+    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: helper-script tests
+        run: bash skills/kabeuchi/tests/run.sh
+
+      # shellcheck ships preinstalled on ubuntu-latest.
+      - name: shellcheck
+        run: shellcheck skills/kabeuchi/scripts/*.sh skills/kabeuchi/tests/*.sh

@@ -46,9 +46,10 @@ Exit status is non-zero if any assertion fails; the last line reports
 
 ## CI
 
-There is no active workflow in this repo; wire the tests into CI with a snippet
-like the following (GitHub Actions). `shellcheck` ships preinstalled on the
-`ubuntu-latest` runner.
+`.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
+request that touches `skills/kabeuchi/**`. `shellcheck` ships preinstalled on the
+`ubuntu-latest` runner, and all four scripts plus this test file are clean at its
+default severity.
 
 ```yaml
 name: kabeuchi tests
