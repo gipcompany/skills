@@ -100,7 +100,7 @@ The skill never deletes the backup branch and never pushes to a remote — both 
 
 ## kabeuchi
 
-**Grill a spec, and write the conclusions back into it.** `kabeuchi` (壁打ち — "hitting a ball against a wall") runs a relentless, one-question-at-a-time interview about a target markdown document, and every time a point is settled it rewrites that conclusion **back into the target, in place**. The target is never a transcript of the discussion — it is always a clean spec of the current agreed state. It is a thin delegation wrapper over `/grilling`: the interview is `/grilling`'s job, and the only artifact kabeuchi produces is the updated target markdown itself.
+**Grill a spec, and write the conclusions back into it.** `kabeuchi` (壁打ち — "hitting a ball against a wall") runs a relentless, one-question-at-a-time interview about a target markdown document, and every time a point is settled it rewrites that conclusion **back into the target, in place**. The target is never a transcript of the discussion — it is always a clean spec of the current agreed state. It is a thin delegation wrapper over `/grilling`: the interview is `/grilling`'s job, except that kabeuchi asks one question per turn instead of `/grilling`'s round of questions, so each settled point becomes its own write-back. The only artifact kabeuchi produces is the updated target markdown itself.
 
 ### Usage
 
