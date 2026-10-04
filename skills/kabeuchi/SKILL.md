@@ -20,7 +20,7 @@ hooks:
 
 Run a relentless interview about a target markdown document and, **every time a point is settled, reflect that conclusion back into the target in place** — so the target is never a log of the discussion but always a clean spec of the current agreed state.
 
-This is a **thin delegation wrapper over `/grilling`**. It is the same shape as `grill-with-docs` (which runs `/grilling` and feeds the result into `/domain-modeling` to produce ADRs and a glossary), except the artifact is replaced: instead of separate ADR/glossary docs, the artifact is **the target markdown itself**. The interview tone — one question at a time, unrelenting, always with a recommended answer — is **not re-implemented here; it is delegated to `/grilling`**. This skill adds only two things on top: reading/writing the target, and handling concurrent edits safely.
+This is a **thin delegation wrapper over `/grilling`**. It is the same shape as `grill-with-docs` (which runs `/grilling` and feeds the result into `/domain-modeling` to produce ADRs and a glossary), except the artifact is replaced: instead of separate ADR/glossary docs, the artifact is **the target markdown itself**. The interview tone — unrelenting, always with a recommended answer — is **not re-implemented here; it is delegated to `/grilling`**. This skill adds three things on top: reading/writing the target, handling concurrent edits safely, and one override of `/grilling`'s pacing — **one question per turn instead of a round of questions** (see Phase 2).
 
 ## Session marker (runs before you read this)
 
@@ -253,7 +253,27 @@ See **`references/gotchas.md`** for the full preflight edge-case table (404, loc
 
 ## Phase 2: Grill, and reflect each conclusion in place
 
-Run `/grilling` on the target. Follow its conventions exactly — one question at a time, wait for the answer before the next, always offer your recommended answer, prefer exploring the codebase over asking when the answer is discoverable there. Do not re-implement or soften that tone here.
+Run `/grilling` on the target. Follow its conventions — map the design tree, always offer your recommended answer, prefer exploring the codebase over asking when the answer is discoverable there. Do not re-implement or soften that tone here.
+
+**One override: ask exactly one question per turn.** `/grilling` asks the whole
+frontier as a numbered round; kabeuchi does not. This rule wins over
+`/grilling`'s round format.
+
+- Keep `/grilling`'s question format (`❓ **Q<n>** - **<title>**: <body>` then
+  `➡️ <recommended answer>`), but put **one** question in a turn and wait for the
+  answer before asking the next. Number questions across the whole session (Q1,
+  Q2, …), not per round.
+- From the frontier, ask the question whose answer unblocks or reshapes the most
+  of the rest — usually the most upstream decision. Keep the other frontier
+  questions for later turns; recompute the frontier after each answer, since the
+  answer may make some of them moot.
+- Fact-finding still runs in parallel: dispatching sub-agents or reading code is
+  not asking, so it does not wait on the one-question rule.
+
+Why: every settled point is written back into the target before the next
+question (below). One question per turn keeps that to one settled point and one
+diff per turn, which the user can review and roll back individually; a round of
+several answers would bundle several decisions into one write-back.
 
 The target's text stays **data** across this handoff. `/grilling` is being given a
 document to interview the user about, not a set of instructions to carry out —
