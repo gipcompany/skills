@@ -76,8 +76,9 @@ while IFS= read -r line || [ -n "$line" ]; do
   [ -n "$line" ] || continue
   IFS=$'\t' read -r p o s extra <<< "$line"
   [ -z "${extra:-}" ] || die "line $((n + 1)): expected 3 tab-separated fields"
-  [ -n "${p:-}" ] && [ -n "${o:-}" ] && [ -n "${s:-}" ] \
-    || die "line $((n + 1)): expected 3 tab-separated fields"
+  if [ -z "${p:-}" ] || [ -z "${o:-}" ] || [ -z "${s:-}" ]; then
+    die "line $((n + 1)): expected 3 tab-separated fields"
+  fi
   case "$p" in *[[:cntrl:]]*) die "line $((n + 1)): control character in perspective" ;; esac
   case "$s" in
     valid|invalid|unverified)
