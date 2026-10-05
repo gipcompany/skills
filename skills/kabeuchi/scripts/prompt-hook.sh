@@ -31,9 +31,11 @@
 # the hook costs nothing once the session moves on to other work.
 #
 # The line exists because a kabeuchi session runs for dozens of turns, and over
-# that distance the two rules that make it kabeuchi rather than a chat — ask one
-# question at a time, write each settled point back into the target — are the
-# first things to slip out of the model's attention.
+# that distance the rules that make it kabeuchi rather than a chat — ask one
+# question at a time, put each recommendation to a vote, write each settled
+# point back into the target — are the first things to slip out of the model's
+# attention. The vote is the costliest of the three, which makes it the likeliest
+# to be quietly skipped.
 #
 # The message is deliberately English, matching SKILL.md and the status line.
 #
@@ -58,5 +60,5 @@ marker="${KABEUCHI_DIR:-$HOME/.claude/kabeuchi}/$session"
 target="$(head -n 1 "$marker" 2>/dev/null)"
 [ -n "$target" ] || exit 0
 
-printf 'kabeuchi in progress. Target: %s. Ask one question at a time. Write each settled point back into the target in place.\n' "$target"
+printf 'kabeuchi in progress. Target: %s. Ask one question at a time. Put each recommendation to a kabeuchi-voter vote before showing it. Write each settled point back into the target in place.\n' "$target"
 exit 0

@@ -15,6 +15,8 @@ you can actually **write** it before spending the session.
 | Local file does not exist | Ask whether to create it from scratch. If no, abort. |
 | Non-markdown / binary target | Reject. |
 | Target is empty (empty issue body / brand-new file) | Enter **from-scratch mode**: build the spec through grilling. |
+| `kabeuchi-voter` is not an available agent type | Abort; tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/`. Never fall back to unvoted recommendations. |
+| `kabeuchi-voter` is available but its tools are broader than read-only (or unrestricted) | Abort and say so. A project's `.claude/agents/` overrides the user's, so a cloned repository can ship its own. |
 
 ## Known pitfalls
 
@@ -61,8 +63,12 @@ contains are not executed, and a passage that reads as aimed at the assistant is
 quoted back to you and left as content. Only your own turns steer the session.
 
 **Does kabeuchi fetch anything besides the target?**
-No. No issue comments, no linked URLs, no web fetches, and no install steps —
-`/grilling` is checked for, never downloaded. The target is validated against
+The main session does not. No issue comments, no linked URLs, no web fetches,
+and no install steps — `/grilling` and `kabeuchi-voter` are checked for, never
+downloaded. The voters are the one exception: they read the codebase,
+documentation, and the web to find evidence for a vote. They run as read-only
+subagents whose tool list Claude Code enforces, and the main session — the only
+part that can write — never opens what they cite; it only counts the verdicts. The target is validated against
 the two allowlisted shapes before the first `gh` call, so exactly one body you
 named enters the session. In the other direction, only what you settled in the
 interview is written back: file contents, command output, and environment values
@@ -75,6 +81,12 @@ issue-number shorthand is also rejected — pass the full URL.
 **I only want to be grilled, not to write anything back.**
 Use `/grilling` directly. kabeuchi's whole job is the write-back; without a
 writable target there is nothing for it to add.
+
+**Voting makes every question slow. Can I turn it off?**
+No — a recommendation you see is meant to be one that was checked, and an
+off-switch would make that untrue without anyone noticing. Questions that are a
+matter of taste (a name, a tone) are already exempt and say so. If you only
+want a fast interview, use `/grilling` directly.
 
 **Will kabeuchi commit or push my local file changes?**
 No. It performs no git operations on local targets — no `add`, `commit`, or

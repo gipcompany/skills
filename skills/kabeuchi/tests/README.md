@@ -1,11 +1,12 @@
 # kabeuchi tests
 
 Regression tests for the deterministic helper scripts — `normalize.sh`,
-`merge3.sh`, `mark.sh` and `prompt-hook.sh`. Zero dependencies beyond `git` and
+`merge3.sh`, `mark.sh`, `prompt-hook.sh` and `tally.sh`. Zero dependencies beyond `git` and
 `bash`: each test writes small text blobs to a temp dir, runs one script, and
 asserts on its stdout and exit code. The interview itself is delegated to
-`/grilling` and is prompt-driven, so there is nothing to unit-test there; these
-tests cover the only real logic the skill owns.
+`/grilling`, and the voting is done by subagents; both are prompt-driven, so
+there is nothing to unit-test there. These tests cover the only real logic the
+skill owns, including the vote counting that follows them.
 
 ## Run
 
@@ -72,6 +73,17 @@ Exit status is non-zero if any assertion fails; the last line reports
   the one reminder line naming the target verbatim; another session's marker
   never leaks in; and it exits 0 on every payload, since a `UserPromptSubmit`
   hook that exits non-zero swallows the user's prompt.
+- **`tally.sh`** — three valid votes for one option are unanimous; an invalid
+  vote stays in the `N/M` denominator while an abstained or failed one leaves it,
+  and all three are named differently; a 2-of-3 majority names the dissent; an
+  option needs **2 valid votes** to win, so a three-way split, a lone valid vote,
+  two agreeing *invalid* votes, and no valid votes all recommend nothing; any
+  `unverified` vote recommends nothing even when all agree; votes can be read
+  from a file. Malformed input — the wrong number of votes, an unknown state, a
+  missing or extra field, an option ID on an abstention or none on a valid vote,
+  an option ID outside `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, a
+  control character in a perspective, an unknown option, a missing file — exits
+  2 with **nothing on stdout**, so half a tally can never be mistaken for one.
 - **no temp litter** — running `merge3.sh` from a working directory leaves no
   extra files behind (it does all work under `mktemp -d` and cleans up on exit).
 
@@ -79,7 +91,7 @@ Exit status is non-zero if any assertion fails; the last line reports
 
 `.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
 request that touches `skills/kabeuchi/**` or the workflow itself. `shellcheck`
-ships preinstalled on the `ubuntu-latest` runner, and all four scripts plus this
+ships preinstalled on the `ubuntu-latest` runner, and all five scripts plus this
 test file are clean at its default severity.
 
 ```yaml

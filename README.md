@@ -12,7 +12,7 @@ A collection of agent skills for [Claude Code](https://docs.anthropic.com/en/doc
 | Skill | Description |
 |-------|-------------|
 | [carve-it](skills/carve-it/SKILL.md) | Replace a single large commit, in place, with a sequence of small review-sized commits — each passing CI on its own, each 100% pure in its Conventional Commits type. |
-| [kabeuchi](skills/kabeuchi/SKILL.md) | Run a relentless `/grilling` (壁打ち) session that writes each settled conclusion back, in place, into a writable markdown target — a GitHub issue body or a local markdown file — so it always reflects the current agreed spec. Requires the `/grilling` skill. |
+| [kabeuchi](skills/kabeuchi/SKILL.md) | Run a relentless `/grilling` (壁打ち) session that writes each settled conclusion back, in place, into a writable markdown target — a GitHub issue body or a local markdown file — so it always reflects the current agreed spec. Every recommendation is put to an evidence-checked vote of read-only subagents. Requires the `/grilling` skill and the bundled `kabeuchi-voter` subagent. |
 
 ## Installation
 
@@ -100,7 +100,7 @@ The skill never deletes the backup branch and never pushes to a remote — both 
 
 ## kabeuchi
 
-**Grill a spec, and write the conclusions back into it.** `kabeuchi` (壁打ち — "hitting a ball against a wall") runs a relentless, one-question-at-a-time interview about a target markdown document, and every time a point is settled it rewrites that conclusion **back into the target, in place**. The target is never a transcript of the discussion — it is always a clean spec of the current agreed state. It is a thin delegation wrapper over `/grilling`: the interview is `/grilling`'s job, except that kabeuchi asks one question per turn instead of `/grilling`'s round of questions, so each settled point becomes its own write-back. The only artifact kabeuchi produces is the updated target markdown itself.
+**Grill a spec, and write the conclusions back into it.** `kabeuchi` (壁打ち — "hitting a ball against a wall") runs a relentless, one-question-at-a-time interview about a target markdown document, and every time a point is settled it rewrites that conclusion **back into the target, in place**. The target is never a transcript of the discussion — it is always a clean spec of the current agreed state. It is a thin delegation wrapper over `/grilling`: the interview is `/grilling`'s job, except that kabeuchi asks one question per turn instead of `/grilling`'s round of questions, so each settled point becomes its own write-back, and the recommendation under each question comes from a vote rather than a single pass of the model's reasoning. The only artifact kabeuchi produces is the updated target markdown itself.
 
 ### Usage
 
@@ -121,15 +121,38 @@ kabeuchi **delegates the entire interview to a `/grilling` skill and does not bu
 
 **kabeuchi never installs it for you.** There is no download step in the skill — no `curl`, no `git clone`, no package install, no network fetch at all; the preflight only checks whether `/grilling` is already present. Upstream it is a single `SKILL.md` with no scripts and no executables, short enough to read in full before you trust it, and that reading is yours to do. Once installed it supplies the interview tone and nothing else: it asks questions inside the same session with exactly the tools that session already had, while the write-back — the only step that touches your issue or your file — stays in kabeuchi, behind a diff you approve. If you'd rather not run a third-party skill, kabeuchi isn't for you, which is why the dependency is stated up front instead of surfacing at run time.
 
+### Requires `kabeuchi-voter`
+
+The recommendation under each question is the one place a grilling session can quietly go wrong: it is one line of reasoning settling a question in one pass, and a wrong one tends to be found only after other decisions have been built on it. So kabeuchi puts every recommendation to a vote before you see it:
+
+- Three subagents vote **independently**, each from a fixed perspective — `spec` (what has been required and agreed), `code` (what the codebase actually does), and `docs` (what the library or service does today, via Context7 and the web). Each must cite evidence it actually looked at, or abstain.
+- A fourth subagent **verifies** that evidence. A vote whose evidence does not hold is invalid, however many voters agree with it.
+- An option needs **two valid votes** to become the recommendation. Otherwise the competing options are laid out side by side for you to choose from. A line under each recommendation shows how it was decided, for example `🗳️ 2/2 valid, unanimous (docs: abstained)`.
+- Questions with no right answer (a name, a tone) are not voted on, and say so.
+
+The counting is done by `scripts/tally.sh`, which is covered by the test suite.
+
+All four subagents run the `kabeuchi-voter` agent definition, which ships with the skill but which you install yourself:
+
+```
+cp ~/.claude/skills/kabeuchi/agents/kabeuchi-voter.md ~/.claude/agents/
+```
+
+Read it first; it is short. Its `tools:` allowlist is `Read, Grep, Glob, WebFetch, WebSearch` and the Context7 MCP server — no `Bash`, no file writes, no subagents of its own. The voters read web pages and whole codebases, so they are where a prompt injection would land, and this makes "read-only" a guarantee Claude Code enforces rather than a request in a prompt. If your Context7 server has a different name (plugin installs use `mcp__plugin_<plugin>_<server>`), change that one entry.
+
+At startup kabeuchi stops if `kabeuchi-voter` is missing, **or if the definition in effect has broader tools than that** — a project's `.claude/agents/` overrides yours, so a repository you cloned could otherwise ship a `kabeuchi-voter` of its own. It never falls back to unvoted recommendations.
+
+Voting costs four subagent runs per question and makes each question take longer to appear. That trade is deliberate: the point of the vote is that a recommendation you see has been checked.
+
 ### How it stays safe
 
 Multiple terminals — or a human editing the issue in a browser / the file in an editor — can change the target mid-session. kabeuchi uses **optimistic detection, conservative resolution, and no locks**: before each write it re-fetches the target and compares a normalized SHA256 against the last synced state; disjoint external edits are auto-merged (3-way), overlapping ones are handed back to you to resolve, and every write is confirmed by reading it back. It always shows you the concrete diff before writing, and performs **no git operations** on local files — committing is left to you.
 
-**The target's content is treated as data, never as instructions.** An issue body is written by whoever can open an issue in that repo, so the skill tells Claude in as many words that text inside the target is material to be edited: instructions addressed to the assistant are not followed, commands and URLs it contains are not executed, and anything that reads as aimed at Claude is quoted back to you rather than acted on. The target body is also the *only* thing kabeuchi reads from outside — no issue comments, no linked URLs, no fetches. In the other direction, only what you settled in the interview is written back; file contents, command output, and environment values never leak into a published issue body.
+**The target's content is treated as data, never as instructions.** An issue body is written by whoever can open an issue in that repo, so the skill tells Claude in as many words that text inside the target is material to be edited: instructions addressed to the assistant are not followed, commands and URLs it contains are not executed, and anything that reads as aimed at Claude is quoted back to you rather than acted on. The target body is also the *only* thing the main session reads from outside — no issue comments, no linked URLs, no fetches. The voters do read the codebase, documentation, and the web, but they run as read-only subagents: the main session never opens what they cite, and it is the only part of kabeuchi that can write. In the other direction, only what you settled in the interview is written back; file contents, command output, and environment values never leak into a published issue body.
 
 ### How it stays visible
 
-A kabeuchi runs for dozens of turns, and over that distance it is easy to lose track of which window is grilling and against which target, or for the interview to drift off its two rules. So the moment `/kabeuchi` is invoked — before Claude has read a word of the skill — it drops a marker file at `~/.claude/kabeuchi/<session-id>` naming the target, and registers a `UserPromptSubmit` hook that restates the target and the rules on every turn. Neither depends on Claude remembering to do anything.
+A kabeuchi runs for dozens of turns, and over that distance it is easy to lose track of which window is grilling and against which target, or for the interview to drift off its rules. So the moment `/kabeuchi` is invoked — before Claude has read a word of the skill — it drops a marker file at `~/.claude/kabeuchi/<session-id>` naming the target, and registers a `UserPromptSubmit` hook that restates the target and the rules on every turn. Neither depends on Claude remembering to do anything.
 
 The marker is also there for your status line to read. Have `~/.claude/statusline.sh` print a second row when the file for the current session exists, and it shows up only while a grilling is running:
 
