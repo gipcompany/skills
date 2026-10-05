@@ -35,7 +35,7 @@ you — so a marker for this session now exists at `~/.claude/kabeuchi/${CLAUDE_
 It is what makes the grilling visible from outside the conversation: the status
 line grows a second row reading `kabeuchi in progress · <target>` for as long as
 the marker exists, and the `UserPromptSubmit` hook in the frontmatter re-states
-the target and this skill's two rules on every turn. Both survive you forgetting
+the target and this skill's three rules on every turn. Both survive you forgetting
 to mention them, which is the point — a kabeuchi runs for dozens of turns.
 
 **Nothing the user typed appears on that command line.** The marker is seeded

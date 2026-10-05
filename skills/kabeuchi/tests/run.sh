@@ -461,7 +461,7 @@ echo "prompt-hook.sh"
   bash "$MARK" set "$SID" "https://github.com/o/r/issues/9" >/dev/null 2>&1
   out="$(printf '%s' "$hook_json" | bash "$PROMPT_HOOK" 2>&1)"
   assert_eq "names the target verbatim, and restates both rules" \
-    "kabeuchi in progress. Target: https://github.com/o/r/issues/9. Ask one question at a time. Write each settled point back into the target in place." \
+    "kabeuchi in progress. Target: https://github.com/o/r/issues/9. Ask one question at a time. Put each recommendation to a kabeuchi-voter vote before showing it. Write each settled point back into the target in place." \
     "$out"
 
   # A UserPromptSubmit hook that exits non-zero swallows the user's prompt, so
