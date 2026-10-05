@@ -14,6 +14,7 @@ NORMALIZE="${SCRIPTS}/normalize.sh"
 MERGE3="${SCRIPTS}/merge3.sh"
 MARK="${SCRIPTS}/mark.sh"
 PROMPT_HOOK="${SCRIPTS}/prompt-hook.sh"
+TALLY="${SCRIPTS}/tally.sh"
 
 pass=0
 fail=0
@@ -533,6 +534,87 @@ echo "merge3.sh (leaves no temp litter in the working directory)"
   after="$(list_dir "$work")"
   assert_eq "merge leaves no extra files in CWD" "$before" "$after"
   rm -rf "$work"
+}
+
+echo "tally.sh"
+{
+  # tally <line>... — feed one vote per argument, print both output lines.
+  tally() { printf '%s\n' "$@" | bash "$TALLY"; }
+  T=$'\t'
+
+  out="$(tally "spec${T}A${T}valid" "code${T}A${T}valid" "docs${T}A${T}valid")"
+  assert_eq "3 valid votes for one option -> unanimous" \
+    "$(printf 'recommend\tA\n🗳️ 3/3 valid, unanimous')" "$out"
+
+  out="$(tally "spec${T}A${T}valid" "code${T}A${T}valid" "docs${T}B${T}invalid")"
+  assert_eq "an invalid vote stays in the denominator and is named" \
+    "$(printf 'recommend\tA\n🗳️ 2/3 valid, unanimous (docs: invalid, evidence did not hold)')" "$out"
+
+  out="$(tally "spec${T}A${T}valid" "code${T}A${T}valid" "docs${T}-${T}abstain")"
+  assert_eq "an abstention leaves the denominator and is told apart from invalid" \
+    "$(printf 'recommend\tA\n🗳️ 2/2 valid, unanimous (docs: abstained)')" "$out"
+
+  out="$(tally "spec${T}A${T}valid" "code${T}-${T}failed" "docs${T}A${T}valid")"
+  assert_eq "a failed voter leaves the denominator and is told apart from abstain" \
+    "$(printf 'recommend\tA\n🗳️ 2/2 valid, unanimous (code: failed)')" "$out"
+
+  out="$(tally "spec${T}A${T}valid" "code${T}B${T}valid" "docs${T}A${T}valid")"
+  assert_eq "2 of 3 valid votes -> majority, the dissent is named" \
+    "$(printf 'recommend\tA\n🗳️ 2/3 valid, majority (code: chose B instead)')" "$out"
+
+  out="$(tally "spec${T}A${T}valid" "code${T}B${T}valid" "docs${T}C${T}valid")"
+  assert_eq "a three-way split recommends nothing" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, valid votes split (spec: A; code: B; docs: C)')" "$out"
+
+  # The 2-vote threshold does not drop when others abstain or fail: one valid
+  # vote is not a recommendation, however unopposed.
+  out="$(tally "spec${T}A${T}valid" "code${T}-${T}abstain" "docs${T}-${T}failed")"
+  assert_eq "a lone valid vote does not win" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, only 1 valid vote (spec: A; code: abstained; docs: failed)')" "$out"
+
+  # Two votes that agree but whose evidence did not hold must not win.
+  out="$(tally "spec${T}A${T}invalid" "code${T}A${T}invalid" "docs${T}B${T}valid")"
+  assert_eq "agreeing invalid votes do not outvote" "recommend	-" "$(printf '%s' "$out" | head -n 1)"
+
+  out="$(tally "spec${T}A${T}invalid" "code${T}-${T}abstain" "docs${T}B${T}invalid")"
+  assert_eq "no valid votes recommends nothing" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, no valid votes (spec: invalid, evidence did not hold; code: abstained; docs: invalid, evidence did not hold)')" "$out"
+
+  # A majority whose evidence was never checked must not pass as vetted.
+  out="$(tally "spec${T}A${T}unverified" "code${T}A${T}unverified" "docs${T}A${T}unverified")"
+  assert_eq "a verifier failure recommends nothing, even when all agree" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, unverified because the verifier failed (spec: A (unverified); code: A (unverified); docs: A (unverified))')" "$out"
+
+  d="$(mktemp -d)"
+  printf 'spec\tA\tvalid\ncode\tA\tvalid\ndocs\tA\tvalid\n' > "$d/votes.tsv"
+  out="$(bash "$TALLY" "$d/votes.tsv")"
+  rm -rf "$d"
+  assert_eq "votes can be read from a file" \
+    "$(printf 'recommend\tA\n🗳️ 3/3 valid, unanimous')" "$out"
+
+  # Malformed input is refused with exit 2 and nothing on stdout, so a caller
+  # cannot mistake half a tally for a result.
+  check_rejects() {
+    local label="$1"; shift
+    local rc=0 o
+    o="$(printf '%s\n' "$@" | bash "$TALLY" 2>/dev/null)" || rc=$?
+    if [ "$rc" -eq 2 ] && [ -z "$o" ]; then ok "$label"; else bad "$label (rc=$rc, stdout=[$o])"; fi
+  }
+  check_rejects "two votes instead of three exits 2" "spec${T}A${T}valid" "code${T}A${T}valid"
+  check_rejects "four votes instead of three exits 2" "a${T}A${T}valid" "b${T}A${T}valid" "c${T}A${T}valid" "d${T}A${T}valid"
+  check_rejects "an unknown state exits 2" "spec${T}A${T}valid" "code${T}A${T}maybe" "docs${T}A${T}valid"
+  check_rejects "a missing field exits 2" "spec${T}A" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "an extra field exits 2" "spec${T}A${T}valid${T}x" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "abstain with an option id exits 2" "spec${T}A${T}abstain" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "valid without an option id exits 2" "spec${T}-${T}valid" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "an option id outside [A-Za-z0-9_-] exits 2" "spec${T}A;rm${T}valid" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "unverified mixed with valid exits 2" "spec${T}A${T}unverified" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "a control character in the perspective exits 2" $'sp\033ec'"${T}A${T}valid" "code${T}A${T}valid" "docs${T}A${T}valid"
+
+  rc=0; bash "$TALLY" --lang </dev/null >/dev/null 2>&1 || rc=$?
+  assert_eq "an unknown option exits 2" "2" "$rc"
+  rc=0; bash "$TALLY" /no/such/file >/dev/null 2>&1 || rc=$?
+  assert_eq "a missing input file exits 2" "2" "$rc"
 }
 
 echo
