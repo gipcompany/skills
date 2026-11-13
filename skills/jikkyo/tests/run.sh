@@ -562,6 +562,11 @@ echo "cleanup.sh"
 # ===========================================================================
 echo "SKILL.md"
 {
+  # SKILL.md runs each script by its path, not through `bash`, and the
+  # allowed-tools rules match that form, so every script must be executable.
+  for s in launch report precheck cleanup; do
+    if [ -x "$SCRIPTS/$s.sh" ]; then ok "$s.sh is executable"; else bad "$s.sh is executable"; fi
+  done
   fm="$(awk 'NR == 1 && /^---$/ { on = 1; next } on && /^---$/ { exit } on' "$SKILL_MD")"
   assert_has "name is jikkyo" "name: jikkyo" "$fm"
   allowed="$(printf '%s\n' "$fm" | sed -n 's/^allowed-tools: //p')"
