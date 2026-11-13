@@ -15,6 +15,9 @@
 # Progress comes from the stream alone: TaskCreate results give task ids,
 # TaskUpdate sets their status, and % = completed / tasks not deleted. With no
 # tasks the comment shows the turn count instead, never a made-up number.
+# While running, once a todo is completed, a `Remaining (est.)` row (and a
+# ` · ~<duration> left` heading suffix) gives elapsed / completed * (total -
+# completed), the run-wide rate; otherwise that row is present but empty.
 #
 # The final state is `finished` (a non-error result line), `failed` (an error
 # result line), or `interrupted` (no result line, or SIGTERM/SIGHUP/SIGINT).
@@ -128,6 +131,7 @@ final_done=""
 # body <state> <state.json contents> <end ts or empty>
 body() {
   local st="$1" json="$2" end_ts="$3" t completed total turns heading label value ended elapsed
+  local secs eta="" eta_cell="" eta_suffix=""
   t="$(now)"
   completed="$(jq -r '.done' <<<"$json")"
   total="$(jq -r '.total' <<<"$json")"
@@ -144,15 +148,26 @@ body() {
   fi
   ended=""
   if [ -n "$end_ts" ]; then ended="$(fmt_time "$end_ts")"; t="$end_ts"; fi
-  elapsed="$(fmt_duration $((t - start_ts)))"
+  secs=$((t - start_ts))
+  elapsed="$(fmt_duration "$secs")"
+  # Estimated time remaining: the run-wide rate so far, applied to the todos
+  # left. Only while running, and only with at least one completed todo; with
+  # no rate to go on the cell stays empty rather than showing a made-up time.
+  if [ "$st" = running ] && [ "$total" -gt 0 ] && [ "$completed" -gt 0 ]; then
+    [ "$secs" -lt 0 ] && secs=0
+    eta="$(fmt_duration $((secs * (total - completed) / completed)))"
+    eta_cell="~${eta} (estimate, from ${completed}/${total} todos)"
+    eta_suffix=" · ~${eta} left"
+  fi
   printf '<!-- jikkyo:status v=1 state=%s -->\n' "$st"
-  printf '### jikkyo · %s · %s\n\n' "$st" "$heading"
+  printf '### jikkyo · %s · %s%s\n\n' "$st" "$heading" "$eta_suffix"
   printf '| Field | Value |\n| --- | --- |\n'
   printf '| State | %s |\n' "$st"
   printf '| Started | %s |\n' "$(fmt_time "$start_ts")"
   printf '| Ended | %s |\n' "$ended"
   printf '| %s | %s |\n' "$label" "$value"
   printf '| Elapsed | %s |\n' "$elapsed"
+  printf '| Remaining (est.) | %s |\n' "$eta_cell"
 }
 
 # write <state> [end ts]: create the comment on the first call, PATCH it by id

@@ -46,6 +46,11 @@ timing and signal tests waiting on a real scheduler.
   back-to-back changes are coalesced into one write; a heartbeat comes after
   5 minutes without a change, and not before; a change still held when the
   stream ends is in the end write, which happens at once.
+- **`report.sh`, estimated time remaining** — against the fake clock, the exact
+  `Remaining (est.)` row and heading for no todos (empty, no suffix), todos
+  with none completed (empty, no suffix), partial progress (1 of 4 after
+  150 s gives `~7m 30s (estimate, from 1/4 todos)` and ` · ~7m 30s left`),
+  and a finished run (empty, no suffix).
 - **`report.sh`, signals** — SIGTERM, SIGHUP, and SIGINT each write
   `interrupted` with an end time before `report.sh` exits (143, 129, 130),
   also when the signal comes after the `result` line.
@@ -67,7 +72,9 @@ timing and signal tests waiting on a real scheduler.
   author not counting; several `--paginate` pages read as one list;
   fractional-second timestamps; empty input or an API error object (a
   failed `gh` listing) giving exit 2 rather than `start`; `--payload` rewriting marker, heading, and
-  State row, and refusing a comment that is not `running`.
+  State row, dropping the heading's ` · ~… left` suffix and emptying the
+  `Remaining (est.)` row (Elapsed untouched), and refusing a comment that is
+  not `running`.
 - **`cleanup.sh`** — `remove` only for a worktree with no uncommitted changes
   (untracked, modified, and staged files all count) whose HEAD is on a
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed

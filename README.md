@@ -13,7 +13,7 @@ A collection of agent skills for [Claude Code](https://docs.anthropic.com/en/doc
 |-------|-------------|
 | [carve-it](skills/carve-it/SKILL.md) | Replace a single large commit, in place, with a sequence of small review-sized commits — each passing CI on its own, each 100% pure in its Conventional Commits type. |
 | [kabeuchi](skills/kabeuchi/SKILL.md) | Run a relentless `/grilling` (壁打ち) session that writes each settled conclusion back, in place, into a writable markdown target — a GitHub issue body or a local markdown file — so it always reflects the current agreed spec. Every recommendation is put to an evidence-checked vote of read-only subagents. Requires the `/grilling` skill and the bundled `kabeuchi-voter` subagent. |
-| [jikkyo](skills/jikkyo/SKILL.md) | Run `/goal` on a GitHub issue in a headless child, in its own git worktree, and commentate the run live on that issue — one status comment with start time, end time, and progress %, edited in place, plus a closing summary. Requires `gh` and `jq`. |
+| [jikkyo](skills/jikkyo/SKILL.md) | Run `/goal` on a GitHub issue in a headless child, in its own git worktree, and commentate the run live on that issue — one status comment with start time, end time, progress %, and an estimated time remaining, edited in place, plus a closing summary. Requires `gh` and `jq`. |
 
 ## Installation
 
@@ -202,18 +202,19 @@ Run it from a checkout of that repository. `--force` starts a run even when anot
 One status comment, created when the run starts and edited in place:
 
 ```
-### jikkyo · running · 3/6 (50%)
+### jikkyo · running · 3/6 (50%) · ~12m 03s left
 
-| Field    | Value                     |
-| -------- | ------------------------- |
-| State    | running                   |
-| Started  | 2026-11-13 18:01:16 +0900 |
-| Ended    |                           |
-| Progress | 3/6 (50%)                 |
-| Elapsed  | 12m 03s                   |
+| Field            | Value                               |
+| ---------------- | ----------------------------------- |
+| State            | running                             |
+| Started          | 2026-11-13 18:01:16 +0900           |
+| Ended            |                                     |
+| Progress         | 3/6 (50%)                           |
+| Elapsed          | 12m 03s                             |
+| Remaining (est.) | ~12m 03s (estimate, from 3/6 todos) |
 ```
 
-Progress is the child's own todo list: completed / not deleted. It can go down when the child adds tasks. A run with no todos shows the turn count instead, never a made-up %. The comment is written at the start and the end at once, on todo changes at most once every 30 seconds, and every 5 minutes as a heartbeat. When the run ends, a second, **new** comment gives a short summary: whether the goal was met, any PR, and what happened to the worktree. It is a new comment so that subscribers get a notification. The issue body is never touched.
+Progress is the child's own todo list: completed / not deleted. It can go down when the child adds tasks. A run with no todos shows the turn count instead, never a made-up %. The remaining time is a rough estimate, elapsed / completed × (total − completed); it can jump when the child adds todos, and it is left empty when there are no todos, none is completed yet, or the run has ended. The comment is written at the start and the end at once, on todo changes at most once every 30 seconds, and every 5 minutes as a heartbeat. When the run ends, a second, **new** comment gives a short summary: whether the goal was met, any PR, and what happened to the worktree. It is a new comment so that subscribers get a notification. The issue body is never touched.
 
 The run ends in one of three states: `finished` (the child exited cleanly, which is not the same as the goal being met; the summary says which), `failed` (an error result), or `interrupted` (no result, or the reporter was killed).
 

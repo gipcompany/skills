@@ -1,8 +1,9 @@
 ---
 name: jikkyo
 description: "Use when you want to run /goal on a GitHub issue and have the run
-  reported live on that issue — start time, end time, and progress % in one
-  status comment edited in place, plus a closing summary comment. Invoked
+  reported live on that issue — start time, end time, progress %, and a rough
+  estimate of the time remaining in one status comment edited in place, plus a
+  closing summary comment. Invoked
   explicitly as /jikkyo [--force] <GitHub issue URL>; the user never types a
   /goal line. Starts /goal in a headless `claude -p` child in its own git
   worktree, so the user cannot steer the run while it is in progress. Requires
@@ -210,7 +211,12 @@ Then, in this order:
   at once, todo changes at most once every 30 seconds, and a heartbeat every
   5 minutes. Progress is completed / non-deleted todos from the child's own
   `TaskCreate` / `TaskUpdate` events; with no todos it shows the turn count,
-  never a made-up %.
+  never a made-up %. The `Remaining (est.)` row, echoed in the heading as
+  ` · ~<duration> left`, is elapsed / completed × (total − completed): the
+  run-wide rate applied to the todos left. It is filled only while running
+  with at least one todo completed, and empty otherwise (no todos, none done
+  yet, or the run has ended), so it is never a made-up time either. It is
+  rough: todos differ in size and the child adds more as it goes.
 - **What the deny list covers.** On top of auto mode the child runs with a
   `--disallowedTools` list that blocks the plain forms of force pushes,
   deleting remote branches, editing or deleting issue comments (so the child
