@@ -21,7 +21,7 @@ GitHub issue and reports start, progress, and finish on that issue as they
 happen.
 
 You are the **reporter's parent**, not the worker. The work is done by a
-headless child (`claude -p '/goal <URL> <tick instruction>'`) that
+headless child (`claude -p '/goal <URL> <todo instruction> <tick instruction>'`) that
 `scripts/launch.sh` starts, and
 the live status is written by `scripts/report.sh`, which reads the child's
 stream. Your jobs are the ones around it: the check before the start, the
@@ -210,7 +210,7 @@ Then, in this order:
 - **Who writes the issue body.** Only the child, and only to tick task-list
   boxes (for example under "Acceptance criteria") it has done and verified.
   `launch.sh` appends a fixed instruction to the goal condition after the URL
-  saying so: tick only verified items, never untick or reword, change nothing
+  (and after the todo instruction below) saying so: tick only verified items, never untick or reword, change nothing
   but `- [ ]` to `- [x]` on those lines, and fetch the current body right
   before each edit, because `gh issue edit --body` replaces the whole body. The
   instruction is a constant, so nothing from the issue reaches the command
@@ -231,7 +231,16 @@ Then, in this order:
   run-wide rate applied to the todos left. It is filled only while running
   with at least one todo completed, and empty otherwise (no todos, none done
   yet, or the run has ended), so it is never a made-up time either. It is
-  rough: todos differ in size and the child adds more as it goes.
+  rough: todos differ in size and the child adds more as it goes. Both
+  depend on the child making todos, and a child left to itself often makes
+  none, so `launch.sh` appends a fixed todo instruction right after the URL,
+  before the tick instruction: break the work into small `TaskCreate` todos of
+  a few minutes each before starting, mark each completed with `TaskUpdate` as
+  soon as it is done, add todos as new steps come up, because progress and the
+  remaining time are computed from them. Like the tick instruction it is a
+  constant, and since the `/goal` evaluator judges it too, it is worded as a
+  way of working, not as a condition for the goal. It is asked, not enforced:
+  the child may still make no todos, or a few large ones.
 - **What the deny list covers.** On top of auto mode the child runs with a
   `--disallowedTools` list that blocks the plain forms of force pushes,
   deleting remote branches, editing or deleting issue comments (so the child
