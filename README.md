@@ -214,13 +214,13 @@ One status comment, created when the run starts and edited in place:
 | Remaining (est.) | ~12m 03s (estimate, from 3/6 todos) |
 ```
 
-Progress is the child's own todo list: completed / not deleted. It can go down when the child adds tasks. A run with no todos shows the turn count instead, never a made-up %. The remaining time is a rough estimate, elapsed / completed × (total − completed); it can jump when the child adds todos, and it is left empty when there are no todos, none is completed yet, or the run has ended. The comment is written at the start and the end at once, on todo changes at most once every 30 seconds, and every 5 minutes as a heartbeat. When the run ends, a second, **new** comment gives a short summary: whether the goal was met, any PR, and what happened to the worktree. It is a new comment so that subscribers get a notification. The reporters never write the issue body; the only change to it is the child ticking the task-list boxes (for example the acceptance criteria) it has done and verified.
+Progress is the child's own todo list: completed / not deleted. It can go down when the child adds tasks. A run with no todos shows the turn count instead, never a made-up %. The remaining time is a rough estimate, elapsed / completed × (total − completed); it can jump when the child adds todos, and it is left empty when there are no todos, none is completed yet, or the run has ended. Because both come from the child's todos, the child is asked up front (a fixed instruction after the URL) to break the work into small todos and complete each as it goes; it is asked, not enforced. The comment is written at the start and the end at once, on todo changes at most once every 30 seconds, and every 5 minutes as a heartbeat. When the run ends, a second, **new** comment gives a short summary: whether the goal was met, any PR, and what happened to the worktree. It is a new comment so that subscribers get a notification. The reporters never write the issue body; the only change to it is the child ticking the task-list boxes (for example the acceptance criteria) it has done and verified.
 
 The run ends in one of three states: `finished` (the child exited cleanly, which is not the same as the goal being met; the summary says which), `failed` (an error result), or `interrupted` (no result, or the reporter was killed).
 
 ### How it works
 
-A skill cannot start `/goal` in its own session, so `jikkyo` runs it in a headless child, `claude -p '/goal <URL> <tick instruction>'`, and acts as the reporter:
+A skill cannot start `/goal` in its own session, so `jikkyo` runs it in a headless child, `claude -p '/goal <URL> <todo instruction> <tick instruction>'`, and acts as the reporter:
 
 - **The child does the work** in its own git worktree (`.claude/worktrees/jikkyo-<N>-<timestamp>`, branch `worktree-jikkyo-<N>-<timestamp>`), so you can keep using your checkout. Unpushed local commits are not visible to it.
 - **A script reports.** `scripts/report.sh` reads the child's `stream-json` output and updates the status comment through `gh` on its own, without the model being awake.

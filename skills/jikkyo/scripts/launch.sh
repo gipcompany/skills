@@ -53,9 +53,15 @@ DENY_RULES=(
   'Bash(gh api graphql*deleteIssue*)'
 )
 
-# Appended to the goal condition after the URL. A constant, so nothing from the
-# issue reaches the command line beyond the validated URL. It is also what the
-# /goal evaluator judges against. Keep it on one line.
+# Both instructions are appended to the goal condition after the URL, todos
+# first. They are constants, so nothing from the issue reaches the command line
+# beyond the validated URL. They are also what the /goal evaluator judges
+# against, which is why the todo one is worded as a way of working, not as a
+# condition for the goal. Keep each on one line.
+#
+# report.sh computes progress and the remaining-time estimate from the child's
+# TaskCreate / TaskUpdate events; a child left to itself often makes no todos.
+TODO_INSTRUCTION='Todos: before starting the work, break it into small steps with TaskCreate, one todo per step of a few minutes each, and mark each todo completed with TaskUpdate as soon as that step is done; add todos with TaskCreate when new steps come up. Progress and the remaining time shown on the issue are computed from these todos.'
 TICK_INSTRUCTION='Task-list boxes: each time a task-list item in the body of this issue (for example under "Acceptance criteria") is done and verified (tests run, output checked), tick that box on the issue. Tick only items you have verified, and never untick or reword anything. Change nothing in the body but "- [ ]" to "- [x]" on those lines: fetch the current body right before each edit and write it back with only those lines changed, because gh issue edit --body replaces the whole body and someone else may have edited it meanwhile. The goal is met only when the work is done and every box you could verify is ticked.'
 
 usage() {
@@ -107,11 +113,11 @@ echo "jikkyo: worktree branch worktree-${name}"
 
 cd "$root" || exit 2
 
-# The goal condition is the issue URL verbatim, then the fixed tick
-# instruction. --disallowedTools takes the rest of the command line, so it
+# The goal condition is the issue URL verbatim, then the fixed todo and tick
+# instructions. --disallowedTools takes the rest of the command line, so it
 # stays last. stdin is /dev/null: `claude -p`
 # otherwise waits for piped input, and the child has no business reading ours.
-CLAUDE_CODE_ENABLE_TODO_TOOLS=1 claude -p "/goal ${url} ${TICK_INSTRUCTION}" \
+CLAUDE_CODE_ENABLE_TODO_TOOLS=1 claude -p "/goal ${url} ${TODO_INSTRUCTION} ${TICK_INSTRUCTION}" \
   --worktree "$name" \
   --output-format stream-json \
   --verbose \
