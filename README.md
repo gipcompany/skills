@@ -13,12 +13,14 @@ A collection of agent skills for [Claude Code](https://docs.anthropic.com/en/doc
 |-------|-------------|
 | [carve-it](skills/carve-it/SKILL.md) | Replace a single large commit, in place, with a sequence of small review-sized commits — each passing CI on its own, each 100% pure in its Conventional Commits type. |
 | [kabeuchi](skills/kabeuchi/SKILL.md) | Run a relentless `/grilling` (壁打ち) session that writes each settled conclusion back, in place, into a writable markdown target — a GitHub issue body or a local markdown file — so it always reflects the current agreed spec. Every recommendation is put to an evidence-checked vote of read-only subagents. Requires the `/grilling` skill and the bundled `kabeuchi-voter` subagent. |
+| [jikkyo](skills/jikkyo/SKILL.md) | Run `/goal` on a GitHub issue in a headless child, in its own git worktree, and commentate the run live on that issue — one status comment with start time, end time, and progress %, edited in place, plus a closing summary. Requires `gh` and `jq`. |
 
 ## Installation
 
 ```
 npx skills add https://github.com/gipcompany/skills --skill carve-it
 npx skills add https://github.com/gipcompany/skills --skill kabeuchi
+npx skills add https://github.com/gipcompany/skills --skill jikkyo
 ```
 
 Or browse and pick interactively:
@@ -182,6 +184,58 @@ The skill also pre-approves `Bash(<skill-dir>/scripts/mark.sh *)` so the marker 
 - Read-only targets, or you just want to stress-test a plan without saving → use `/grilling` directly.
 - You want the session distilled into separate ADR / glossary documents instead of edited back into one target → that's a different workflow.
 - Targets other than a GitHub issue body or a local markdown file (PR bodies, Gists, arbitrary URLs).
+
+## jikkyo
+
+**Run `/goal` on an issue, and commentate it on the issue.** `jikkyo` (実況 — "live commentary," the play-by-play of a sports broadcast) takes the GitHub issue URL you would have given `/goal`, starts the `/goal` run itself, and writes the run's status back to the issue as it goes. You type only `/jikkyo <URL>`; you never type a `/goal` line.
+
+### Usage
+
+```
+/jikkyo [--force] https://github.com/<owner>/<repo>/issues/<N>
+```
+
+Run it from a checkout of that repository. `--force` starts a run even when another one looks active on the issue.
+
+### What shows up on the issue
+
+One status comment, created when the run starts and edited in place:
+
+```
+### jikkyo · running · 3/6 (50%)
+
+| Field    | Value                     |
+| -------- | ------------------------- |
+| State    | running                   |
+| Started  | 2026-11-13 18:01:16 +0900 |
+| Ended    |                           |
+| Progress | 3/6 (50%)                 |
+| Elapsed  | 12m 03s                   |
+```
+
+Progress is the child's own todo list: completed / not deleted. It can go down when the child adds tasks. A run with no todos shows the turn count instead, never a made-up %. The comment is written at the start and the end at once, on todo changes at most once every 30 seconds, and every 5 minutes as a heartbeat. When the run ends, a second, **new** comment gives a short summary: whether the goal was met, any PR, and what happened to the worktree. It is a new comment so that subscribers get a notification. The issue body is never touched.
+
+The run ends in one of three states: `finished` (the child exited cleanly, which is not the same as the goal being met; the summary says which), `failed` (an error result), or `interrupted` (no result, or the reporter was killed).
+
+### How it works
+
+A skill cannot start `/goal` in its own session, so `jikkyo` runs it in a headless child, `claude -p '/goal <URL>'`, and acts as the reporter:
+
+- **The child does the work** in its own git worktree (`.claude/worktrees/jikkyo-<N>-<timestamp>`, branch `worktree-jikkyo-<N>-<timestamp>`), so you can keep using your checkout. Unpushed local commits are not visible to it.
+- **A script reports.** `scripts/report.sh` reads the child's `stream-json` output and updates the status comment through `gh` on its own, without the model being awake.
+- **The parent session** checks the issue before the start and, at exit, removes the worktree when that is safe (`scripts/cleanup.sh` decides: no uncommitted changes, and pushed or no new commits) and posts the summary.
+- **At most one run per issue**, judged from the issue itself, so it works across terminals and machines. A `running` status comment updated in the last 15 minutes blocks a new run, and an older one is marked `interrupted`.
+
+### What it runs on your machine
+
+Know this before you install it: **the child runs unattended with `--permission-mode auto`**, and you cannot steer it once it has started. On top of auto mode it gets a short deny list (`--disallowedTools`) blocking the plain forms of force pushes, remote-branch deletion, editing or deleting issue comments, and closing or deleting issues. Plain `git push` stays allowed so that it can open a PR. Deny rules match only the command as written, so the list is a limit on the obvious, not a sandbox. Read `skills/jikkyo/scripts/launch.sh`, where it is defined.
+
+`allowed-tools` pre-approves only `jikkyo`'s own `launch.sh`, `precheck.sh`, and `cleanup.sh`, for the turn that invokes the skill. Every `gh` and `git` call made by the parent session asks as usual. `/jikkyo` is `disable-model-invocation: true`, so you have to type it.
+
+### When not to use
+
+- You want to steer the run while it is in progress → type `/goal <URL>` yourself.
+- Targets other than a GitHub issue URL.
 
 ## License
 
