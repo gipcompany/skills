@@ -210,7 +210,10 @@ Then, in this order:
 - **Who writes the issue body.** Only the child, and only to tick task-list
   boxes (for example under "Acceptance criteria") it has done and verified.
   `launch.sh` appends a fixed instruction to the goal condition after the URL
-  (and after the todo instruction below) saying so: tick only verified items, never untick or reword, change nothing
+  (and after the todo instruction below) saying so: tick each box as soon as
+  its item is done and verified, before moving on to the next item, and not
+  save the ticks for one edit at the end; tick only verified items, never
+  untick or reword, change nothing
   but `- [ ]` to `- [x]` on those lines, and fetch the current body right
   before each edit, because `gh issue edit --body` replaces the whole body. The
   instruction is a constant, so nothing from the issue reaches the command
@@ -219,7 +222,8 @@ Then, in this order:
   write the body: GitHub's issue update has no conditional write. Limits: the
   instruction is also what the `/goal` evaluator judges, so "only verified" is
   asked, not enforced; a human editing the body at the same moment can still
-  race the child; and an issue without a task list is unaffected.
+  race the child, and ticking as it goes means more edits and more chances
+  of that; and an issue without a task list is unaffected.
 - **Why scripts report, not you.** You get a turn only when the background
   command exits, and a Monitor watch expires after at most 30 minutes.
   `report.sh` writes on its own: the status comment at the start and the end
@@ -236,7 +240,9 @@ Then, in this order:
   none, so `launch.sh` appends a fixed todo instruction right after the URL,
   before the tick instruction: break the work into small `TaskCreate` todos of
   a few minutes each before starting, mark each completed with `TaskUpdate` as
-  soon as it is done, add todos as new steps come up, because progress and the
+  soon as it is done, add todos as new steps come up, and, when the issue has
+  a task list, make one todo per task-list item and tick its box right after
+  completing that todo, because progress and the
   remaining time are computed from them. Like the tick instruction it is a
   constant, and since the `/goal` evaluator judges it too, it is worded as a
   way of working, not as a condition for the goal. It is asked, not enforced:

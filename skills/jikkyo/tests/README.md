@@ -60,8 +60,9 @@ timing and signal tests waiting on a real scheduler.
   or a run outside a git repository. The child
   gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <todo instruction> <tick instruction>'`
   (one argument: the URL, then the fixed instruction to make `TaskCreate`
-  todos up front and complete them with `TaskUpdate`, then the fixed
-  instruction to tick only verified boxes, change only `- [ ]` to `- [x]`,
+  todos up front, one per task-list item when there is one, and complete them
+  with `TaskUpdate`, then the fixed instruction to tick each box as soon as
+  it is verified, not all at the end, tick only verified boxes, change only `- [ ]` to `- [x]`,
   and fetch the body before each edit),
   `--worktree jikkyo-<N>-<timestamp>`, `--output-format stream-json`,
   `--verbose`, `--permission-mode auto`, and `--disallowedTools` with every
