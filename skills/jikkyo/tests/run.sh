@@ -231,6 +231,13 @@ echo "report.sh: end states and the final message"
   assert_has "no result line: says there is no final message" "jikkyo: no final message" "$out"
   assert_lacks "no result line: prints no final message" "final message:" "$out"
 
+  f="$TMP/emptyresult.jsonl"
+  jq -cn '{type: "result", subtype: "success", is_error: false, result: ""}' > "$f"
+  run_report "$f"
+  out="$(cat "$TMP/out")"
+  assert_has "an empty result text: says the final message is empty" "jikkyo: final message is empty" "$out"
+  assert_lacks "an empty result text: no bare final-message header" "final message:" "$out"
+
   : > "$TMP/empty.jsonl"
   run_report "$TMP/empty.jsonl"
   assert_eq "an empty stream still gets a start and an end write" "2" "$(calls)"

@@ -135,7 +135,9 @@ The background command's output is the hand-over. Read it and pick out:
 - `jikkyo: state finished|failed|interrupted` — how the stream ended.
 - `jikkyo: final message:` followed by the child's final message (the `result`
   text on success, the `errors` on an `error_*` subtype), **or**
-  `jikkyo: no final message …` when the stream had no `result` line.
+  `jikkyo: final message is empty …` when the `result` line carried no text
+  (a `/goal` loop that hit Claude Code's stop-hook block cap ends this way),
+  **or** `jikkyo: no final message …` when the stream had no `result` line.
 
 Then, in this order:
 

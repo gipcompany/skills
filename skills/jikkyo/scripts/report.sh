@@ -196,15 +196,22 @@ _write() {
 }
 
 print_final_message() {
-  local json
+  local json msg
   json="$(cat "$state_file")"
   if [ "$(jq -r '.result == null' <<<"$json")" = true ]; then
     echo "jikkyo: no final message (the stream ended without a result line)"
     return
   fi
+  msg="$(jq -r '.result | if .subtype == "success" then (.text // "")
+         else ((.errors // []) | if type == "array" then map(tostring) | join("\n") else tostring end) end' <<<"$json")"
+  # An empty result is real: a /goal loop that hits the stop-hook block cap
+  # ends with subtype success and no text. Say so instead of printing nothing.
+  if [ -z "$(printf '%s' "$msg" | tr -d '[:space:]')" ]; then
+    echo "jikkyo: final message is empty (the result line carried no text)"
+    return
+  fi
   echo "jikkyo: final message:"
-  jq -r '.result | if .subtype == "success" then (.text // "")
-         else ((.errors // []) | if type == "array" then map(tostring) | join("\n") else tostring end) end' <<<"$json"
+  printf '%s\n' "$msg"
 }
 
 final_state() {
