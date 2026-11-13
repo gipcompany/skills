@@ -125,16 +125,21 @@ echo "report.sh: progress"
   } > "$f"
   run_report "$f"
   b="$(last_body)"
-  assert_eq "completed / non-deleted tasks, with a deletion and a mid-run add" "### jikkyo · finished · 2/3 (66%)" "$(heading "$b")"
-  assert_has "the table carries the progress row" "| Progress | 2/3 (66%) |" "$b"
+  assert_eq "completed / non-deleted tasks, with a deletion and a mid-run add" "### jikkyo · finished · 66%" "$(heading "$b")"
+  assert_has "the table carries the progress row" "| Progress | 66% |" "$b"
 
   # The % can go down when the child adds tasks.
-  f="$TMP/down.jsonl"
+  f="$TMP/down-before.jsonl"
   { create a 1; create b 2; create c 3; create d 4
-    update e 1 completed; update f 2 completed; update g 3 completed
-    create h 5; create i 6; } > "$f"
+    update e 1 completed; update f 2 completed; update g 3 completed; } > "$f"
   run_report "$f"
-  assert_eq "progress drops when tasks are added (3/4 -> 3/6)" "### jikkyo · interrupted · 3/6 (50%)" "$(heading "$(last_body)")"
+  assert_eq "before the add: 3 of 4 todos" "### jikkyo · interrupted · 75%" "$(heading "$(last_body)")"
+  f="$TMP/down.jsonl"
+  { cat "$TMP/down-before.jsonl"; create h 5; create i 6; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "progress drops when tasks are added (3/4 -> 3/6)" "### jikkyo · interrupted · 50%" "$(heading "$b")"
+  assert_has "the Progress row drops too" "| Progress | 50% |" "$b"
 
   # A TaskCreate whose result is an error creates nothing; neither does an
   # update to a task that was never created.
@@ -143,7 +148,7 @@ echo "report.sh: progress"
     assistant_tool b TaskCreate '{"subject":"x","description":"y"}'; tool_result b "boom" true
     update c 9 completed; update d 1 completed; result_ok; } > "$f"
   run_report "$f"
-  assert_eq "failed creates and unknown task ids are ignored" "### jikkyo · finished · 1/1 (100%)" "$(heading "$(last_body)")"
+  assert_eq "failed creates and unknown task ids are ignored" "### jikkyo · finished · 100%" "$(heading "$(last_body)")"
 
   # The task id can also come from the structured tool_use_result.
   f="$TMP/structured.jsonl"
@@ -152,7 +157,7 @@ echo "report.sh: progress"
              message: {content: [{type: "tool_result", tool_use_id: "s1", content: [{type: "text", text: "ok"}]}]}}'
     update s2 5 completed; result_ok; } > "$f"
   run_report "$f"
-  assert_eq "task id read from tool_use_result when the text has none" "### jikkyo · finished · 1/1 (100%)" "$(heading "$(last_body)")"
+  assert_eq "task id read from tool_use_result when the text has none" "### jikkyo · finished · 100%" "$(heading "$(last_body)")"
 
   # No todo events: turn count, no %.
   f="$TMP/notodo.jsonl"
@@ -179,14 +184,14 @@ echo "report.sh: progress"
     echo '{"type":"user","message":{"content":[42, null, "x"]}}'
     update b 1 completed; result_ok; } > "$f"
   run_report "$f"
-  assert_eq "unexpected event shapes are skipped and the run goes on" "### jikkyo · finished · 1/1 (100%)" "$(heading "$(last_body)")"
+  assert_eq "unexpected event shapes are skipped and the run goes on" "### jikkyo · finished · 100%" "$(heading "$(last_body)")"
   assert_has "...and the final message still arrives" "All done. Opened PR #99." "$(cat "$TMP/out")"
 
   # Garbage lines do not end the run.
   f="$TMP/garbage.jsonl"
   { echo 'not json'; echo '[1,2]'; create a 1; update b 1 completed; result_ok; } > "$f"
   run_report "$f"
-  assert_eq "lines that are not JSON objects are skipped" "### jikkyo · finished · 1/1 (100%)" "$(heading "$(last_body)")"
+  assert_eq "lines that are not JSON objects are skipped" "### jikkyo · finished · 100%" "$(heading "$(last_body)")"
 }
 
 # ===========================================================================
@@ -299,14 +304,14 @@ echo "report.sh: when it writes"
   assert_eq "still held at 29 s" "1" "$(calls)"
   at 1030; settle
   assert_eq "the held change is written at the next slot (30 s)" "2" "$(calls)"
-  assert_eq "the held write shows the change" "### jikkyo · running · 0/1 (0%)" "$(heading "$(last_body)")"
+  assert_eq "the held write shows the change" "### jikkyo · running · 0%" "$(heading "$(last_body)")"
 
   at 1031; update u1 1 in_progress >&4; update u2 1 completed >&4; settle
   at 1059; settle
   assert_eq "back-to-back changes are coalesced and held" "2" "$(calls)"
   at 1060; settle
   assert_eq "they are written as one write" "3" "$(calls)"
-  assert_eq "that write shows the latest state" "### jikkyo · running · 1/1 (100%) · ~0s left" "$(heading "$(last_body)")"
+  assert_eq "that write shows the latest state" "### jikkyo · running · 100% · ~0s left" "$(heading "$(last_body)")"
 
   at 1200; settle
   assert_eq "no change, no write before the heartbeat" "3" "$(calls)"
@@ -321,14 +326,14 @@ echo "report.sh: when it writes"
   exec 4>&-
   wait "$rpid"
   assert_eq "end: written at once when the stream ends" "5" "$(calls)"
-  assert_eq "the pending change is in the end write" "### jikkyo · interrupted · 1/2 (50%)" "$(heading "$(last_body)")"
+  assert_eq "the pending change is in the end write" "### jikkyo · interrupted · 50%" "$(heading "$(last_body)")"
   rm -f "$fifo"
 }
 
 # ===========================================================================
 echo "report.sh: estimated time remaining"
 {
-  remaining() { printf '%s\n' "$1" | grep '^| Remaining (est.) |'; }
+  remaining() { printf '%s\n' "$1" | grep '^| Remaining'; }
   new_log
   clock="$TMP/clock"; echo 1000 > "$clock"
   fifo="$TMP/fifo-eta"; rm -f "$fifo"; mkfifo "$fifo"
@@ -339,15 +344,15 @@ echo "report.sh: estimated time remaining"
 
   settle
   b="$(last_body)"
-  assert_eq "no todos: the Remaining row is empty" "| Remaining (est.) |  |" "$(remaining "$b")"
+  assert_eq "no todos: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
   assert_eq "no todos: no estimate in the heading" "### jikkyo · running · 0 turns" "$(heading "$b")"
 
   { create t1 1; create t2 2; create t3 3; create t4 4; } >&4
   echo 1060 > "$clock"; settle
   assert_eq "todos written" "2" "$(calls)"
   b="$(last_body)"
-  assert_eq "none completed: the Remaining row is empty" "| Remaining (est.) |  |" "$(remaining "$b")"
-  assert_eq "none completed: no estimate in the heading" "### jikkyo · running · 0/4 (0%)" "$(heading "$b")"
+  assert_eq "none completed: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
+  assert_eq "none completed: no estimate in the heading" "### jikkyo · running · 0%" "$(heading "$b")"
 
   # 150 s for 1 of 4 todos: 150 / 1 * 3 = 450 s left.
   update u1 1 completed >&4
@@ -355,16 +360,16 @@ echo "report.sh: estimated time remaining"
   assert_eq "progress written" "3" "$(calls)"
   b="$(last_body)"
   assert_eq "partial progress: the Remaining row has the estimate" \
-    "| Remaining (est.) | ~7m 30s (estimate, from 1/4 todos) |" "$(remaining "$b")"
+    "| Remaining | ~7m 30s (estimate) |" "$(remaining "$b")"
   assert_eq "partial progress: the heading carries the estimate" \
-    "### jikkyo · running · 1/4 (25%) · ~7m 30s left" "$(heading "$b")"
+    "### jikkyo · running · 25% · ~7m 30s left" "$(heading "$b")"
 
   result_ok >&4
   exec 4>&-
   wait "$rpid"
   b="$(last_body)"
-  assert_eq "finished: the Remaining row is empty" "| Remaining (est.) |  |" "$(remaining "$b")"
-  assert_eq "finished: no estimate in the heading" "### jikkyo · finished · 1/4 (25%)" "$(heading "$b")"
+  assert_eq "finished: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
+  assert_eq "finished: no estimate in the heading" "### jikkyo · finished · 25%" "$(heading "$b")"
   rm -f "$fifo"
 }
 
@@ -528,7 +533,7 @@ echo "precheck.sh"
   comment() {  # <id> <login> <state or "none"> <age seconds>
     local b
     if [ "$3" = none ]; then b="just a comment mentioning jikkyo:status state=running"
-    else b="$(printf '<!-- jikkyo:status v=1 state=%s -->\n### jikkyo · %s · 1/2 (50%%)\n\n| Field | Value |\n| --- | --- |\n| State | %s |' "$3" "$3" "$3")"; fi
+    else b="$(printf '<!-- jikkyo:status v=1 state=%s -->\n### jikkyo · %s · 50%%\n\n| Field | Value |\n| --- | --- |\n| State | %s |' "$3" "$3" "$3")"; fi
     jq -cn --argjson id "$1" --arg login "$2" --arg b "$b" --arg at "$(iso $((NOW - $4)))" \
       '{id: $id, html_url: ("https://github.com/o/r/issues/12#issuecomment-" + ($id | tostring)),
         user: {login: $login}, body: $b, created_at: $at, updated_at: $at}'
@@ -572,15 +577,24 @@ echo "precheck.sh"
 
   p="$(comment 1 me running 5000 | bash "$PRECHECK" --payload | jq -r .body)"
   assert_eq "--payload rewrites the marker to interrupted" "<!-- jikkyo:status v=1 state=interrupted -->" "$(printf '%s\n' "$p" | head -n 1)"
-  assert_has "--payload rewrites the heading" "### jikkyo · interrupted · 1/2 (50%)" "$p"
+  assert_has "--payload rewrites the heading" "### jikkyo · interrupted · 50%" "$p"
   assert_has "--payload rewrites the State row" "| State | interrupted |" "$p"
-  eta_body="$(printf '%s\n' '<!-- jikkyo:status v=1 state=running -->' '### jikkyo · running · 3/8 (37%) · ~12m 30s left' '' \
+  eta_body="$(printf '%s\n' '<!-- jikkyo:status v=1 state=running -->' '### jikkyo · running · 37% · ~12m 30s left' '' \
+    '| Field | Value |' '| --- | --- |' '| State | running |' '| Elapsed | 7m 30s |' \
+    '| Remaining | ~12m 30s (estimate) |')"
+  p="$(jq -cn --arg b "$eta_body" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload drops the estimate from the heading" "### jikkyo · interrupted · 37%" "$(heading "$p")"
+  assert_eq "--payload empties the Remaining row" "| Remaining |  |" "$(printf '%s\n' "$p" | grep '^| Remaining')"
+  assert_has "--payload keeps the Elapsed row" "| Elapsed | 7m 30s |" "$p"
+  # A comment posted before the row was renamed carries the old fraction and
+  # the old `Remaining (est.)` label; it is emptied the same way.
+  old_body="$(printf '%s\n' '<!-- jikkyo:status v=1 state=running -->' '### jikkyo · running · 3/8 (37%) · ~12m 30s left' '' \
     '| Field | Value |' '| --- | --- |' '| State | running |' '| Elapsed | 7m 30s |' \
     '| Remaining (est.) | ~12m 30s (estimate, from 3/8 todos) |')"
-  p="$(jq -cn --arg b "$eta_body" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
-  assert_eq "--payload drops the estimate from the heading" "### jikkyo · interrupted · 3/8 (37%)" "$(heading "$p")"
-  assert_eq "--payload empties the Remaining row" "| Remaining (est.) |  |" "$(printf '%s\n' "$p" | grep '^| Remaining (est.) |')"
-  assert_has "--payload keeps the Elapsed row" "| Elapsed | 7m 30s |" "$p"
+  p="$(jq -cn --arg b "$old_body" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload, old format: drops the estimate from the heading" "### jikkyo · interrupted · 3/8 (37%)" "$(heading "$p")"
+  assert_eq "--payload, old format: empties the Remaining (est.) row" "| Remaining (est.) |  |" "$(printf '%s\n' "$p" | grep '^| Remaining')"
+  assert_has "--payload, old format: keeps the Elapsed row" "| Elapsed | 7m 30s |" "$p"
   rc=0; comment 1 me finished 10 | bash "$PRECHECK" --payload >/dev/null 2>&1 || rc=$?
   assert_eq "--payload refuses a comment that is not running" "1" "$rc"
 }

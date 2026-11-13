@@ -230,8 +230,11 @@ Then, in this order:
   at once, todo changes at most once every 30 seconds, and a heartbeat every
   5 minutes. Progress is completed / non-deleted todos from the child's own
   `TaskCreate` / `TaskUpdate` events; with no todos it shows the turn count,
-  never a made-up %. The `Remaining (est.)` row, echoed in the heading as
-  ` · ~<duration> left`, is elapsed / completed × (total − completed): the
+  never a made-up %. The heading and the `Progress` row show a percentage
+  only (`60%`), with no `<completed>/<total>` fraction: the todos are the
+  child's, not the issue's task list, and a fraction reads like a count of
+  the issue's boxes. The `Remaining` row (value `~<duration> (estimate)`),
+  echoed in the heading as ` · ~<duration> left`, is elapsed / completed × (total − completed): the
   run-wide rate applied to the todos left. It is filled only while running
   with at least one todo completed, and empty otherwise (no todos, none done
   yet, or the run has ended), so it is never a made-up time either. It is
