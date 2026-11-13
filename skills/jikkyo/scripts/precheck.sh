@@ -63,7 +63,11 @@ if [ "$payload" = true ]; then
       else {body: ($b
         | sub("^<!-- jikkyo:status v=1 state=running -->"; "<!-- jikkyo:status v=1 state=interrupted -->")
         | sub("### jikkyo · running"; "### jikkyo · interrupted")
-        | sub("\\| State \\| running \\|"; "| State | interrupted |"))}
+        # A dead run keeps no forward-looking estimate: drop the heading
+        # suffix (` · ~` occurs nowhere else) and empty the Remaining cell.
+        | sub(" · ~[^\\n]*"; "")
+        | sub("\\| State \\| running \\|"; "| State | interrupted |")
+        | sub("\\| Remaining \\(est\\.\\) \\|[^\\n]*"; "| Remaining (est.) |  |"))}
       end' 2>/dev/null)" || usage
   [ -n "$out" ] || { echo "precheck.sh: that comment is not a running jikkyo status comment" >&2; exit 1; }
   printf '%s\n' "$out"
