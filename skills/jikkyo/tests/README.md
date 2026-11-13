@@ -42,6 +42,17 @@ timing and signal tests waiting on a real scheduler.
   on the issue, every later write a PATCH of that comment by id; `--edit-last`
   and the issue body are never used; the hidden marker is the first line; a
   create that fails is retried as a create.
+- **`report.sh`, the language of the issue** — the `gh` stub answers the
+  issue read (`gh api repos/o/r/issues/12`, logged apart from the writes) with
+  `$GH_ISSUE`. An English issue gives today's English text; Japanese in the
+  body, in the title alone, or as halfwidth katakana gives a Japanese heading,
+  table header, field names, and state words (running, finished, failed,
+  interrupted, and the turn count), with the marker still `v=1` and the
+  English state; other non-ASCII text (accented Latin, Korean), a failed
+  read, an answer that is not JSON, and an issue with no title or body give
+  English. The issue's text never appears in a `gh` argument, the comment,
+  or the output, and a `$(…)` in it is never run. The hand-over lines stay
+  English apart from `jikkyo: language <ja|en>`.
 - **`report.sh`, when it writes** — against a fake clock (`JIKKYO_CLOCK_FILE`)
   with the stream held open on a FIFO: the start is written before any event;
   a todo change inside the 30-second window is held until the window ends;
@@ -52,7 +63,8 @@ timing and signal tests waiting on a real scheduler.
   `Remaining` row and heading for no todos (empty, no suffix), todos
   with none completed (empty, no suffix), partial progress (1 of 4 after
   150 s gives `~7m 30s (estimate)`, `25%`, and ` · ~7m 30s left`),
-  and a finished run (empty, no suffix).
+  and a finished run (empty, no suffix); the same in Japanese, where the
+  durations keep their format and only the words change.
 - **`report.sh`, signals** — SIGTERM, SIGHUP, and SIGINT each write
   `interrupted` with an end time before `report.sh` exits (143, 129, 130),
   also when the signal comes after the `result` line.
@@ -83,7 +95,11 @@ timing and signal tests waiting on a real scheduler.
   `Remaining` row (Elapsed untouched), also for a comment posted in the old
   format (`3/8 (37%)` and a `Remaining (est.)` row, whose label is kept),
   and refusing a comment that is
-  not `running`.
+  not `running`. The same decisions for Japanese status comments (live,
+  stale, and each ended state, also next to an English one), and `--payload`
+  rewriting a Japanese one, including the running comment `report.sh` itself
+  wrote with an estimate (suffix dropped, `Remaining` row emptied, Elapsed
+  and Progress untouched).
 - **`cleanup.sh`** — `remove` only for a worktree with no uncommitted changes
   (untracked, modified, and staged files all count) whose HEAD is on a
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed
@@ -92,4 +108,5 @@ timing and signal tests waiting on a real scheduler.
   worktree, or a path inside one.
 - **`SKILL.md`** — `allowed-tools` pins exactly `launch.sh`, `precheck.sh`, and
   `cleanup.sh` under `${CLAUDE_SKILL_DIR}`, with no rule for `claude`, `gh`, or
-  `git`, and the skill has no injected commands.
+  `git`, and the skill has no injected commands; it tells the parent to write
+  the closing summary in the status comment's language.

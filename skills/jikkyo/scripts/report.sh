@@ -24,6 +24,14 @@
 # After the final write it prints the child's final message for the parent
 # session: the `result` text on success, the `errors` on an error_* subtype.
 #
+# Language: before the first write it reads the issue's title and body with
+# `gh api` and writes the visible text in Japanese (`ja`) if they contain any
+# hiragana, katakana, or kanji, else in English (`en`). The issue's text goes
+# from gh to jq on a pipe and only `ja` or `en` comes back: none of it reaches
+# a command line or the comment. A failed fetch gives `en`. The choice is made
+# once and printed as `jikkyo: language <ja|en>`. The hidden marker, the state
+# values in it, and the number and duration formats are the same in both.
+#
 # Tuning, for tests: JIKKYO_TODO_INTERVAL (30), JIKKYO_HEARTBEAT_INTERVAL (300),
 # JIKKYO_TICK (1, seconds between scheduler passes), JIKKYO_MIN_GAP (1, seconds
 # between two writes), JIKKYO_CLOCK_FILE (read "now" in epoch seconds from this
@@ -67,6 +75,46 @@ fmt_duration() {
   if [ "$h" -gt 0 ]; then printf '%dh %02dm %02ds' "$h" "$m" "$s"
   elif [ "$m" -gt 0 ]; then printf '%dm %02ds' "$m" "$s"
   else printf '%ds' "$s"; fi
+}
+
+# Hiragana, katakana (with the phonetic extensions and the halfwidth forms),
+# and kanji (CJK unified ideographs, extension A, compatibility ideographs).
+# shellcheck disable=SC2016  # jq program
+LANG_FILTER='
+  ((.title // "") + "\n" + (.body // "")) as $t
+  | if ($t | type) == "string"
+       and ($t | test("[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]"))
+    then "ja" else "en" end
+'
+
+# detect_lang: print `ja` or `en` for the issue. Anything that goes wrong
+# (gh fails, the answer is not an issue object) gives `en`.
+detect_lang() {
+  local l
+  l="$(gh api "repos/${owner}/${repo}/issues/${num}" 2>/dev/null \
+       | jq -r "if type == \"object\" then (try (${LANG_FILTER}) catch \"en\") else \"en\" end" 2>/dev/null)"
+  case "$l" in ja) echo ja ;; *) echo en ;; esac
+}
+
+# The visible text in each language. The marker always uses the English state.
+set_labels() {
+  if [ "$1" = ja ]; then
+    L_FIELD="項目" L_VALUE="値" L_STATE="状態" L_STARTED="開始" L_ENDED="終了"
+    L_PROGRESS="進捗" L_TURNS="ターン数" L_ELAPSED="経過" L_REMAINING="残り"
+    L_ESTIMATE="（推定）" L_LEFT_PRE=" · 残り ~" L_LEFT_POST=""
+    L_TURN_ONE="1 ターン" L_TURN_MANY=" ターン"
+  else
+    L_FIELD="Field" L_VALUE="Value" L_STATE="State" L_STARTED="Started" L_ENDED="Ended"
+    L_PROGRESS="Progress" L_TURNS="Turns" L_ELAPSED="Elapsed" L_REMAINING="Remaining"
+    L_ESTIMATE=" (estimate)" L_LEFT_PRE=" · ~" L_LEFT_POST=" left"
+    L_TURN_ONE="1 turn" L_TURN_MANY=" turns"
+  fi
+}
+state_word() {
+  if [ "$LANG_CODE" = ja ]; then
+    case "$1" in running) echo "実行中" ;; finished) echo "完了" ;; failed) echo "失敗" ;;
+      interrupted) echo "中断" ;; *) echo "$1" ;; esac
+  else echo "$1"; fi
 }
 
 # ---------------------------------------------------------------------------
@@ -131,7 +179,7 @@ final_done=""
 # body <state> <state.json contents> <end ts or empty>
 body() {
   local st="$1" json="$2" end_ts="$3" t completed total turns heading label value ended elapsed
-  local secs eta="" eta_cell="" eta_suffix=""
+  local secs eta="" eta_cell="" eta_suffix="" word
   t="$(now)"
   completed="$(jq -r '.done' <<<"$json")"
   total="$(jq -r '.total' <<<"$json")"
@@ -139,12 +187,12 @@ body() {
   if [ "$total" -gt 0 ]; then
     value="$((completed * 100 / total))%"
     heading="$value"
-    label="Progress"
+    label="$L_PROGRESS"
   else
     value="$turns"
-    heading="${turns} turns"
-    [ "$turns" = 1 ] && heading="1 turn"
-    label="Turns"
+    heading="${turns}${L_TURN_MANY}"
+    [ "$turns" = 1 ] && heading="$L_TURN_ONE"
+    label="$L_TURNS"
   fi
   ended=""
   if [ -n "$end_ts" ]; then ended="$(fmt_time "$end_ts")"; t="$end_ts"; fi
@@ -156,18 +204,19 @@ body() {
   if [ "$st" = running ] && [ "$total" -gt 0 ] && [ "$completed" -gt 0 ]; then
     [ "$secs" -lt 0 ] && secs=0
     eta="$(fmt_duration $((secs * (total - completed) / completed)))"
-    eta_cell="~${eta} (estimate)"
-    eta_suffix=" · ~${eta} left"
+    eta_cell="~${eta}${L_ESTIMATE}"
+    eta_suffix="${L_LEFT_PRE}${eta}${L_LEFT_POST}"
   fi
+  word="$(state_word "$st")"
   printf '<!-- jikkyo:status v=1 state=%s -->\n' "$st"
-  printf '### jikkyo · %s · %s%s\n\n' "$st" "$heading" "$eta_suffix"
-  printf '| Field | Value |\n| --- | --- |\n'
-  printf '| State | %s |\n' "$st"
-  printf '| Started | %s |\n' "$(fmt_time "$start_ts")"
-  printf '| Ended | %s |\n' "$ended"
+  printf '### jikkyo · %s · %s%s\n\n' "$word" "$heading" "$eta_suffix"
+  printf '| %s | %s |\n| --- | --- |\n' "$L_FIELD" "$L_VALUE"
+  printf '| %s | %s |\n' "$L_STATE" "$word"
+  printf '| %s | %s |\n' "$L_STARTED" "$(fmt_time "$start_ts")"
+  printf '| %s | %s |\n' "$L_ENDED" "$ended"
   printf '| %s | %s |\n' "$label" "$value"
-  printf '| Elapsed | %s |\n' "$elapsed"
-  printf '| Remaining | %s |\n' "$eta_cell"
+  printf '| %s | %s |\n' "$L_ELAPSED" "$elapsed"
+  printf '| %s | %s |\n' "$L_REMAINING" "$eta_cell"
 }
 
 # write <state> [end ts]: create the comment on the first call, PATCH it by id
@@ -257,6 +306,11 @@ on_signal() {
 trap 'on_signal 143' TERM
 trap 'on_signal 129' HUP
 trap 'on_signal 130' INT
+
+LANG_CODE=en; set_labels en   # until the fetch below has answered
+LANG_CODE="$(detect_lang)"
+set_labels "$LANG_CODE"
+echo "jikkyo: language ${LANG_CODE}"
 
 write running
 

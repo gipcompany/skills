@@ -134,6 +134,7 @@ The background command's output is the hand-over. Read it and pick out:
 
 - `jikkyo: worktree name|path|branch …` — the three lines `launch.sh` printed
   before the child started.
+- `jikkyo: language ja|en` — the language the status comment is written in.
 - `jikkyo: status comment <URL>` — the status comment.
 - `jikkyo: state finished|failed|interrupted` — how the stream ended.
 - `jikkyo: final message:` followed by the child's final message (the `result`
@@ -180,9 +181,15 @@ Then, in this order:
    JIKKYO_EOF
    ```
 
-   Keep it short and factual:
+   **Write it in the same language as the status comment**, from the
+   `jikkyo: language` line: all in Japanese for `ja`, all in English for
+   `en` (or when the line is missing). Do not decide the language yourself
+   from the issue: the script has already chosen it, and the summary must
+   match the status comment. Keep it short and factual:
 
-   - First line: `jikkyo · <state>` and a link to the status comment.
+   - First line: `jikkyo · <state>` and a link to the status comment. For
+     `ja` the state is the word the status comment uses: `完了` (finished),
+     `失敗` (failed), or `中断` (interrupted).
    - **Whether the goal was met**, and why, in one or two sentences based on
      the final message. `finished` only means the child exited cleanly: the
      `/goal` evaluator may have ruled the goal impossible, or the no-progress
@@ -257,6 +264,21 @@ Then, in this order:
   `git push` stays allowed, so the child can push its branch and open a PR.
   Deny rules match only the command as written; the list is a limit on the
   obvious, not a sandbox.
+- **Which language.** `report.sh` decides once, at the start, before its
+  first write: it reads the issue's title and body with `gh api` and pipes
+  them to `jq`, which answers `ja` if they contain any hiragana, katakana, or
+  kanji, else `en`. Nothing from the issue reaches a command line or the
+  comment; only `ja` or `en` comes back, and a failed read gives `en`. For
+  `ja` the heading, the field names, the state words (`実行中`, `完了`,
+  `失敗`, `中断`), the turn count, and the estimate labels are Japanese; the
+  number and duration formats are the same as in English, and so is the
+  hidden marker, state values included, so `precheck.sh` reads a run's state
+  the same way in either language. `precheck.sh --payload` rewrites the
+  visible text of either form, including comments written before there was a
+  Japanese form. Limits: only `ja` or `en` (any other language gets English);
+  an English issue that quotes any Japanese text is classed as `ja`; and
+  editing the issue mid-run does not change the language. You write the
+  closing summary in that language too (Phase 3).
 - **Concurrent runs.** One run per issue, judged from the issue itself, so it
   works across terminals and machines: a `running` status comment by the same
   account that was updated within 15 minutes blocks a new run. The state lives
