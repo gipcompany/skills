@@ -58,7 +58,10 @@ timing and signal tests waiting on a real scheduler.
   with exit 2 before the child or `gh` runs, as is an issue whose repository is
   not a remote of the checkout (a host like `notgithub.com` does not count),
   or a run outside a git repository. The child
-  gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL>'`,
+  gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <tick instruction>'`
+  (one argument: the URL, a space, then the fixed instruction to tick only
+  verified boxes, change only `- [ ]` to `- [x]`, and fetch the body before
+  each edit),
   `--worktree jikkyo-<N>-<timestamp>`, `--output-format stream-json`,
   `--verbose`, `--permission-mode auto`, and `--disallowedTools` with every
   rule for force pushes, remote-branch deletion, comment edits and deletes,

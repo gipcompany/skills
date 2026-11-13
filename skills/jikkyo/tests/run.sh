@@ -449,7 +449,15 @@ echo "launch.sh"
   args="$(cat "$CLAUDE_ARGS" 2>/dev/null)"
   assert_eq "the child's stdin is /dev/null, not the caller's" "" "$(cat "$CLAUDE_ARGS.stdin" 2>/dev/null)"
   assert_eq "the child gets CLAUDE_CODE_ENABLE_TODO_TOOLS=1" "1" "$(cat "$CLAUDE_ARGS.env" 2>/dev/null)"
-  assert_eq "-p with the goal set to the issue URL verbatim" "$(printf -- '-p\n/goal %s' "$URL")" "$(printf '%s\n' "$args" | sed -n '1,2p')"
+  assert_eq "-p comes first" "-p" "$(printf '%s\n' "$args" | sed -n '1p')"
+  prompt="$(printf '%s\n' "$args" | sed -n '2p')"
+  assert_eq "the prompt starts with '/goal <URL> '" "/goal $URL " "${prompt:0:$(( ${#URL} + 7 ))}"
+  assert_has "the prompt asks the child to tick verified boxes" "tick that box on the issue" "$prompt"
+  assert_has "...only verified ones, never untick or reword" "Tick only items you have verified, and never untick or reword anything." "$prompt"
+  assert_has "...changing only - [ ] to - [x]" 'Change nothing in the body but "- [ ]" to "- [x]" on those lines' "$prompt"
+  assert_has "...fetching the body right before each edit" "fetch the current body right before each edit" "$prompt"
+  assert_has "...and the goal includes the ticks" "every box you could verify is ticked" "$prompt"
+  assert_eq "the prompt is one argument on one line (--worktree follows it)" "--worktree" "$(printf '%s\n' "$args" | sed -n '3p')"
   name="$(printf '%s\n' "$args" | awk 'prev == "--worktree" { print; exit } { prev = $0 }')"
   if [[ "$name" =~ ^jikkyo-12-[0-9]{8}-[0-9]{6}$ ]]; then ok "--worktree jikkyo-<N>-<timestamp> ($name)"
   else bad "--worktree jikkyo-<N>-<timestamp> (got [$name])"; fi
@@ -467,6 +475,7 @@ echo "launch.sh"
     'Bash(gh api graphql*closeIssue*)' 'Bash(gh api graphql*deleteIssue*)'; do
     if printf '%s\n' "$deny" | grep -qxF -- "$rule"; then ok "deny list has $rule"; else bad "deny list has $rule"; fi
   done
+  assert_eq "the deny list is exactly these 20 rules, last on the line" "20" "$(printf '%s\n' "$deny" | grep -c .)"
   assert_lacks "plain git push stays allowed" "Bash(git push)" "$deny"
   assert_lacks "plain git push stays allowed (no catch-all)" "Bash(git push*)" "$deny"
 
