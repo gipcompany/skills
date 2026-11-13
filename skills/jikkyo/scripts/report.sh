@@ -15,7 +15,7 @@
 # Progress comes from the stream alone: TaskCreate results give task ids,
 # TaskUpdate sets their status, and % = completed / tasks not deleted. With no
 # tasks the comment shows the turn count instead, never a made-up number.
-# While running, once a todo is completed, a `Remaining (est.)` row (and a
+# While running, once a todo is completed, a `Remaining` row (and a
 # ` · ~<duration> left` heading suffix) gives elapsed / completed * (total -
 # completed), the run-wide rate; otherwise that row is present but empty.
 #
@@ -137,7 +137,7 @@ body() {
   total="$(jq -r '.total' <<<"$json")"
   turns="$(jq -r '.turns' <<<"$json")"
   if [ "$total" -gt 0 ]; then
-    value="${completed}/${total} ($((completed * 100 / total))%)"
+    value="$((completed * 100 / total))%"
     heading="$value"
     label="Progress"
   else
@@ -156,7 +156,7 @@ body() {
   if [ "$st" = running ] && [ "$total" -gt 0 ] && [ "$completed" -gt 0 ]; then
     [ "$secs" -lt 0 ] && secs=0
     eta="$(fmt_duration $((secs * (total - completed) / completed)))"
-    eta_cell="~${eta} (estimate, from ${completed}/${total} todos)"
+    eta_cell="~${eta} (estimate)"
     eta_suffix=" · ~${eta} left"
   fi
   printf '<!-- jikkyo:status v=1 state=%s -->\n' "$st"
@@ -167,7 +167,7 @@ body() {
   printf '| Ended | %s |\n' "$ended"
   printf '| %s | %s |\n' "$label" "$value"
   printf '| Elapsed | %s |\n' "$elapsed"
-  printf '| Remaining (est.) | %s |\n' "$eta_cell"
+  printf '| Remaining | %s |\n' "$eta_cell"
 }
 
 # write <state> [end ts]: create the comment on the first call, PATCH it by id

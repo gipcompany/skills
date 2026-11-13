@@ -21,7 +21,9 @@ timing and signal tests waiting on a real scheduler.
 ## What is covered
 
 - **`report.sh`, progress** — completed / non-deleted todos, with a deleted
-  task and a task added mid-run; the % going down when tasks are added; a
+  task and a task added mid-run, shown as a percentage only (`66%`, no
+  `<completed>/<total>`) in the heading and the `Progress` row; the % going
+  down when tasks are added (75% before the add, 50% after); a
   failed `TaskCreate` and an update to an unknown task id changing nothing; the
   task id read from the result text (`Task #N created`) or from
   `tool_use_result.task.id`; a stream with no todo events showing the turn
@@ -47,9 +49,9 @@ timing and signal tests waiting on a real scheduler.
   5 minutes without a change, and not before; a change still held when the
   stream ends is in the end write, which happens at once.
 - **`report.sh`, estimated time remaining** — against the fake clock, the exact
-  `Remaining (est.)` row and heading for no todos (empty, no suffix), todos
+  `Remaining` row and heading for no todos (empty, no suffix), todos
   with none completed (empty, no suffix), partial progress (1 of 4 after
-  150 s gives `~7m 30s (estimate, from 1/4 todos)` and ` · ~7m 30s left`),
+  150 s gives `~7m 30s (estimate)`, `25%`, and ` · ~7m 30s left`),
   and a finished run (empty, no suffix).
 - **`report.sh`, signals** — SIGTERM, SIGHUP, and SIGINT each write
   `interrupted` with an end time before `report.sh` exits (143, 129, 130),
@@ -78,7 +80,9 @@ timing and signal tests waiting on a real scheduler.
   fractional-second timestamps; empty input or an API error object (a
   failed `gh` listing) giving exit 2 rather than `start`; `--payload` rewriting marker, heading, and
   State row, dropping the heading's ` · ~… left` suffix and emptying the
-  `Remaining (est.)` row (Elapsed untouched), and refusing a comment that is
+  `Remaining` row (Elapsed untouched), also for a comment posted in the old
+  format (`3/8 (37%)` and a `Remaining (est.)` row, whose label is kept),
+  and refusing a comment that is
   not `running`.
 - **`cleanup.sh`** — `remove` only for a worktree with no uncommitted changes
   (untracked, modified, and staged files all count) whose HEAD is on a

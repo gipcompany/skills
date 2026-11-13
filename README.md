@@ -202,19 +202,19 @@ Run it from a checkout of that repository. `--force` starts a run even when anot
 One status comment, created when the run starts and edited in place:
 
 ```
-### jikkyo · running · 3/6 (50%) · ~12m 03s left
+### jikkyo · running · 50% · ~12m 03s left
 
-| Field            | Value                               |
-| ---------------- | ----------------------------------- |
-| State            | running                             |
-| Started          | 2026-11-13 18:01:16 +0900           |
-| Ended            |                                     |
-| Progress         | 3/6 (50%)                           |
-| Elapsed          | 12m 03s                             |
-| Remaining (est.) | ~12m 03s (estimate, from 3/6 todos) |
+| Field     | Value                     |
+| --------- | ------------------------- |
+| State     | running                   |
+| Started   | 2026-11-13 18:01:16 +0900 |
+| Ended     |                           |
+| Progress  | 50%                       |
+| Elapsed   | 12m 03s                   |
+| Remaining | ~12m 03s (estimate)       |
 ```
 
-Progress is the child's own todo list: completed / not deleted. It can go down when the child adds tasks. A run with no todos shows the turn count instead, never a made-up %. The remaining time is a rough estimate, elapsed / completed × (total − completed); it can jump when the child adds todos, and it is left empty when there are no todos, none is completed yet, or the run has ended. Because both come from the child's todos, the child is asked up front (a fixed instruction after the URL) to break the work into small todos and complete each as it goes; it is asked, not enforced. The comment is written at the start and the end at once, on todo changes at most once every 30 seconds, and every 5 minutes as a heartbeat. When the run ends, a second, **new** comment gives a short summary: whether the goal was met, any PR, and what happened to the worktree. It is a new comment so that subscribers get a notification. The reporters never write the issue body; the only change to it is the child ticking the task-list boxes (for example the acceptance criteria) it has done and verified. It is asked to tick each box as soon as its item is verified, right after completing that item's todo (one todo per task-list item), rather than all at once at the end, so the boxes fill in as the run goes; this too is asked, not enforced.
+Progress is a percentage of the child's own todo list: completed / not deleted, rounded down. It counts the child's todos, not the issue's task list, so it is shown as a percentage only, with no `<completed>/<total>` fraction that could be read as a count of the issue's boxes. It can go down when the child adds tasks (3 of 4 is 75%, then 3 of 5 is 60%). A run with no todos shows the turn count instead, never a made-up %. The `Remaining` row is a rough estimate (its value says so), elapsed / completed × (total − completed); it can jump when the child adds todos, and it is left empty when there are no todos, none is completed yet, or the run has ended. Because both come from the child's todos, the child is asked up front (a fixed instruction after the URL) to break the work into small todos and complete each as it goes; it is asked, not enforced. The comment is written at the start and the end at once, on todo changes at most once every 30 seconds, and every 5 minutes as a heartbeat. When the run ends, a second, **new** comment gives a short summary: whether the goal was met, any PR, and what happened to the worktree. It is a new comment so that subscribers get a notification. The reporters never write the issue body; the only change to it is the child ticking the task-list boxes (for example the acceptance criteria) it has done and verified. It is asked to tick each box as soon as its item is verified, right after completing that item's todo (one todo per task-list item), rather than all at once at the end, so the boxes fill in as the run goes; this too is asked, not enforced.
 
 The run ends in one of three states: `finished` (the child exited cleanly, which is not the same as the goal being met; the summary says which), `failed` (an error result), or `interrupted` (no result, or the reporter was killed).
 
