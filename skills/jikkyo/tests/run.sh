@@ -45,8 +45,16 @@ trap 'rm -rf "$TMP"' EXIT
 # would.
 STUBS="$TMP/stubs"
 mkdir -p "$STUBS"
+# The read of the issue (`gh api repos/o/r/issues/12`, for the language) is
+# logged apart, in $GH_LOG/reads, and answers with $GH_ISSUE (an English issue
+# when unset), so the write counts below stay the writes alone.
 cat > "$STUBS/gh" <<'EOF'
 #!/usr/bin/env bash
+if [ "$*" = "api repos/o/r/issues/12" ]; then
+  printf '%s\n' "$*" >> "$GH_LOG/reads"
+  if [ -n "${GH_ISSUE:-}" ]; then cat "$GH_ISSUE"; else echo '{"title":"An issue","body":"In English."}'; fi
+  exit "${GH_ISSUE_RC:-0}"
+fi
 n=$(( $(cat "$GH_LOG/count" 2>/dev/null || echo 0) + 1 ))
 echo "$n" > "$GH_LOG/count"
 printf '%s\n' "$*" > "$GH_LOG/$n.args"
@@ -268,6 +276,7 @@ echo "report.sh: where it writes"
   new_log
   cat > "$TMP/gh-fail" <<'EOF'
 #!/usr/bin/env bash
+[ "$*" = "api repos/o/r/issues/12" ] && { echo '{"title":"t","body":"b"}'; exit 0; }
 n=$(( $(cat "$GH_LOG/count" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$GH_LOG/count"
 printf '%s\n' "$*" > "$GH_LOG/$n.args"; cat > "$GH_LOG/$n.body"
 [ "$n" -eq 1 ] && exit 1
@@ -279,6 +288,89 @@ EOF
 
   rc=0; bash "$REPORT" "https://example.com/x" < /dev/null >/dev/null 2>&1 || rc=$?
   assert_eq "a non-issue URL is a usage error" "2" "$rc"
+}
+
+# ===========================================================================
+echo "report.sh: the language of the issue"
+{
+  issue() { jq -cn --arg t "$1" --arg b "$2" '{title: $t, body: $b}' > "$TMP/issue.json"; }
+  f="$TMP/lang.jsonl"; { create a 1; create b 2; update c 1 completed; result_ok; } > "$f"
+
+  # English, as today.
+  issue "Fix the parser" "It breaks on a blank line."
+  GH_ISSUE="$TMP/issue.json" run_report "$f"
+  b="$(last_body)"
+  assert_has "English issue: prints the language" "jikkyo: language en" "$(cat "$TMP/out")"
+  assert_eq "English issue: the heading is English" "### jikkyo · finished · 50%" "$(heading "$b")"
+  assert_eq "English issue: the field names are English" \
+    "| Field | Value |,| State | finished |,| Progress | 50% |" \
+    "$(printf '%s\n' "$b" | grep -E '^\| (Field|State|Progress) ' | paste -sd, -)"
+  assert_eq "the issue is read once, with a plain GET" "api repos/o/r/issues/12" "$(cat "$GH_LOG/reads")"
+
+  # Japanese in the body, with the issue's own text in it.
+  issue "Parser bug" "空行で落ちます。\$(touch $TMP/pwned) SECRET-ISSUE-TEXT"
+  GH_ISSUE="$TMP/issue.json" run_report "$f"
+  b="$(last_body)"
+  assert_has "Japanese issue: prints the language" "jikkyo: language ja" "$(cat "$TMP/out")"
+  assert_eq "Japanese issue: the marker keeps v=1 and the English state" \
+    "<!-- jikkyo:status v=1 state=finished -->" "$(printf '%s\n' "$b" | head -n 1)"
+  assert_eq "Japanese issue: the heading is Japanese" "### jikkyo · 完了 · 50%" "$(heading "$b")"
+  want="$(printf '%s\n' '| 項目 | 値 |' '| --- | --- |' '| 状態 | 完了 |')"
+  assert_eq "Japanese issue: the table header and State row are Japanese" "$want" "$(printf '%s\n' "$b" | sed -n '4,6p')"
+  for row in '| 開始 | 2' '| 終了 | 2' '| 進捗 | 50% |' '| 経過 | ' '| 残り |  |'; do
+    assert_has "Japanese issue: row [$row]" "$row" "$b"
+  done
+  for word in Field State Started Ended Progress Elapsed Remaining finished; do
+    assert_lacks "Japanese issue: no English [$word] in the visible text" "$word" "$(printf '%s\n' "$b" | sed '1d')"
+  done
+  all="$(cat "$GH_LOG"/*.args "$GH_LOG"/*.body)"
+  assert_lacks "no text from the issue reaches the comment or a command line" "SECRET-ISSUE-TEXT" "$all$(cat "$TMP/out" "$TMP/err")"
+  assert_lacks "...not even the Japanese part" "空行" "$all"
+  if [ -e "$TMP/pwned" ]; then bad "the issue's text is never run"; else ok "the issue's text is never run"; fi
+
+  # Only the title in Japanese; katakana alone; halfwidth katakana.
+  issue "パーサの不具合" "It breaks."
+  GH_ISSUE="$TMP/issue.json" run_report "$f"
+  assert_eq "Japanese in the title alone gives ja" "### jikkyo · 完了 · 50%" "$(heading "$(last_body)")"
+  issue "x" "ｴﾗｰ"
+  GH_ISSUE="$TMP/issue.json" run_report "$f"
+  assert_has "halfwidth katakana gives ja" "jikkyo: language ja" "$(cat "$TMP/out")"
+  issue "Café — naïve «quotes» ü" "Ünïcödé, but not Japanese: 한국어"
+  GH_ISSUE="$TMP/issue.json" run_report "$f"
+  assert_has "other non-ASCII text gives en" "jikkyo: language en" "$(cat "$TMP/out")"
+
+  # A failed read, or an answer that is not an issue, falls back to English.
+  echo '{"message":"Not Found"}' > "$TMP/issue.json"
+  GH_ISSUE="$TMP/issue.json" GH_ISSUE_RC=1 run_report "$f"
+  assert_eq "a failed issue read gives en" "### jikkyo · finished · 50%" "$(heading "$(last_body)")"
+  echo 'not json' > "$TMP/issue.json"
+  GH_ISSUE="$TMP/issue.json" run_report "$f"
+  assert_has "an answer that is not JSON gives en" "jikkyo: language en" "$(cat "$TMP/out")"
+  jq -cn '{title: null, body: null}' > "$TMP/issue.json"
+  GH_ISSUE="$TMP/issue.json" run_report "$f"
+  assert_has "an issue with no title or body gives en" "jikkyo: language en" "$(cat "$TMP/out")"
+
+  # The other states and the turn count, in Japanese.
+  issue "日本語" ""
+  export GH_ISSUE="$TMP/issue.json"
+  f="$TMP/lang-fail.jsonl"; { create a 1; result_err error_max_turns; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "Japanese: failed" "### jikkyo · 失敗 · 0%" "$(heading "$b")"
+  assert_eq "Japanese: failed keeps the English marker" "failed" "$(marker_state "$b")"
+  f="$TMP/lang-int.jsonl"; { assistant_text; assistant_text; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "Japanese: interrupted, with the turn count" "### jikkyo · 中断 · 2 ターン" "$(heading "$b")"
+  assert_has "Japanese: the Turns row" "| ターン数 | 2 |" "$b"
+  f="$TMP/lang-one.jsonl"; { assistant_text; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "Japanese: one turn" "### jikkyo · 完了 · 1 ターン" "$(heading "$(last_body)")"
+  assert_eq "Japanese: the first write says running" "### jikkyo · 実行中 · 0 ターン" "$(heading "$(nth_body 1)")"
+  assert_eq "Japanese: running keeps the English marker" "running" "$(marker_state "$(nth_body 1)")"
+  assert_has "the final message is passed on unchanged" "All done. Opened PR #99." "$(cat "$TMP/out")"
+  assert_has "the hand-over state stays English" "jikkyo: state finished" "$(cat "$TMP/out")"
+  unset GH_ISSUE
 }
 
 # ===========================================================================
@@ -370,6 +462,27 @@ echo "report.sh: estimated time remaining"
   b="$(last_body)"
   assert_eq "finished: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
   assert_eq "finished: no estimate in the heading" "### jikkyo · finished · 25%" "$(heading "$b")"
+  rm -f "$fifo"
+
+  # The same estimate in Japanese: the words change, the duration format not.
+  jq -cn '{title: "見積もり", body: ""}' > "$TMP/issue-ja.json"
+  new_log
+  echo 1000 > "$clock"
+  fifo="$TMP/fifo-eta-ja"; rm -f "$fifo"; mkfifo "$fifo"
+  GH_ISSUE="$TMP/issue-ja.json" JIKKYO_CLOCK_FILE="$clock" bash "$REPORT" "$URL" < "$fifo" > "$TMP/out" 2>&1 &
+  rpid=$!
+  exec 4> "$fifo"
+  settle   # the start write, at 1000
+  { create t1 1; create t2 2; create t3 3; create t4 4; update u1 1 completed; } >&4
+  echo 1150 > "$clock"; settle
+  b="$(last_body)"
+  assert_eq "Japanese: the Remaining row has the estimate" "| 残り | ~7m 30s（推定） |" "$(printf '%s\n' "$b" | grep '^| 残り')"
+  assert_eq "Japanese: the heading carries the estimate" "### jikkyo · 実行中 · 25% · 残り ~7m 30s" "$(heading "$b")"
+  JA_ETA_BODY="$b"   # a running Japanese comment, for the precheck tests
+  exec 4>&-
+  wait "$rpid"
+  assert_eq "Japanese, ended: no estimate in the heading" "### jikkyo · 中断 · 25%" "$(heading "$(last_body)")"
+  assert_eq "Japanese, ended: the Remaining row is empty" "| 残り |  |" "$(last_body | grep '^| 残り')"
   rm -f "$fifo"
 }
 
@@ -597,6 +710,39 @@ echo "precheck.sh"
   assert_has "--payload, old format: keeps the Elapsed row" "| Elapsed | 7m 30s |" "$p"
   rc=0; comment 1 me finished 10 | bash "$PRECHECK" --payload >/dev/null 2>&1 || rc=$?
   assert_eq "--payload refuses a comment that is not running" "1" "$rc"
+
+  # Japanese status comments: the marker is the same, so the decisions are too.
+  ja_comment() {  # <id> <login> <state> <age seconds>
+    local w b
+    case "$3" in running) w="実行中" ;; finished) w="完了" ;; failed) w="失敗" ;; interrupted) w="中断" ;; esac
+    b="$(printf '<!-- jikkyo:status v=1 state=%s -->\n### jikkyo · %s · 50%%\n\n| 項目 | 値 |\n| --- | --- |\n| 状態 | %s |' "$3" "$w" "$w")"
+    jq -cn --argjson id "$1" --arg login "$2" --arg b "$b" --arg at "$(iso $((NOW - $4)))" \
+      '{id: $id, html_url: ("https://github.com/o/r/issues/12#issuecomment-" + ($id | tostring)),
+        user: {login: $login}, body: $b, created_at: $at, updated_at: $at}'
+  }
+  assert_eq "Japanese: a live running comment: refuse" \
+    "refuse https://github.com/o/r/issues/12#issuecomment-1" "$(ja_comment 1 me running 60 | decide)"
+  assert_eq "Japanese: a stale running comment: rewrite" "rewrite 1" "$(ja_comment 1 me running 900 | decide)"
+  for st in finished failed interrupted; do
+    assert_eq "Japanese: a $st comment never blocks" "start" "$(ja_comment 1 me "$st" 1 | decide)"
+  done
+  assert_eq "a stale English and a stale Japanese comment are both rewritten" "rewrite 1 2" \
+    "$( { comment 1 me running 5000; ja_comment 2 me running 5000; } | decide)"
+
+  p="$(ja_comment 1 me running 5000 | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "Japanese --payload: the marker becomes interrupted" "<!-- jikkyo:status v=1 state=interrupted -->" "$(printf '%s\n' "$p" | head -n 1)"
+  assert_eq "Japanese --payload: the heading" "### jikkyo · 中断 · 50%" "$(heading "$p")"
+  assert_has "Japanese --payload: the State row" "| 状態 | 中断 |" "$p"
+  assert_lacks "Japanese --payload: no running word left" "実行中" "$p"
+  # The comment report.sh itself wrote above, with an estimate in it.
+  p="$(jq -cn --arg b "$JA_ETA_BODY" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "Japanese --payload: drops the estimate from the heading" "### jikkyo · 中断 · 25%" "$(heading "$p")"
+  assert_eq "Japanese --payload: empties the Remaining row" "| 残り |  |" "$(printf '%s\n' "$p" | grep '^| 残り')"
+  assert_has "Japanese --payload: keeps the Elapsed row" "| 経過 | 2m 30s |" "$p"
+  assert_has "Japanese --payload: keeps the Progress row" "| 進捗 | 25% |" "$p"
+  # An English comment from report.sh, likewise, end to end.
+  p="$(comment 1 me running 5000 | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_lacks "English --payload: no Japanese appears" "中断" "$p"
 }
 
 # ===========================================================================
@@ -668,6 +814,9 @@ echo "SKILL.md"
   assert_lacks "allowed-tools does not pre-approve claude -p" "claude" "$allowed"
   assert_lacks "allowed-tools does not pre-approve gh" "gh " "$allowed"
   assert_lacks "allowed-tools does not pre-approve git" "git " "$allowed"
+  skill="$(cat "$SKILL_MD")"
+  assert_has "SKILL.md: the summary is in the status comment's language" "Write it in the same language as the status comment" "$skill"
+  assert_has "SKILL.md: the parent reads the language line" "jikkyo: language ja|en" "$skill"
   assert_eq "allowed-tools has exactly three rules" "3" "$(printf '%s\n' "$allowed" | grep -o 'Bash(' | wc -l | tr -d ' ')"
   # shellcheck disable=SC2016  # a literal backtick pattern
   if grep -n '^ *!`\|^```!' "$SKILL_MD" | grep -q .; then bad "SKILL.md has no injected commands"

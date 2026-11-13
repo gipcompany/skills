@@ -23,6 +23,10 @@
 #
 # prints the PATCH payload ({"body": …}) that turns that `running` comment into
 # an `interrupted` one, and exits 1 if the comment is not in state `running`.
+# It rewrites the visible text in English or in Japanese (report.sh writes
+# Japanese on an issue written in Japanese), including comments written before
+# there was a Japanese form; the state is read from the marker alone, which is
+# English in both, so the decision lines above do not depend on the language.
 #
 # Exit status: 0 with a decision, 1 as above, 2 on bad input, including
 # empty input or anything that is not a list of comment arrays.
@@ -68,7 +72,14 @@ if [ "$payload" = true ]; then
         # whose label is `Remaining`, or `Remaining (est.)` in older comments.
         | sub(" · ~[^\\n]*"; "")
         | sub("\\| State \\| running \\|"; "| State | interrupted |")
-        | sub("\\| (?<l>Remaining(?: \\(est\\.\\))?) \\|[^\\n]*"; "| \(.l) |  |"))}
+        | sub("\\| (?<l>Remaining(?: \\(est\\.\\))?) \\|[^\\n]*"; "| \(.l) |  |")
+        # The Japanese form, written on an issue in Japanese: the same
+        # rewrites. The marker is English in both; only the visible words
+        # differ, and a comment matches one set of these or the other.
+        | sub("### jikkyo · 実行中"; "### jikkyo · 中断")
+        | sub(" · 残り ~[^\\n]*"; "")
+        | sub("\\| 状態 \\| 実行中 \\|"; "| 状態 | 中断 |")
+        | sub("\\| 残り \\|[^\\n]*"; "| 残り |  |"))}
       end' 2>/dev/null)" || usage
   [ -n "$out" ] || { echo "precheck.sh: that comment is not a running jikkyo status comment" >&2; exit 1; }
   printf '%s\n' "$out"
