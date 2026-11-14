@@ -24,6 +24,7 @@ CLEANUP="${SCRIPTS}/cleanup.sh"
 SKILL_MD="${HERE}/../SKILL.md"
 README_MD="${HERE}/../../../README.md"
 URL="https://github.com/o/r/issues/12"
+SID="0f6c2a3e-5b7d-4c1e-9a8f-2d3b4c5e6f70"
 
 pass=0
 fail=0
@@ -670,24 +671,24 @@ echo "launch.sh"
       "https://github.com/o/r/issues/12'\"\$(id)" "https://gitlab.com/o/r/issues/12" \
       "https://github.com/o/r/issues/0"; do
     rm -f "$CLAUDE_ARGS"; new_log
-    rc=0; (cd "$repo" && bash "$LAUNCH" "$bad_url") >/dev/null 2>&1 || rc=$?
+    rc=0; (cd "$repo" && bash "$LAUNCH" "$SID" "$bad_url") >/dev/null 2>&1 || rc=$?
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then
       ok "rejects [$bad_url] without starting the child"
     else bad "rejects [$bad_url] without starting the child (rc=$rc)"; fi
   done
 
   rm -f "$CLAUDE_ARGS"
-  rc=0; (cd "$repo" && bash "$LAUNCH" "https://github.com/someone/else/issues/12") >/dev/null 2>&1 || rc=$?
+  rc=0; (cd "$repo" && bash "$LAUNCH" "$SID" "https://github.com/someone/else/issues/12") >/dev/null 2>&1 || rc=$?
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "rejects an issue whose repository is not a remote here"
   else bad "rejects an issue whose repository is not a remote here (rc=$rc)"; fi
 
   rm -f "$CLAUDE_ARGS"
-  rc=0; (cd "$TMP" && bash "$LAUNCH" "$URL") >/dev/null 2>&1 || rc=$?
+  rc=0; (cd "$TMP" && bash "$LAUNCH" "$SID" "$URL") >/dev/null 2>&1 || rc=$?
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "rejects a run outside a git repository"
   else bad "rejects a run outside a git repository (rc=$rc)"; fi
 
   new_log
-  out="$(cd "$repo/" && echo "caller's stdin" | bash "$LAUNCH" "$URL" 2>&1)"
+  out="$(cd "$repo/" && echo "caller's stdin" | bash "$LAUNCH" "$SID" "$URL" 2>&1)"
   args="$(cat "$CLAUDE_ARGS" 2>/dev/null)"
   assert_eq "the child's stdin is /dev/null, not the caller's" "" "$(cat "$CLAUDE_ARGS.stdin" 2>/dev/null)"
   assert_eq "the child gets CLAUDE_CODE_ENABLE_TODO_TOOLS=1" "1" "$(cat "$CLAUDE_ARGS.env" 2>/dev/null)"
@@ -769,18 +770,18 @@ echo "launch.sh"
 
   # From a subdirectory the worktree path is still under the repository root.
   mkdir -p "$repo/sub/dir"
-  out="$(cd "$repo/sub/dir" && bash "$LAUNCH" "$URL" 2>&1 < /dev/null)"
+  out="$(cd "$repo/sub/dir" && bash "$LAUNCH" "$SID" "$URL" 2>&1 < /dev/null)"
   assert_has "from a subdirectory the path is under the repository root" "jikkyo: worktree path $root/.claude/worktrees/jikkyo-12-" "$out"
 
   # A host that merely ends in github.com does not count.
   git -C "$repo" remote set-url origin https://notgithub.com/o/r.git
-  rm -f "$CLAUDE_ARGS"; rc=0; (cd "$repo" && bash "$LAUNCH" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
+  rm -f "$CLAUDE_ARGS"; rc=0; (cd "$repo" && bash "$LAUNCH" "$SID" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "a remote on notgithub.com does not match"
   else bad "a remote on notgithub.com does not match (rc=$rc)"; fi
 
   # An SSH remote counts too.
   git -C "$repo" remote set-url origin git@github.com:O/R.git
-  rm -f "$CLAUDE_ARGS"; out="$(cd "$repo" && bash "$LAUNCH" "$URL" 2>&1 < /dev/null)"
+  rm -f "$CLAUDE_ARGS"; out="$(cd "$repo" && bash "$LAUNCH" "$SID" "$URL" 2>&1 < /dev/null)"
   if [ -e "$CLAUDE_ARGS" ]; then ok "an SSH remote (any case) matches the issue's repository"
   else bad "an SSH remote (any case) matches the issue's repository ($out)"; fi
   assert_lacks "a fresh run gets no resume instruction" "Resuming:" "$(sed -n '2p' "$CLAUDE_ARGS")"
@@ -851,10 +852,11 @@ EOF
   }
 
   # shellcheck disable=SC2016  # literal $(id), never expanded
-  for bad_args in "--resume|$BR|1" "--resume|$BR|$URL" "--resume|worktree-jikkyo-13-20261114-132452|1|$URL" \
-      "--resume|main|1|$URL" "--resume|$BR -->|1|$URL" "--resume|$BR\$(id)|1|$URL" "--resume|$BR|0|$URL" \
-      "--resume|$BR|1a|$URL" "--resume|$BR|1 2|$URL" "--resume|$BR|1|$URL|extra" "$URL|--resume|$BR|1" \
-      "--resume|$BR|1|https://github.com/o/r/issues/13" "--resume|||$URL" "--resume||4242|$URL" "--resume|$BR||$URL"; do
+  for bad_args in "--resume|$BR|1|$SID" "--resume|$BR|$SID|$URL" "--resume|worktree-jikkyo-13-20261114-132452|1|$SID|$URL" \
+      "--resume|main|1|$SID|$URL" "--resume|$BR -->|1|$SID|$URL" "--resume|$BR\$(id)|1|$SID|$URL" "--resume|$BR|0|$SID|$URL" \
+      "--resume|$BR|1a|$SID|$URL" "--resume|$BR|1 2|$SID|$URL" "--resume|$BR|1|$SID|$URL|extra" "$SID|$URL|--resume|$BR|1" \
+      "--resume|$BR|1|$SID|https://github.com/o/r/issues/13" "--resume||||$URL" "--resume||4242|$SID|$URL" "--resume|$BR||$SID|$URL" \
+      "--resume|$BR|1|$URL" "--resume|$BR|1||$URL" "--resume|$BR|1|not-a-session|$URL" "--resume|$BR|1|$SID\$(id)|$URL"; do
     IFS='|' read -r -a a <<<"$bad_args"
     launch_resume "${a[@]}"
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
@@ -862,7 +864,7 @@ EOF
     else bad "rejects [$bad_args] without a worktree or the child (rc=$rc)"; fi
   done
 
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   assert_eq "resume: exits 0" "0" "$rc"
   name="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree name //p')"
   if [[ "$name" =~ ^jikkyo-12-[0-9]{8}-[0-9]{6}$ ]]; then ok "resume: a new worktree name jikkyo-<N>-<timestamp> ($name)"
@@ -927,7 +929,7 @@ EOF
   assert_eq "resume: a new status comment is posted" "api -X POST repos/o/r/issues/12/comments --input - --jq [.id, .html_url] | @tsv" "$(cat "$GH_LOG/1.args")"
 
   # The branch is now checked out in that worktree: a second resume refuses.
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: refuses a branch checked out in another worktree"
   else bad "resume: refuses a branch checked out in another worktree (rc=$rc)"; fi
   assert_has "...and says so" "checked out in another worktree" "$out"
@@ -936,7 +938,7 @@ EOF
   # Local branch behind the remote (the worktree is gone): fast-forwarded.
   git_t -C "$rs/repo" worktree remove "$wpath"
   git_t -C "$rs/repo" branch -q -f "$BR" "$tip~1"
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
   assert_eq "resume: a local branch behind the remote is brought up to the pushed tip" "0:$tip" \
     "$rc:$(git_t -C "$wpath" rev-parse HEAD 2>/dev/null)"
@@ -946,13 +948,13 @@ EOF
   git_t -C "$rs/repo" branch -q -f "$BR" "$tip"
   git_t -C "$rs/repo" commit-tree -m local "$tip^{tree}" -p "$tip" > "$rs/local-commit"
   git_t -C "$rs/repo" branch -q -f "$BR" "$(cat "$rs/local-commit")"
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "resume: refuses a local branch with commits the remote lacks"
   else bad "resume: refuses a local branch with commits the remote lacks (rc=$rc)"; fi
   assert_eq "...and leaves that branch where it was" "$(cat "$rs/local-commit")" "$(git_t -C "$rs/repo" rev-parse "$BR")"
 
   # A branch that is not on the remote.
-  launch_resume --resume "worktree-jikkyo-12-20990101-000000" 4242 "$URL"
+  launch_resume --resume "worktree-jikkyo-12-20990101-000000" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: refuses a branch that is not on the remote"
   else bad "resume: refuses a branch that is not on the remote (rc=$rc)"; fi
   assert_lacks "...before printing worktree lines" "jikkyo: worktree" "$out"
@@ -968,7 +970,7 @@ EOF
   BR5="worktree-jikkyo-12-20261114-300001"
   push_branch "$BR5"
   git_t -C "$rs/repo" remote add aaa https://github.com/o/r.git
-  launch_resume --resume "$BR5" 4242 "$URL"
+  launch_resume --resume "$BR5" 4242 "$SID" "$URL"
   assert_eq "resume: with two matching remotes, exits 0" "0" "$rc"
   assert_has "resume: ...and fetches from the first one listed" \
     "fetch --quiet aaa +refs/heads/$BR5:refs/remotes/aaa/$BR5" "$(cat "$rs/git.log")"
@@ -984,7 +986,7 @@ EOF
   push_branch "$BR6"
   mv "$rs/repo/.claude/worktrees" "$rs/worktrees.saved"
   : > "$rs/repo/.claude/worktrees"
-  launch_resume --resume "$BR6" 4242 "$URL"
+  launch_resume --resume "$BR6" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: a failed worktree add exits 2 without the child"
   else bad "resume: a failed worktree add exits 2 without the child (rc=$rc)"; fi
   assert_has "...and says so" "could not add a worktree for $BR6" "$out"
@@ -993,7 +995,7 @@ EOF
   mv "$rs/worktrees.saved" "$rs/repo/.claude/worktrees"
 
   # The worktrees cannot be listed: exit 2 before the fetch.
-  T_FAIL_LIST=1 launch_resume --resume "$BR6" 4242 "$URL"
+  T_FAIL_LIST=1 launch_resume --resume "$BR6" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: a failed worktree list exits 2 without the child"
   else bad "resume: a failed worktree list exits 2 without the child (rc=$rc)"; fi
   assert_has "...and says so" "could not list the worktrees" "$out"
@@ -1001,7 +1003,7 @@ EOF
 
   # The new worktree cannot be entered: exit 2, no child, no worktree lines,
   # and launch.sh tries to take the worktree back out.
-  T_MOVE_ADDED=1 launch_resume --resume "$BR6" 4242 "$URL"
+  T_MOVE_ADDED=1 launch_resume --resume "$BR6" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: a worktree that cannot be entered exits 2 without the child"
   else bad "resume: a worktree that cannot be entered exits 2 without the child (rc=$rc)"; fi
   assert_has "...and says so" "could not enter" "$out"
@@ -1037,7 +1039,7 @@ EOF
   git_t -C "$rs/seed" commit -q -m "hostile configuration"
   git_t -C "$rs/seed" push -q origin "$BR7" 2>/dev/null
   "$REAL_GIT" -C "$rs/repo" config core.hooksPath .githooks
-  launch_resume --resume "$BR7" 4242 "$URL"
+  launch_resume --resume "$BR7" 4242 "$SID" "$URL"
   assert_eq "resume: a branch with its own hooks, MCP servers, and links is resumed" "0" "$rc"
   assert_has "resume: ...with the user's settings only" "$(printf -- '--setting-sources\nuser')" "$(cat "$CLAUDE_ARGS" 2>/dev/null)"
   assert_eq "resume: ...and launch.sh ran nothing from it" "" "$(find "$rs" -name pwned -o -name hooked)"
@@ -1068,6 +1070,62 @@ EOF
   fi
   "$REAL_GIT" -C "$rs/repo" config --unset core.hooksPath
   rm -f "$rs/hooked"
+}
+
+# ===========================================================================
+echo "launch.sh and report.sh: the session id"
+{
+  # A copy of launch.sh next to a report.sh stub that records its arguments,
+  # to see what launch.sh hands over.
+  ho="$TMP/handoff"
+  mkdir -p "$ho"
+  cp "$LAUNCH" "$ho/launch.sh"
+  cat > "$ho/report.sh" <<'EOF2'
+#!/usr/bin/env bash
+cat > /dev/null
+printf '%s\n' "$@" > "$REPORT_ARGS"
+EOF2
+  chmod +x "$ho/launch.sh" "$ho/report.sh"
+  export REPORT_ARGS="$TMP/report-args"
+  git -C "$repo" remote set-url origin https://github.com/o/r.git
+
+  rm -f "$REPORT_ARGS"
+  (cd "$repo" && bash "$ho/launch.sh" "$SID" "$URL") >/dev/null 2>&1 < /dev/null
+  assert_eq "a fresh launch hands the session id to report.sh as --session" \
+    "$(printf -- '--session\n%s\n%s\nworktree-jikkyo-12-' "$SID" "$URL")" \
+    "$(sed -e '$s/[0-9]\{8\}-[0-9]\{6\}$//' "$REPORT_ARGS" 2>/dev/null)"
+
+  BR8="worktree-jikkyo-12-20261114-300004"
+  push_branch "$BR8"
+  rm -f "$REPORT_ARGS" "$CLAUDE_ARGS"; rc=0
+  out="$(cd "$rs/repo" && PATH="$rs/bin:$PATH" bash "$ho/launch.sh" --resume "$BR8" 4242 "$SID" "$URL" 2>&1 < /dev/null)" || rc=$?
+  assert_eq "a resumed launch hands the session id to report.sh as --session" \
+    "$(printf -- '--session\n%s\n%s\n%s\n4242' "$SID" "$URL" "$BR8")" "$(cat "$REPORT_ARGS" 2>/dev/null)"
+  wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
+  [ -n "$wpath" ] && git_t -C "$rs/repo" worktree remove --force "$wpath" 2>/dev/null
+
+  # shellcheck disable=SC2016  # literal $(id), never expanded
+  for bad_sid in "" "not-a-session" "${SID}0" "${SID%?}" "${SID}\$(id)" "${SID} " \
+      "0f6c2a3e_5b7d_4c1e_9a8f_2d3b4c5e6f70" "0f6c2a3e-5b7d-4c1e-9a8f-2d3b4c5e6f7g" "../../etc/passwd"; do
+    rm -f "$CLAUDE_ARGS"; new_log
+    rc=0; (cd "$repo" && bash "$LAUNCH" "$bad_sid" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
+    if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then
+      ok "launch.sh rejects the session id [$bad_sid] without starting the child"
+    else bad "launch.sh rejects the session id [$bad_sid] without starting the child (rc=$rc)"; fi
+    rc=0; bash "$REPORT" --session "$bad_sid" "$URL" < /dev/null >/dev/null 2>&1 || rc=$?
+    if [ "$rc" = 2 ] && [ "$(calls)" = 0 ]; then ok "report.sh rejects --session [$bad_sid] before any write"
+    else bad "report.sh rejects --session [$bad_sid] before any write (rc=$rc)"; fi
+  done
+  rm -f "$CLAUDE_ARGS"; rc=0
+  (cd "$repo" && bash "$LAUNCH" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
+  if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "launch.sh without a session id is refused"
+  else bad "launch.sh without a session id is refused (rc=$rc)"; fi
+  new_log; rc=0; bash "$REPORT" --session < /dev/null >/dev/null 2>&1 || rc=$?
+  assert_eq "report.sh --session with no value exits 2" "2" "$rc"
+  # An upper-case session id has the same shape.
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" --session "$(printf '%s' "$SID" | tr '[:lower:]' '[:upper:]')" "$URL" >/dev/null 2>&1 || rc=$?
+  assert_eq "report.sh accepts an upper-case session id" "0" "$rc"
 }
 
 # ===========================================================================
@@ -1484,7 +1542,10 @@ echo "SKILL.md"
   assert_has "SKILL.md: usage has --resume" "/jikkyo [--force | --resume] <GitHub issue URL>" "$skill"
   assert_has "SKILL.md: resume asks precheck.sh with the issue number" "precheck.sh --author '<login>' --resume '<N>'" "$skill"
   assert_has "SKILL.md: no valid branch stops the resume" "Never pick a branch any other" "$skill"
-  assert_has "SKILL.md: resume launches with the validated branch and id" "launch.sh --resume '<branch>' '<comment id>' '<URL>'" "$skill"
+  # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
+  assert_has "SKILL.md: resume launches with the validated branch, id, and session id" "launch.sh --resume '<branch>' '<comment id>' '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
+  # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
+  assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   assert_has "SKILL.md: documents resuming" "**Resuming a run.**" "$skill"
   assert_has "SKILL.md: resume lists the other authors first" "precheck.sh --author '<login>' --authors" "$skill"
   assert_has "SKILL.md: ...checks each one's permission" "gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission" "$skill"

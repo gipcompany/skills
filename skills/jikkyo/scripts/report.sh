@@ -4,7 +4,13 @@
 # and keep one status comment on the GitHub issue up to date while it runs.
 #
 #   claude -p ... --output-format stream-json --verbose \
-#     | report.sh '<issue URL>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]
+#     | report.sh [--session <session id>] '<issue URL>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]
+#
+# --session gives the id of the session that launched (or resumed) the run
+# (launch.sh passes it). It must have the exact shape of a Claude Code session
+# id, a UUID, or report.sh exits 2 before it writes anything. It goes into the
+# state file only (see below), so the status line shows the run in that
+# session alone.
 #
 # The optional second argument is the run's branch (launch.sh passes it). It
 # must be `worktree-jikkyo-<N>-<8 digits>-<6 digits>`, with <N> the issue's
@@ -60,9 +66,20 @@ TICK="${JIKKYO_TICK:-1}"
 MIN_GAP="${JIKKYO_MIN_GAP:-1}"
 
 usage() {
-  echo "usage: ... | report.sh '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
+  echo "usage: ... | report.sh [--session <session id>] '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
   exit 2
 }
+session=""
+if [ "$#" -ge 1 ] && [ "$1" = --session ]; then
+  [ "$#" -ge 2 ] || usage
+  session="$2"
+  sid_re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  if ! [[ "$session" =~ $sid_re ]]; then
+    echo "report.sh: not a session id: $session" >&2
+    usage
+  fi
+  shift 2
+fi
 if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then usage; fi
 re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)$'
 [[ "$1" =~ $re ]] || usage

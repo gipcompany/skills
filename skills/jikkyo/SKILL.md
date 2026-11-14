@@ -186,14 +186,20 @@ The arguments are: $ARGUMENTS
 4. **Launch** with the Bash tool's `run_in_background: true`:
 
    ```
-   ${CLAUDE_SKILL_DIR}/scripts/launch.sh '<URL>'
+   ${CLAUDE_SKILL_DIR}/scripts/launch.sh '${CLAUDE_SESSION_ID}' '<URL>'
    ```
 
-   On resume, pass the branch and the comment id from step 3r before the URL:
+   On resume, pass the branch and the comment id from step 3r before the
+   session id:
 
    ```
-   ${CLAUDE_SKILL_DIR}/scripts/launch.sh --resume '<branch>' '<comment id>' '<URL>'
+   ${CLAUDE_SKILL_DIR}/scripts/launch.sh --resume '<branch>' '<comment id>' '${CLAUDE_SESSION_ID}' '<URL>'
    ```
+
+   The session id is this session's own, filled in already: copy it as it
+   stands. `launch.sh` refuses anything that is not shaped like a session id.
+   It goes into the state file the status line reads, so the run shows in
+   this session's status line only (see *Status line* below).
 
    Do not wrap it, pipe it, or add an environment assignment: `launch.sh`
    builds the child pipeline itself (todo tools on, `--worktree` for a fresh
