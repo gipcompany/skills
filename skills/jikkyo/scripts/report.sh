@@ -14,8 +14,9 @@
 # no branch the marker has no `branch=` field and the row is empty.
 #
 # The optional third argument, on a resumed run, is the numeric id of the
-# earlier run's status comment (launch.sh --resume passes it). It must be all
-# digits, or report.sh exits 2 before it writes anything. It adds a
+# earlier run's status comment (launch.sh --resume passes it). It must match
+# ^[1-9][0-9]*$ (digits, no leading zero), or report.sh exits 2 before it
+# writes anything. It adds a
 # `Resumed from` row (`再開元`) linking that comment, built from the validated
 # owner, repository, and issue number. The earlier comment is not touched.
 #

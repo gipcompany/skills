@@ -121,28 +121,21 @@ timing and signal tests waiting on a real scheduler.
     same branch and a `Resumed from` row.
   - A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and backticks never
     reaches the child's or any git command line and is never run. The git
-    command lines are exactly the expected nine: the worktree list before
-    the fetch, the default branch fetched with the resumed one into a ref
-    named after the run, the whole-tree raw diff, the default branch's
-    tree, the diff of the configuration names, and the ref's removal.
+    command lines are exactly these five: `remote -v`, `worktree list`
+    (before the fetch), the fetch of the one branch, `show-ref`, and
+    `worktree add`.
+  - The resumed child runs with `--setting-sources user` right after the
+    prompt and is told that the project's configuration is not loaded; a
+    fresh run has no `--setting-sources`. A branch carrying a hook, an
+    `.mcp.json`, a `.claude` symlink, and a `CLAUDE.md` symlink is resumed
+    with that flag and nothing in it runs (`claude` is a stub here; that
+    Claude Code honours the flag is its own behaviour).
   - Refused before the worktree lines: a branch checked out in another
     worktree, a local branch with a commit the remote lacks (left where it
     was), a branch not on the remote, and a failed `git worktree add`.
-  - Refused for what Claude Code loads, compared with the remote's default
-    branch: a change to `.claude/settings.json`, `.mcp.json`, `CLAUDE.md`,
-    `CLAUDE.local.md`, a nested `CLAUDE.md`, or a nested `.claude/skills/`;
-    the same in another case (`.Claude/settings.json`, `.mcp.JSON`,
-    `pkg/claude.md`); a `.claude` symlink, a nested one, any new symlink,
-    and a submodule; a non-ASCII name that folds to `.mcp.json` or
-    `CLAUDE.md`; a change to the file a `CLAUDE.md` symlink on the default
-    branch points to; and a hook the default branch has since removed.
-    No `refs/jikkyo/` ref is left behind.
-  - Resumed: a branch that kept the default branch's `CLAUDE.md`, even
-    from a stale checkout; a branch with a non-ASCII name that cannot be a
-    configuration name; a branch next to a `CLAUDE.md` symlink that leaves
-    its target alone; with two remotes pointing at the issue's repository,
-    from the first one listed; and a local branch behind the remote,
-    brought up to the pushed tip.
+  - Resumed: with two remotes pointing at the issue's repository, from the
+    first one listed; and a local branch behind the remote, brought up to
+    the pushed tip.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and
