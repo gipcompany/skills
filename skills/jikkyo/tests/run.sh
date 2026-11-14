@@ -291,6 +291,63 @@ EOF
 }
 
 # ===========================================================================
+echo "report.sh: the branch"
+{
+  BR="worktree-jikkyo-12-20261114-132452"
+  f="$TMP/branch.jsonl"; { create a 1; result_ok; } > "$f"
+  new_log
+  rc=0; bash "$REPORT" "$URL" "$BR" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  assert_eq "with a branch: exits 0" "0" "$rc"
+  assert_eq "the first write's marker carries branch= after state=" \
+    "<!-- jikkyo:status v=1 state=running branch=$BR -->" "$(nth_body 1 | head -n 1)"
+  BR_RUNNING_BODY="$(nth_body 1)"   # a running comment with a branch, for the precheck tests
+  b="$(last_body)"
+  assert_eq "the final write's marker keeps branch=" \
+    "<!-- jikkyo:status v=1 state=finished branch=$BR -->" "$(printf '%s\n' "$b" | head -n 1)"
+  assert_eq "marker_state still reads the state" "finished" "$(marker_state "$b")"
+  # shellcheck disable=SC2016  # literal backticks around the branch
+  assert_eq "the table has a Branch row right after State" \
+    "$(printf '| State | finished |\n| Branch | `%s` |' "$BR")" "$(printf '%s\n' "$b" | sed -n '6,7p')"
+
+  # Without a branch (older callers): no branch= field, and an empty row.
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "without a branch the marker has no branch= field" \
+    "<!-- jikkyo:status v=1 state=finished -->" "$(printf '%s\n' "$b" | head -n 1)"
+  assert_eq "without a branch the Branch row is empty" "| Branch |  |" "$(printf '%s\n' "$b" | grep '^| Branch')"
+
+  # Only the exact shape for this issue's number is written; anything else
+  # is a usage error before the first write.
+  # shellcheck disable=SC2016  # a literal $(id), never expanded
+  for bad_branch in "" "worktree-jikkyo-13-20261114-132452" "worktree-jikkyo-12-2026111-132452" \
+      "worktree-jikkyo-12-20261114-1324520" "jikkyo-12-20261114-132452" "main" \
+      "worktree-jikkyo-12-20261114-132452 -->" "worktree-jikkyo-12-20261114-132452
+x" "worktree-jikkyo-12-20261114-13245a" "worktree-jikkyo-012-20261114-132452" \
+      'worktree-jikkyo-12-20261114-132452$(id)'; do
+    new_log
+    rc=0; bash "$REPORT" "$URL" "$bad_branch" < "$f" >/dev/null 2>&1 || rc=$?
+    if [ "$rc" = 2 ] && [ "$(calls)" = 0 ]; then ok "rejects branch [$bad_branch] without writing"
+    else bad "rejects branch [$bad_branch] without writing (rc=$rc, calls=$(calls))"; fi
+  done
+  new_log
+  rc=0; bash "$REPORT" "$URL" "$BR" extra < "$f" >/dev/null 2>&1 || rc=$?
+  assert_eq "a third argument is a usage error" "2:0" "$rc:$(calls)"
+
+  # In Japanese: the same marker, a Japanese label.
+  jq -cn '{title: "日本語", body: ""}' > "$TMP/issue-br.json"
+  new_log
+  GH_ISSUE="$TMP/issue-br.json" bash "$REPORT" "$URL" "$BR" < "$f" > "$TMP/out" 2>&1
+  BR_RUNNING_BODY_JA="$(nth_body 1)"
+  b="$(last_body)"
+  assert_eq "Japanese: the marker carries the same branch= field" \
+    "<!-- jikkyo:status v=1 state=finished branch=$BR -->" "$(printf '%s\n' "$b" | head -n 1)"
+  # shellcheck disable=SC2016  # literal backticks around the branch
+  assert_eq "Japanese: the Branch row is labelled ブランチ" \
+    "$(printf '| 状態 | 完了 |\n| ブランチ | `%s` |' "$BR")" "$(printf '%s\n' "$b" | sed -n '6,7p')"
+  assert_lacks "Japanese: no English Branch label" "| Branch |" "$b"
+}
+
+# ===========================================================================
 echo "report.sh: the language of the issue"
 {
   issue() { jq -cn --arg t "$1" --arg b "$2" '{title: $t, body: $b}' > "$TMP/issue.json"; }
@@ -618,6 +675,9 @@ echo "launch.sh"
   assert_eq "...before the child starts" "4" \
     "$(( $(printf '%s\n' "$out" | grep -n '^child-started$' | cut -d: -f1) >= 4 ? 4 : 0 ))"
   assert_has "the child's stream is reported on the issue" "state=finished" "$(last_body)"
+  assert_eq "launch.sh passes the worktree branch to report.sh, into the marker" \
+    "<!-- jikkyo:status v=1 state=finished branch=worktree-$name -->" "$(last_body | head -n 1)"
+  assert_has "...and into the Branch row" "| Branch | \`worktree-$name\` |" "$(last_body)"
   assert_has "the final message reaches the output" "All done. Opened PR #99." "$out"
 
   # From a subdirectory the worktree path is still under the repository root.
@@ -710,6 +770,42 @@ echo "precheck.sh"
   assert_has "--payload, old format: keeps the Elapsed row" "| Elapsed | 7m 30s |" "$p"
   rc=0; comment 1 me finished 10 | bash "$PRECHECK" --payload >/dev/null 2>&1 || rc=$?
   assert_eq "--payload refuses a comment that is not running" "1" "$rc"
+
+  # Markers with the run's branch after the state (report.sh writes them since
+  # #28) are read like the ones without it.
+  BR="worktree-jikkyo-12-20261114-132452"
+  br_comment() {  # <id> <login> <state> <age seconds>
+    comment "$1" "$2" "$3" "$4" | jq -c --arg br "$BR" '.body |= sub(" -->"; " branch=\($br) -->")'
+  }
+  assert_has "br_comment builds a marker with branch=" "state=running branch=$BR -->" "$(br_comment 1 me running 60 | jq -r .body)"
+  assert_eq "branch=: a live running comment: refuse" \
+    "refuse https://github.com/o/r/issues/12#issuecomment-1" "$(br_comment 1 me running 60 | decide)"
+  assert_eq "branch=: a stale running comment: rewrite" "rewrite 1" "$(br_comment 1 me running 900 | decide)"
+  for st in finished failed interrupted; do
+    assert_eq "branch=: a $st comment never blocks" "start" "$(br_comment 1 me "$st" 1 | decide)"
+  done
+  assert_eq "stale comments with and without branch= are both rewritten" "rewrite 1 2" \
+    "$( { comment 1 me running 5000; br_comment 2 me running 5000; } | decide)"
+  assert_eq "a marker with a malformed branch= does not count" "start" \
+    "$(comment 1 me running 60 | jq -c '.body |= sub(" -->"; " branch=main -->")' | decide)"
+  p="$(br_comment 1 me running 5000 | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload with branch=: interrupted, and the branch is kept" \
+    "<!-- jikkyo:status v=1 state=interrupted branch=$BR -->" "$(printf '%s\n' "$p" | head -n 1)"
+  assert_has "--payload with branch=: the heading" "### jikkyo · interrupted · 50%" "$p"
+  assert_has "--payload with branch=: the State row" "| State | interrupted |" "$p"
+  rc=0; br_comment 1 me finished 10 | bash "$PRECHECK" --payload >/dev/null 2>&1 || rc=$?
+  assert_eq "--payload with branch=: refuses a comment that is not running" "1" "$rc"
+  # Comments report.sh itself wrote with a branch, end to end, in both languages.
+  p="$(jq -cn --arg b "$BR_RUNNING_BODY" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload on report.sh's own branch= comment: the marker" \
+    "<!-- jikkyo:status v=1 state=interrupted branch=$BR -->" "$(printf '%s\n' "$p" | head -n 1)"
+  assert_eq "...the heading" "### jikkyo · interrupted · 0 turns" "$(heading "$p")"
+  assert_has "...and the Branch row is kept" "| Branch | \`$BR\` |" "$p"
+  p="$(jq -cn --arg b "$BR_RUNNING_BODY_JA" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload on report.sh's own Japanese branch= comment: the marker" \
+    "<!-- jikkyo:status v=1 state=interrupted branch=$BR -->" "$(printf '%s\n' "$p" | head -n 1)"
+  assert_eq "...the heading" "### jikkyo · 中断 · 0 ターン" "$(heading "$p")"
+  assert_has "...and the ブランチ row is kept" "| ブランチ | \`$BR\` |" "$p"
 
   # Japanese status comments: the marker is the same, so the decisions are too.
   ja_comment() {  # <id> <login> <state> <age seconds>
