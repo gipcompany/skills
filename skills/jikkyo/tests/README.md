@@ -72,12 +72,16 @@ timing and signal tests waiting on a real scheduler.
   with exit 2 before the child or `gh` runs, as is an issue whose repository is
   not a remote of the checkout (a host like `notgithub.com` does not count),
   or a run outside a git repository. The child
-  gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <todo instruction> <tick instruction>'`
+  gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`
   (one argument: the URL, then the fixed instruction to make `TaskCreate`
   todos up front, one per task-list item when there is one, and complete them
   with `TaskUpdate`, then the fixed instruction to tick each box as soon as
   it is verified, not all at the end, tick only verified boxes, change only `- [ ]` to `- [x]`,
-  and fetch the body before each edit),
+  and fetch the body before each edit, then, last, the fixed instruction to
+  keep `.jikkyo/progress.md` in its fixed shape, updating, committing, and
+  pushing it after every todo, keeping secrets, environment values, and
+  command output out of it, and deleting it in one pushed commit right before
+  the PR),
   `--worktree jikkyo-<N>-<timestamp>`, `--output-format stream-json`,
   `--verbose`, `--permission-mode auto`, and `--disallowedTools` with every
   rule for force pushes, remote-branch deletion, comment edits and deletes,

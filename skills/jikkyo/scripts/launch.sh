@@ -53,16 +53,20 @@ DENY_RULES=(
   'Bash(gh api graphql*deleteIssue*)'
 )
 
-# Both instructions are appended to the goal condition after the URL, todos
-# first. They are constants, so nothing from the issue reaches the command line
+# The three instructions are appended to the goal condition after the URL, in
+# the order todo, tick, log. They are constants, so nothing from the issue reaches the command line
 # beyond the validated URL. They are also what the /goal evaluator judges
 # against, which is why the todo one is worded as a way of working, not as a
 # condition for the goal. Keep each on one line.
 #
 # report.sh computes progress and the remaining-time estimate from the child's
 # TaskCreate / TaskUpdate events; a child left to itself often makes no todos.
+# The log is what a later run resumes from (design: issue #27). It lives on the
+# run's own branch, is pushed after every todo so a crash loses at most one
+# step, and is deleted before the PR so it never reaches the base branch.
 TODO_INSTRUCTION='Todos: before starting the work, break it into small steps with TaskCreate, one todo per step of a few minutes each, and mark each todo completed with TaskUpdate as soon as that step is done; add todos with TaskCreate when new steps come up. If the body of this issue has a task list (for example under "Acceptance criteria"), make one todo per task-list item, and tick the box of that item right after you mark its todo completed. Progress and the remaining time shown on the issue are computed from these todos.'
 TICK_INSTRUCTION='Task-list boxes: as soon as a task-list item in the body of this issue (for example under "Acceptance criteria") is done and verified (tests run, output checked), tick that box on the issue, before you move on to the next item; do not save the ticks for one edit at the end. Tick only items you have verified, and never untick or reword anything. Change nothing in the body but "- [ ]" to "- [x]" on those lines: fetch the current body right before each edit and write it back with only those lines changed, because gh issue edit --body replaces the whole body and someone else may have edited it meanwhile. The goal is met only when the work is done and every box you could verify is ticked.'
+LOG_INSTRUCTION='Progress log: keep a progress log in .jikkyo/progress.md on this branch, so an interrupted run can be resumed from it. Each time you mark a todo completed, update the log, commit it, and run a plain git push. Keep the log in this fixed shape: first the header lines "issue: <issue URL>", "branch: <this branch>", "updated: <ISO 8601 time>", and "next: <the next step, one line>"; then a "## Todos" section with one task-list line per todo, "- [x] <todo> (<short commit hash>)" once it is completed and "- [ ] <todo>" until then; then a "## Verified task-list items" section with one "- <item>: <how it was verified>" line per box you ticked on the issue; then a "## Dead ends and decisions" section with what did not work or what you decided, and why. Never put tokens, secrets, environment values, or command output in the log. As the last step, right before you open the pull request (or mark it ready for review), delete .jikkyo/progress.md in one ordinary commit and push it, so the log never reaches the base branch.'
 
 usage() {
   echo "usage: launch.sh '<https://github.com/<owner>/<repo>/issues/<N>>'" >&2
@@ -113,11 +117,11 @@ echo "jikkyo: worktree branch worktree-${name}"
 
 cd "$root" || exit 2
 
-# The goal condition is the issue URL verbatim, then the fixed todo and tick
-# instructions. --disallowedTools takes the rest of the command line, so it
+# The goal condition is the issue URL verbatim, then the fixed todo, tick, and
+# log instructions. --disallowedTools takes the rest of the command line, so it
 # stays last. stdin is /dev/null: `claude -p`
 # otherwise waits for piped input, and the child has no business reading ours.
-CLAUDE_CODE_ENABLE_TODO_TOOLS=1 claude -p "/goal ${url} ${TODO_INSTRUCTION} ${TICK_INSTRUCTION}" \
+CLAUDE_CODE_ENABLE_TODO_TOOLS=1 claude -p "/goal ${url} ${TODO_INSTRUCTION} ${TICK_INSTRUCTION} ${LOG_INSTRUCTION}" \
   --worktree "$name" \
   --output-format stream-json \
   --verbose \
