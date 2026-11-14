@@ -266,7 +266,12 @@ Then, in this order:
      still name the branch if it is on the remote.
 
    The run is **resumable** when its state is `interrupted` or `failed`
-   and the branch is on the remote. Never delete, rename, or push to the
+   and the branch is on the remote. If step 1 left the worktree or the
+   local branch in place (`cleanup.sh` printed `keep`, or a git step
+   refused), the resume command may be refused until a person deals with
+   it: `launch.sh --resume` will not start on a branch that is checked out
+   in another worktree or has local commits the remote lacks. The summary
+   then says so (below). Never delete, rename, or push to the
    remote branch, whatever these show: a person decides what to do with it.
    Like the `git` steps, these two may ask for permission.
 
@@ -299,10 +304,14 @@ Then, in this order:
    - Any PR or branch the final message names, as a link.
    - **When the run is resumable** (step 2), say so and give the exact
      command, with the URL single-quoted as on every command line here:
-     `/jikkyo --resume '<URL>'`. For `en`: `Resumable: /jikkyo --resume '<URL>'`
-     (in a code span). For `ja`: `再開できます: /jikkyo --resume '<URL>'` (the
-     same code span). Do not offer it for a `finished` run or when the
-     branch is not on the remote.
+     `/jikkyo --resume '<URL>'`, with only the command in a code span. For
+     `en`: Resumable: `` `/jikkyo --resume '<URL>'` ``. For `ja`: 再開できます:
+     `` `/jikkyo --resume '<URL>'` ``. When step 1 left the worktree or the
+     local branch in place, add in the same language that the command may
+     be refused until a person removes what was left (a worktree that is
+     still there, a local branch whose commits are not on the remote),
+     after pushing or dropping its commits. Do not offer the
+     command for a `finished` run or when the branch is not on the remote.
    - **When the run opened no PR** (step 2) and its branch is on the remote,
      name the branch as a link, `https://github.com/<owner>/<repo>/tree/<branch>`,
      and say it is left on the remote for a person to delete once it is no
@@ -320,7 +329,8 @@ Then, in this order:
    `JIKKYO_EOF`.
 
 4. **Tell the user** the outcome in one or two lines, with the summary link,
-   and the resume command when the run is resumable.
+   and the resume command when the run is resumable (with the same caveat
+   when step 1 left the worktree or the local branch in place).
 
 ## How the pieces fit
 
