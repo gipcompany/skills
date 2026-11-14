@@ -14,6 +14,9 @@
 #
 # Anything it cannot establish gives `keep`: jikkyo never deletes work silently.
 #
+# The child could have written git config in the worktree; `git status`
+# would run a core.fsmonitor command from it, so that is turned off here.
+#
 set -uo pipefail
 
 if [ "$#" -ne 1 ]; then
@@ -28,7 +31,7 @@ decide() { printf '%s\n%s\n' "$1" "$2"; exit 0; }
 top="$(git -C "$wt" rev-parse --show-toplevel 2>/dev/null)" || decide keep "$wt is not a git worktree"
 [ "$(cd "$wt" && pwd -P)" = "$(cd "$top" && pwd -P)" ] || decide keep "$wt is not the top of a worktree"
 
-dirty="$(git -C "$wt" status --porcelain --untracked-files=all 2>/dev/null)" \
+dirty="$(git -c core.fsmonitor=false -C "$wt" status --porcelain --untracked-files=all 2>/dev/null)" \
   || decide keep "git status failed in $wt"
 [ -z "$dirty" ] || decide keep "uncommitted changes in $wt"
 

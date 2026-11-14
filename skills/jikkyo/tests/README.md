@@ -123,22 +123,27 @@ timing and signal tests waiting on a real scheduler.
     reaches the child's or any git command line and is never run. Leaving
     out `rev-parse`, the git command lines are exactly these five:
     `remote -v`, `worktree list` (before the fetch), the fetch of the one
-    branch, `show-ref`, and `worktree add`.
+    branch, `show-ref`, and `worktree add` (with `core.hooksPath` set to
+    `/dev/null`).
+  - The tests start with no `GIT_CONFIG_*` variables in the environment.
   - The resumed child runs with `--setting-sources user` right after the
     prompt, with `GIT_CONFIG_*` pointing `core.hooksPath` at `/dev/null`
     and `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, and is told that the project's
-    configuration is not loaded; a fresh run has none of these. A branch
-    carrying a hook, an `.mcp.json`, a `.claude` symlink, a `CLAUDE.md`
-    symlink, and a git hook is resumed with that flag, and launch.sh runs
-    nothing from it (`claude` is a stub here; that Claude Code honours the
-    flag is its own behaviour). With a relative `core.hooksPath` in the
-    checkout, a commit in the worktree under the child's environment does
-    not run the branch's git hook, and a plain one does.
+    configuration is not loaded and git hooks are off; a fresh run has none
+    of these. A branch carrying a hook, an `.mcp.json`, a `.claude`
+    symlink, a `CLAUDE.md` symlink, and git hooks is resumed with that
+    flag, and launch.sh runs nothing from it, with a relative
+    `core.hooksPath` in the checkout (`claude` is a stub here; that Claude
+    Code honours the flag is its own behaviour). A commit in the worktree
+    under the child's environment lands there and runs none of the
+    branch's git hooks; a plain commit, and a plain `worktree add` of the
+    branch, would run them.
   - Refused before the worktree lines: a branch checked out in another
     worktree, a local branch with a commit the remote lacks (left where it
     was), a branch not on the remote, a failed `git worktree add`, a
     failed `git worktree list` (before the fetch), and a worktree that
-    cannot be entered (launch.sh then removes it).
+    cannot be entered (launch.sh then removes it, or drops its record when
+    its directory is gone).
   - Resumed: with two remotes pointing at the issue's repository, from the
     first one listed; and a local branch behind the remote, brought up to
     the pushed tip.
@@ -183,8 +188,9 @@ timing and signal tests waiting on a real scheduler.
   (untracked, modified, and staged files all count) whose HEAD is on a
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed
   commit, a dirty pushed worktree, a pushed branch with a newer unpushed
-  commit, a missing path, a directory that is not a
-  worktree, or a path inside one.
+  commit, a missing path, a directory that is not a worktree, or a path
+  inside one. A `core.fsmonitor` command in git config is not run by its
+  `git status`, while a plain `git status` would run it.
 - **`SKILL.md`** — `allowed-tools` pins exactly `launch.sh`, `precheck.sh`, and
   `cleanup.sh` under `${CLAUDE_SKILL_DIR}`, with no rule for `claude`, `gh`, or
   `git`, and the skill has no injected commands; it tells the parent to write

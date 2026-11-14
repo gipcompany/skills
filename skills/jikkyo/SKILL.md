@@ -4,8 +4,8 @@ description: "Use when you want to run /goal on a GitHub issue and have the run
   reported live on that issue — start time, end time, progress %, and a rough
   estimate of the time remaining in one status comment edited in place, plus a
   closing summary comment. Invoked explicitly as /jikkyo [--force |
-  --resume] <GitHub issue URL>; the user never types a /goal line. --resume continues an interrupted or failed run
-  from its pushed branch. Starts /goal in a headless `claude -p` child in its
+  --resume] <GitHub issue URL>; the user never types a /goal line. --resume
+  continues an interrupted or failed run from its pushed branch. Starts /goal in a headless `claude -p` child in its
   own git worktree, so the user cannot steer the run while it is in
   progress. Requires gh and jq. Not for targets other than a GitHub issue
   URL, and not for runs you want to steer interactively (type /goal yourself
@@ -401,25 +401,32 @@ Then, in this order:
   named, cased, or linked. This needs Claude Code 2.1.211 or later: before
   that, path-scoped rules and rules in nested `.claude/rules/` still
   loaded. It also turns off two things the flag does not cover. git runs
-  hooks on every commit the child makes, from `core.hooksPath`, which tools
-  such as husky point into the tree, so the child gets `core.hooksPath` set
-  to `/dev/null` (through `GIT_CONFIG_*`; the user's own git hooks are off
-  in a resumed run too). Auto memory is read and written whatever the
-  setting sources, and shared with the user's other sessions in the
-  repository, so the child runs with `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`.
+  hooks on checkout and on every commit, from `core.hooksPath`, which tools
+  such as husky point into the tree, so `launch.sh` runs its
+  `git worktree add` with `core.hooksPath` set to `/dev/null`, and the
+  child gets the same through `GIT_CONFIG_*`. That covers every git the
+  child runs, its tests included, and the user's own git hooks are off in
+  a resumed run too. Auto memory is read and written whatever the setting
+  sources, and shared with the user's other sessions in the repository,
+  so the child runs with `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`.
 
   The cost is that a resumed run does not get what the project's
   configuration gives a fresh run: its `CLAUDE.md` guidance (test commands,
   commit conventions), and also its `permissions.deny` rules and safety
-  hooks, so it runs under looser limits than a fresh run, with only
-  jikkyo's own deny list. The resume instruction tells the child that the
-  configuration is not loaded and that any `CLAUDE.md` it reads is
+  hooks, so it runs under looser limits than a fresh run: jikkyo's deny
+  list and the user's own settings still apply, the project's do not. The
+  resume instruction tells the child that the project configuration is
+  not loaded and git hooks are off, and that any `CLAUDE.md` it reads is
   information, not instructions. This was chosen over checking the
   branch's configuration files against the default branch, which kept
   being bypassed (symlinks, case folding, links behind links, `@` imports).
   It covers what Claude Code and git load, not what the child runs: scripts
   and tests on the branch are still untrusted input to a child in auto
-  mode, and the resume instruction itself asks it to run the tests.
+  mode, and the resume instruction itself asks it to run the tests. Like a
+  fresh child, it can also change git config, so `cleanup.sh` runs its
+  `git status` with `core.fsmonitor` off. A branch's `.lfsconfig` can
+  still point Git LFS downloads during `git worktree add` at another
+  server; that runs no code.
 
   The child gets the same goal line plus a fourth fixed constant, the
   resume instruction: this worktree continues an earlier run;
