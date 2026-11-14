@@ -5,7 +5,7 @@
 # same on every machine.
 #
 #   gh api --paginate repos/<o>/<r>/issues/<N>/comments \
-#     | precheck.sh --author <login> [--now <epoch>] [--force | --resume <N>]
+#     | precheck.sh --author <login> [--now <epoch>] [--force | --resume <N> [--trusted <login>]…]
 #
 # Prints exactly one decision line:
 #
@@ -27,6 +27,23 @@
 #   none                   nothing to resume: no such comment, or the latest
 #                          one names no branch, or a branch of another issue.
 #
+# A run may be resumed by another account than the one that ran it. Each
+# --trusted <login> (only with --resume) names another account whose status
+# comments count too; the caller has checked that it has `admin` or `write`
+# permission on the repository. Then a `running` comment updated within 15
+# minutes by any counted account refuses, and a `finished` comment by any of
+# them takes its branch out. A stale `running` comment by a --trusted account
+# is never put on the `rewrite` list (jikkyo edits only its own account's
+# comments): it counts like an `interrupted` one instead.
+#
+#   gh api --paginate repos/<o>/<r>/issues/<N>/comments \
+#     | precheck.sh --author <login> --authors
+#
+# prints, one per line, the other accounts that wrote a jikkyo status comment
+# on the issue: the candidates for --trusted. A login that is not the shape of
+# a GitHub login (letters, digits, and hyphens, at most 39, not starting with
+# a hyphen) is left out, so each line is safe on a command line.
+#
 # The branch printed with `resume` is always exactly
 # `worktree-jikkyo-<N>-<8 digits>-<6 digits>` and the id is all digits: that
 # is the only text from the comments that leaves this script for a command line.
@@ -41,6 +58,7 @@
 #
 # prints the PATCH payload ({"body": …}) that turns that `running` comment into
 # an `interrupted` one, and exits 1 if the comment is not in state `running`.
+# With --author <login> it also exits 1 if another account wrote the comment.
 # It rewrites the visible text in English or in Japanese (report.sh writes
 # Japanese on an issue written in Japanese), including comments written before
 # there was a Japanese form; the state is read from the marker alone, which is
@@ -54,14 +72,18 @@ set -uo pipefail
 STALE_AFTER=900
 
 usage() {
-  echo "usage: precheck.sh --author <login> [--now <epoch>] [--force | --resume <N>] < comments.json" >&2
-  echo "       precheck.sh --payload < comment.json" >&2
+  echo "usage: precheck.sh --author <login> [--now <epoch>] [--force | --resume <N> [--trusted <login>]...] < comments.json" >&2
+  echo "       precheck.sh --author <login> --authors < comments.json" >&2
+  echo "       precheck.sh --payload [--author <login>] < comment.json" >&2
   exit 2
 }
 
 command -v jq >/dev/null 2>&1 || { echo "precheck.sh: jq is required" >&2; exit 2; }
 
 author="" now="" force=false payload=false resume_num="" resuming=false
+authors=false trusted=()
+# The shape of a GitHub login. Nothing else is trusted or printed.
+LOGIN_RE='^[A-Za-z0-9][A-Za-z0-9-]{0,38}$'
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --author) [ "$#" -ge 2 ] || usage; author="$2"; shift 2 ;;
@@ -69,6 +91,8 @@ while [ "$#" -gt 0 ]; do
     --force) force=true; shift ;;
     --payload) payload=true; shift ;;
     --resume) [ "$#" -ge 2 ] || usage; resume_num="$2"; resuming=true; shift 2 ;;
+    --trusted) [ "$#" -ge 2 ] || usage; trusted+=("$2"); shift 2 ;;
+    --authors) authors=true; shift ;;
     *) usage ;;
   esac
 done
@@ -80,12 +104,14 @@ done
 MARKER_RE='^<!-- jikkyo:status v=1 state=(?<state>[a-z]+)(?: branch=(?<branch>worktree-jikkyo-[0-9]+-[0-9]{8}-[0-9]{6}))? -->'
 
 if [ "$payload" = true ]; then
-  if [ -n "$author" ] || [ -n "$now" ] || [ "$force" = true ] || [ "$resuming" = true ]; then usage; fi
-  out="$(jq -c --arg re "$MARKER_RE" '
+  if [ -n "$now" ] || [ "$force" = true ] || [ "$resuming" = true ] || [ "$authors" = true ] || [ "${#trusted[@]}" -gt 0 ]; then usage; fi
+  out="$(jq -c --arg re "$MARKER_RE" --arg author "$author" '
     if type == "array" then .[0] else . end
     | (.body // "") as $b
     | ($b | capture($re).state? // null) as $s
     | if $s != "running" then empty
+      # jikkyo edits only its own account'"'"'s status comments.
+      elif $author != "" and .user.login? != $author then empty
       else {body: ($b
         # Only the state changes; a `branch=` field after it is kept as is.
         | sub("^<!-- jikkyo:status v=1 state=running(?<r>(?: branch=[^ ]+)?) -->"; "<!-- jikkyo:status v=1 state=interrupted\(.r) -->")
@@ -104,12 +130,20 @@ if [ "$payload" = true ]; then
         | sub("\\| 状態 \\| 実行中 \\|"; "| 状態 | 中断 |")
         | sub("\\| 残り \\|[^\\n]*"; "| 残り |  |"))}
       end' 2>/dev/null)" || usage
-  [ -n "$out" ] || { echo "precheck.sh: that comment is not a running jikkyo status comment" >&2; exit 1; }
+  [ -n "$out" ] || { echo "precheck.sh: that comment is not a running jikkyo status comment${author:+ by $author}" >&2; exit 1; }
   printf '%s\n' "$out"
   exit 0
 fi
 
 [ -n "$author" ] || usage
+for t in ${trusted[@]+"${trusted[@]}"}; do
+  [[ "$t" =~ $LOGIN_RE ]] || { echo "precheck.sh: --trusted takes a GitHub login: $t" >&2; usage; }
+done
+# Another account's comments count only when deciding a resume.
+if [ "${#trusted[@]}" -gt 0 ] && [ "$resuming" = false ]; then
+  echo "precheck.sh: --trusted needs --resume" >&2; usage
+fi
+if [ "$authors" = true ] && { [ -n "$now" ] || [ "$force" = true ] || [ "$resuming" = true ]; }; then usage; fi
 [ -n "$now" ] || now="$(date '+%s')"
 case "$now" in '' | *[!0-9]*) usage ;; esac
 # A forced resume would take a live run's branch out from under it.
@@ -126,27 +160,44 @@ if ! jq -e -s 'length > 0 and all(.[]; type == "array")' >/dev/null 2>&1 <<<"$in
   echo "precheck.sh: expected the issue's comments as JSON arrays (did the gh call fail?)" >&2
   exit 2
 fi
+if [ "$authors" = true ]; then
+  jq -r -s --arg re "$MARKER_RE" --arg author "$author" --arg login_re "$LOGIN_RE" '
+    [ flatten(1)[]
+      | select(type == "object" and ((.body // "") | type == "string" and test($re)))
+      | .user.login?
+      | select(type == "string" and . != $author and test($login_re)) ]
+    | unique[]' <<<"$input" || usage
+  exit 0
+fi
+trusted_json="$(jq -cn '$ARGS.positional' --args ${trusted[@]+"${trusted[@]}"})"
 jq -r -s --arg re "$MARKER_RE" --arg author "$author" --argjson now "$now" \
-  --argjson force "$force" --argjson stale "$STALE_AFTER" --arg resume_num "$resume_num" '
+  --argjson force "$force" --argjson stale "$STALE_AFTER" --arg resume_num "$resume_num" \
+  --argjson trusted "$trusted_json" '
   [ flatten(1)[]
-    | select(type == "object" and .user.login? == $author)
+    | select(type == "object" and (.user.login? as $l | $l == $author or ($l | IN($trusted[]))))
     | ((.body // "") | capture($re)? // null) as $m
     | select($m != null)
-    | {id, url: .html_url, state: $m.state, branch: $m.branch,
+    | {id, url: .html_url, state: $m.state, branch: $m.branch, own: (.user.login == $author),
        age: ($now - ((.updated_at // .created_at) | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601))} ] as $counted
   | [ $counted[] | select(.state == "running") ] as $running
   | [ $running[] | select(.age < $stale) ] as $live
-  | ("rewrite " + ($running | map(.id | tostring) | join(" "))) as $rewrite
+  # Only this account'"'"'s own comments are ever rewritten. Without --resume
+  # there are no others: --trusted needs --resume.
+  | [ $running[] | select(.own) ] as $own_running
+  | ("rewrite " + ($own_running | map(.id | tostring) | join(" "))) as $rewrite
   | if $resume_num != "" then
       if $live != [] then "refuse " + $live[0].url
-      elif $running != [] then $rewrite
+      elif $own_running != [] then $rewrite
       else
         # Comment ids grow with creation, so the largest is the latest run.
         # Earlier comments are never edited, so a branch that was resumed and
         # then finished still has its old `interrupted` comment: a `finished`
         # comment for the same branch, posted later, takes the branch out.
         ([ $counted[] | select(.state == "finished" and .branch != null and (.id | type) == "number") ]) as $done
-        | ([ $counted[] | select(.state == "interrupted" or .state == "failed")
+        # Another account'"'"'s `running` comment, stale since no live one is
+        # left here, is a run that died without saying so: it counts like
+        # `interrupted`, and is left as it is.
+        | ([ $counted[] | select(.state == "interrupted" or .state == "failed" or (.state == "running" and (.own | not)))
            | select((.id | type) == "number")
            | . as $c | select(all($done[]; .branch != $c.branch or .id < $c.id)) ] | max_by(.id)) as $last
         | if $last == null then "none"
