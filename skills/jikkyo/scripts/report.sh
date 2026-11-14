@@ -63,7 +63,7 @@ usage() {
   echo "usage: ... | report.sh '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
   exit 2
 }
-[ "$#" -ge 1 ] && [ "$#" -le 3 ] || usage
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then usage; fi
 re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)$'
 [[ "$1" =~ $re ]] || usage
 owner="${BASH_REMATCH[1]}"
