@@ -22,7 +22,8 @@ GitHub issue and reports start, progress, and finish on that issue as they
 happen.
 
 You are the **reporter's parent**, not the worker. The work is done by a
-headless child (`claude -p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`) that
+headless child (`claude -p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`, plus
+a resume instruction on `--resume`) that
 `scripts/launch.sh` starts, and
 the live status is written by `scripts/report.sh`, which reads the child's
 stream. Your jobs are the ones around it: the check before the start, the
@@ -107,8 +108,10 @@ The arguments are: $ARGUMENTS
      `--payload` exits 1 when that comment is no longer `running` (another
      run took it over, or it finished since the listing). The PATCH after it
      then fails on empty input and changes nothing; move on to the next id.
-     If the listing in this step fails, `precheck.sh` exits 2 instead of
-     guessing: report the `gh` error and stop. Then go to step 4.
+     When every id is done, go to step 4.
+
+   If the listing in this step fails, `precheck.sh` exits 2 instead of
+   guessing: report the `gh` error and stop.
 
    **3r. With `--resume`**, ask `precheck.sh` which run to resume instead,
    passing the issue number:
@@ -120,9 +123,12 @@ The arguments are: $ARGUMENTS
    - `refuse <comment URL>` — a live run is reporting there; a resume would
      race it. Tell the user, link the comment, and **stop** (`--force` does
      not combine with `--resume`).
-   - `rewrite <id> [<id> …]` — rewrite each to `interrupted` exactly as in
-     step 3, then run this step 3r again: the rewritten run is now a
-     candidate to resume.
+   - `rewrite <id> [<id> …]` — rewrite each to `interrupted` with the same
+     command as in step 3 (moving on to the next id the same way), then run
+     this step 3r **once more**: the rewritten run is now a candidate to
+     resume. Do not go to step 4 from here. If the second check prints
+     `rewrite` again, a rewrite did not take: tell the user which comments
+     are still `running`, and **stop** rather than loop.
    - `resume <branch> <comment id>` — go to step 4 the resume way. The
      branch is `worktree-jikkyo-<N>-<timestamp>` and the id is all digits;
      `precheck.sh` has validated both, and they are the only things taken
@@ -130,9 +136,13 @@ The arguments are: $ARGUMENTS
    - `none` — there is no run to resume: no `interrupted` or `failed` status
      comment by this account (a branch with a later `finished` comment does
      not count: that run was resumed and completed), or the latest one names
-     no branch (it predates branch recording) or a branch of another issue. Tell the user, suggest
-     a plain `/jikkyo '<URL>'`, and **stop**. Never pick a branch any other
-     way (from the remote, the log, or the user).
+     no branch (it predates branch recording) or a branch of another issue.
+     Tell the user, suggest a plain `/jikkyo '<URL>'`, and **stop**.
+     Never pick a branch any other way (from the remote, the log, or the
+     user).
+
+   As in step 3, a failed listing makes `precheck.sh` exit 2: report the
+   `gh` error and stop.
 
 4. **Launch** with the Bash tool's `run_in_background: true`:
 

@@ -109,20 +109,25 @@ timing and signal tests waiting on a real scheduler.
 - **`launch.sh --resume`** — against a real bare remote reached through the
   issue's GitHub URL (`url.<file>.insteadOf`, with a thin `git` wrapper that
   shows the GitHub URL in `remote -v` and logs every git command line):
-  missing or extra arguments, `--resume` after the URL, a branch for another
-  issue, `main`, ` -->`, `$(…)`, a bad comment id, or a URL of another issue
-  are exit 2 before any worktree, child, or `gh` write. A good resume adds a
+  missing or extra arguments, empty branch or id (`--resume '' ''` included),
+  `--resume` after the URL, a branch for another issue, `main`, ` -->`,
+  `$(…)`, a bad comment id, or a URL of another issue are exit 2 before any
+  worktree, child, or `gh` write. A good resume adds a
   new worktree `jikkyo-<N>-<timestamp>` on the branch at the pushed tip,
   tracking `origin/<branch>`, prints the worktree lines (naming the resumed
   branch) first, and runs the child inside it without `--worktree`, with the
   same flags and deny list and the resume instruction last, after the log
   instruction. A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and
   backticks never reaches the child's or any git command line and is never
-  run; the git command lines are exactly the expected five. The status
+  run; the git command lines are exactly the expected six, with the
+  worktree list read before the fetch. The status
   comment is a new one with the same branch and a `Resumed from` row. It
   refuses, before printing the worktree lines, a branch checked out in
   another worktree, a local branch with a commit the remote lacks (left
-  where it was), and a branch not on the remote; a local branch behind the
+  where it was), a branch not on the remote, a branch that changes
+  `.claude/settings.json`, `.mcp.json`, `CLAUDE.md`, or a nested
+  `CLAUDE.md`, and a failed `git worktree add`; with two remotes pointing at
+  the issue's repository it fetches from and tracks the first one listed; a local branch behind the
   remote is brought up to the pushed tip.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
@@ -147,8 +152,11 @@ timing and signal tests waiting on a real scheduler.
   `none` with no comments, for a `finished` run, another author, a latest
   run without a branch, a branch of another issue (also `jikkyo-123-` for
   12), or a malformed one; `resume <branch> <id>` for the latest
-  `interrupted` or `failed` comment (by id, also when a later run
-  `finished`), in English or Japanese, and nothing but that shape on the
+  `interrupted` or `failed` comment (by id, also when a later run of
+  another branch `finished`), but `none` once a later `finished` comment
+  names the same branch (and the branch again if it was then interrupted
+  once more; a `finished` comment by another author does not count), a
+  comment whose id is not a number never counts, in English or Japanese, and nothing but that shape on the
   line; `refuse` for a live `running` comment (also at 14 m 59 s); `rewrite`
   for a stale one, after which the same check resumes it; and exit 2 for
   `--force` with `--resume`, a bad issue number (empty, `0`, a leading zero,

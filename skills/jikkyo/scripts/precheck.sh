@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# precheck.sh — decide whether a new jikkyo run may start on an issue, from the
-# issue's comments alone, so the answer is the same on every machine.
+# precheck.sh — decide whether a new jikkyo run may start on an issue, or which
+# earlier run to resume, from the issue's comments alone, so the answer is the
+# same on every machine.
 #
 #   gh api --paginate repos/<o>/<r>/issues/<N>/comments \
 #     | precheck.sh --author <login> [--now <epoch>] [--force | --resume <N>]
@@ -60,14 +61,14 @@ usage() {
 
 command -v jq >/dev/null 2>&1 || { echo "precheck.sh: jq is required" >&2; exit 2; }
 
-author="" now="" force=false payload=false resume="" resuming=false
+author="" now="" force=false payload=false resume_num="" resuming=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --author) [ "$#" -ge 2 ] || usage; author="$2"; shift 2 ;;
     --now) [ "$#" -ge 2 ] || usage; now="$2"; shift 2 ;;
     --force) force=true; shift ;;
     --payload) payload=true; shift ;;
-    --resume) [ "$#" -ge 2 ] || usage; resume="$2"; resuming=true; shift 2 ;;
+    --resume) [ "$#" -ge 2 ] || usage; resume_num="$2"; resuming=true; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -114,7 +115,7 @@ case "$now" in '' | *[!0-9]*) usage ;; esac
 # A forced resume would take a live run's branch out from under it.
 if [ "$resuming" = true ]; then
   [ "$force" = false ] || usage
-  [[ "$resume" =~ ^[1-9][0-9]*$ ]] || usage
+  [[ "$resume_num" =~ ^[1-9][0-9]*$ ]] || usage
 fi
 input="$(cat)"
 
@@ -126,7 +127,7 @@ if ! jq -e -s 'length > 0 and all(.[]; type == "array")' >/dev/null 2>&1 <<<"$in
   exit 2
 fi
 jq -r -s --arg re "$MARKER_RE" --arg author "$author" --argjson now "$now" \
-  --argjson force "$force" --argjson stale "$STALE_AFTER" --arg resume "$resume" '
+  --argjson force "$force" --argjson stale "$STALE_AFTER" --arg resume_num "$resume_num" '
   [ flatten(1)[]
     | select(type == "object" and .user.login? == $author)
     | ((.body // "") | capture($re)? // null) as $m
@@ -134,9 +135,11 @@ jq -r -s --arg re "$MARKER_RE" --arg author "$author" --argjson now "$now" \
     | {id, url: .html_url, state: $m.state, branch: $m.branch,
        age: ($now - ((.updated_at // .created_at) | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601))} ] as $counted
   | [ $counted[] | select(.state == "running") ] as $running
-  | if $resume != "" then
-      if any($running[]; .age < $stale) then "refuse " + ([$running[] | select(.age < $stale)][0].url)
-      elif $running != [] then "rewrite " + ($running | map(.id | tostring) | join(" "))
+  | [ $running[] | select(.age < $stale) ] as $live
+  | ("rewrite " + ($running | map(.id | tostring) | join(" "))) as $rewrite
+  | if $resume_num != "" then
+      if $live != [] then "refuse " + $live[0].url
+      elif $running != [] then $rewrite
       else
         # Comment ids grow with creation, so the largest is the latest run.
         # Earlier comments are never edited, so a branch that was resumed and
@@ -147,12 +150,12 @@ jq -r -s --arg re "$MARKER_RE" --arg author "$author" --argjson now "$now" \
            | select((.id | type) == "number")
            | . as $c | select(all($done[]; .branch != $c.branch or .id < $c.id)) ] | max_by(.id)) as $last
         | if $last == null then "none"
-          elif ($last.branch // "" | test("^worktree-jikkyo-" + $resume + "-[0-9]{8}-[0-9]{6}$"))
+          elif ($last.branch // "" | test("^worktree-jikkyo-" + $resume_num + "-[0-9]{8}-[0-9]{6}$"))
             then "resume " + $last.branch + " " + ($last.id | tostring)
           else "none" end
       end
     elif $running == [] then "start"
-    elif $force then "rewrite " + ($running | map(.id | tostring) | join(" "))
-    elif any($running[]; .age < $stale) then "refuse " + ([$running[] | select(.age < $stale)][0].url)
-    else "rewrite " + ($running | map(.id | tostring) | join(" "))
+    elif $force then $rewrite
+    elif $live != [] then "refuse " + $live[0].url
+    else $rewrite
     end' <<<"$input" || usage

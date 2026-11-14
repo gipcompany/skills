@@ -789,26 +789,26 @@ fi
 exec "$REAL_GIT" "\$@"
 EOF
   chmod +x "$rs/bin/git"
-  rg() { "$REAL_GIT" -c user.name=t -c user.email=t@t "$@"; }
+  git_t() { "$REAL_GIT" -c user.name=t -c user.email=t@t "$@"; }
   "$REAL_GIT" init -q --bare "$rs/remote.git"
   "$REAL_GIT" clone -q "$rs/remote.git" "$rs/seed" 2>/dev/null
-  rg -C "$rs/seed" commit -q --allow-empty -m init
-  rg -C "$rs/seed" push -q origin HEAD:main 2>/dev/null
+  git_t -C "$rs/seed" commit -q --allow-empty -m init
+  git_t -C "$rs/seed" push -q origin HEAD:main 2>/dev/null
   BR="worktree-jikkyo-12-20261114-132452"
-  rg -C "$rs/seed" checkout -q -b "$BR"
+  git_t -C "$rs/seed" checkout -q -b "$BR"
   mkdir -p "$rs/seed/.jikkyo"
   # A log that tries to smuggle text onto a command line.
   # shellcheck disable=SC2016  # literal $(...), never expanded
   printf '%s\n' 'issue: https://github.com/o/r/issues/12' "branch: $BR" 'next: SENTINEL-FROM-LOG $(touch pwned) `id`' > "$rs/seed/.jikkyo/progress.md"
-  rg -C "$rs/seed" add .jikkyo/progress.md
-  rg -C "$rs/seed" commit -q -m "log"
-  rg -C "$rs/seed" commit -q --allow-empty -m "work"
-  rg -C "$rs/seed" push -q origin "$BR" 2>/dev/null
-  tip="$(rg -C "$rs/seed" rev-parse HEAD)"
+  git_t -C "$rs/seed" add .jikkyo/progress.md
+  git_t -C "$rs/seed" commit -q -m "log"
+  git_t -C "$rs/seed" commit -q --allow-empty -m "work"
+  git_t -C "$rs/seed" push -q origin "$BR" 2>/dev/null
+  tip="$(git_t -C "$rs/seed" rev-parse HEAD)"
 
   "$REAL_GIT" clone -q "$rs/remote.git" "$rs/repo" 2>/dev/null
-  rg -C "$rs/repo" remote set-url origin https://github.com/o/r.git
-  rg -C "$rs/repo" config url."file://$rs/remote.git".insteadOf https://github.com/o/r.git
+  git_t -C "$rs/repo" remote set-url origin https://github.com/o/r.git
+  git_t -C "$rs/repo" config url."file://$rs/remote.git".insteadOf https://github.com/o/r.git
   rroot="$(cd "$rs/repo" && pwd -P)"
   assert_eq "the fixture's remote -v shows the GitHub URL" "origin	https://github.com/o/r.git (fetch)" \
     "$(PATH="$rs/bin:$PATH" git -C "$rs/repo" remote -v | head -n 1)"
@@ -841,10 +841,10 @@ EOF
   assert_eq "resume: the worktree lines come first and name the resumed branch" \
     "$(printf 'jikkyo: worktree name %s\njikkyo: worktree path %s\njikkyo: worktree branch %s' "$name" "$wpath" "$BR")" \
     "$(printf '%s\n' "$out" | sed -n '1,3p')"
-  assert_eq "resume: the worktree is on the branch" "$BR" "$(rg -C "$wpath" symbolic-ref --short HEAD 2>/dev/null)"
-  assert_eq "resume: ...at the pushed tip" "$tip" "$(rg -C "$wpath" rev-parse HEAD 2>/dev/null)"
+  assert_eq "resume: the worktree is on the branch" "$BR" "$(git_t -C "$wpath" symbolic-ref --short HEAD 2>/dev/null)"
+  assert_eq "resume: ...at the pushed tip" "$tip" "$(git_t -C "$wpath" rev-parse HEAD 2>/dev/null)"
   assert_eq "resume: ...tracking the remote branch, so a plain git push works" "origin/$BR" \
-    "$(rg -C "$wpath" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)"
+    "$(git_t -C "$wpath" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)"
   assert_eq "resume: the log is there for the child to read" "branch: $BR" "$(sed -n '2p' "$wpath/.jikkyo/progress.md" 2>/dev/null)"
   assert_eq "resume: the child runs inside that worktree" "$wpath" "$(cat "$CLAUDE_ARGS.cwd" 2>/dev/null)"
   args="$(cat "$CLAUDE_ARGS" 2>/dev/null)"
@@ -876,8 +876,8 @@ EOF
   # only value on them is the validated branch.
   assert_eq "resume: the git calls" "$(printf '%s\n' \
       "-C $rroot remote -v" \
-      "-C $rroot fetch --quiet origin +refs/heads/$BR:refs/remotes/origin/$BR" \
       "-C $rroot worktree list --porcelain" \
+      "-C $rroot fetch --quiet origin +refs/heads/$BR:refs/remotes/origin/$BR" \
       "-C $rroot show-ref --verify --quiet refs/heads/$BR" \
       "-C $rroot diff --quiet HEAD...refs/remotes/origin/$BR -- .claude .mcp.json :(glob)**/CLAUDE.md :(glob)**/CLAUDE.local.md" \
       "-C $rroot worktree add --quiet --track -B $BR $wpath refs/remotes/origin/$BR")" \
@@ -897,22 +897,22 @@ EOF
   assert_lacks "...before printing worktree lines" "jikkyo: worktree" "$out"
 
   # Local branch behind the remote (the worktree is gone): fast-forwarded.
-  rg -C "$rs/repo" worktree remove "$wpath"
-  rg -C "$rs/repo" branch -q -f "$BR" "$tip~1"
+  git_t -C "$rs/repo" worktree remove "$wpath"
+  git_t -C "$rs/repo" branch -q -f "$BR" "$tip~1"
   launch_resume --resume "$BR" 4242 "$URL"
   wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
   assert_eq "resume: a local branch behind the remote is brought up to the pushed tip" "0:$tip" \
-    "$rc:$(rg -C "$wpath" rev-parse HEAD 2>/dev/null)"
+    "$rc:$(git_t -C "$wpath" rev-parse HEAD 2>/dev/null)"
 
   # Local branch with a commit the remote lacks: refused, nothing moved.
-  rg -C "$rs/repo" worktree remove "$wpath"
-  rg -C "$rs/repo" branch -q -f "$BR" "$tip"
-  rg -C "$rs/repo" commit-tree -m local "$tip^{tree}" -p "$tip" > "$rs/local-commit"
-  rg -C "$rs/repo" branch -q -f "$BR" "$(cat "$rs/local-commit")"
+  git_t -C "$rs/repo" worktree remove "$wpath"
+  git_t -C "$rs/repo" branch -q -f "$BR" "$tip"
+  git_t -C "$rs/repo" commit-tree -m local "$tip^{tree}" -p "$tip" > "$rs/local-commit"
+  git_t -C "$rs/repo" branch -q -f "$BR" "$(cat "$rs/local-commit")"
   launch_resume --resume "$BR" 4242 "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "resume: refuses a local branch with commits the remote lacks"
   else bad "resume: refuses a local branch with commits the remote lacks (rc=$rc)"; fi
-  assert_eq "...and leaves that branch where it was" "$(cat "$rs/local-commit")" "$(rg -C "$rs/repo" rev-parse "$BR")"
+  assert_eq "...and leaves that branch where it was" "$(cat "$rs/local-commit")" "$(git_t -C "$rs/repo" rev-parse "$BR")"
 
   # A branch that is not on the remote.
   launch_resume --resume "worktree-jikkyo-12-20990101-000000" 4242 "$URL"
@@ -926,18 +926,53 @@ EOF
   for cfg in .claude/settings.json .mcp.json CLAUDE.md sub/dir/CLAUDE.md; do
     n=$((n + 1))
     cbr="worktree-jikkyo-12-20261114-20000$n"
-    rg -C "$rs/seed" checkout -q -b "$cbr" main
+    git_t -C "$rs/seed" checkout -q -b "$cbr" main
     mkdir -p "$rs/seed/$(dirname "$cfg")"
     echo '{}' > "$rs/seed/$cfg"
-    rg -C "$rs/seed" add "$cfg"
-    rg -C "$rs/seed" commit -q -m "cfg"
-    rg -C "$rs/seed" push -q origin "$cbr" 2>/dev/null
+    git_t -C "$rs/seed" add "$cfg"
+    git_t -C "$rs/seed" commit -q -m "cfg"
+    git_t -C "$rs/seed" push -q origin "$cbr" 2>/dev/null
     launch_resume --resume "$cbr" 4242 "$URL"
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
       ok "resume: refuses a branch that changes $cfg"
     else bad "resume: refuses a branch that changes $cfg (rc=$rc)"; fi
     assert_has "...and says so" "the child would load them" "$out"
   done
+
+  # A fresh branch for the cases below, so none of the ones above is in the way.
+  push_branch() {  # <branch>: an ordinary pushed branch off main
+    git_t -C "$rs/seed" checkout -q -b "$1" main
+    git_t -C "$rs/seed" commit -q --allow-empty -m "work"
+    git_t -C "$rs/seed" push -q origin "$1" 2>/dev/null
+  }
+
+  # Two remotes point at the issue's repository: the first listed is used.
+  BR5="worktree-jikkyo-12-20261114-300001"
+  push_branch "$BR5"
+  git_t -C "$rs/repo" remote add aaa https://github.com/o/r.git
+  launch_resume --resume "$BR5" 4242 "$URL"
+  assert_eq "resume: with two matching remotes, exits 0" "0" "$rc"
+  assert_has "resume: ...and fetches from the first one listed" \
+    "fetch --quiet aaa +refs/heads/$BR5:refs/remotes/aaa/$BR5" "$(cat "$rs/git.log")"
+  wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
+  assert_eq "resume: ...and tracks that remote's branch" "aaa/$BR5" \
+    "$(git_t -C "$wpath" rev-parse --abbrev-ref '@{upstream}' 2>/dev/null)"
+  git_t -C "$rs/repo" worktree remove "$wpath"
+  git_t -C "$rs/repo" remote remove aaa
+
+  # git worktree add fails (the worktrees directory cannot be made): exit 2,
+  # no child, and no worktree lines.
+  BR6="worktree-jikkyo-12-20261114-300002"
+  push_branch "$BR6"
+  mv "$rs/repo/.claude/worktrees" "$rs/worktrees.saved"
+  : > "$rs/repo/.claude/worktrees"
+  launch_resume --resume "$BR6" 4242 "$URL"
+  if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: a failed worktree add exits 2 without the child"
+  else bad "resume: a failed worktree add exits 2 without the child (rc=$rc)"; fi
+  assert_has "...and says so" "could not add a worktree for $BR6" "$out"
+  assert_lacks "...before printing worktree lines" "jikkyo: worktree" "$out"
+  rm -f "$rs/repo/.claude/worktrees"
+  mv "$rs/worktrees.saved" "$rs/repo/.claude/worktrees"
 }
 
 # ===========================================================================
@@ -1052,42 +1087,44 @@ echo "precheck.sh"
   # --resume <N>: which earlier run to resume, from the comments alone.
   BR2="worktree-jikkyo-12-20261114-150000"
   br2_comment() { br_comment "$@" | jq -c --arg br "$BR2" '.body |= sub("branch=[^ ]+"; "branch=\($br)")'; }
-  resume() { decide --resume 12; }
+  decide_resume() { decide --resume 12; }
   assert_eq "--resume: no comments: none" "none" "$(echo '[]' | bash "$PRECHECK" --author me --now "$NOW" --resume 12)"
-  assert_eq "--resume: an interrupted comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me interrupted 60 | resume)"
-  assert_eq "--resume: a failed comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me failed 60 | resume)"
+  assert_eq "--resume: an interrupted comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me interrupted 60 | decide_resume)"
+  assert_eq "--resume: a failed comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me failed 60 | decide_resume)"
   assert_eq "--resume: the latest interrupted or failed one wins" "resume $BR2 5" \
-    "$( { br_comment 1 me failed 9000; br2_comment 5 me interrupted 8000; br_comment 3 me interrupted 10; } | resume)"
-  assert_eq "--resume: a finished run is not resumed" "none" "$(br_comment 1 me finished 60 | resume)"
+    "$( { br_comment 1 me failed 9000; br2_comment 5 me interrupted 8000; br_comment 3 me interrupted 10; } | decide_resume)"
+  assert_eq "--resume: a finished run is not resumed" "none" "$(br_comment 1 me finished 60 | decide_resume)"
   assert_eq "--resume: a later finished run does not hide an earlier interrupted one" "resume $BR 1" \
-    "$( { br_comment 1 me interrupted 9000; br2_comment 2 me finished 60; } | resume)"
+    "$( { br_comment 1 me interrupted 9000; br2_comment 2 me finished 60; } | decide_resume)"
   assert_eq "--resume: a branch that was resumed and then finished is not resumed again" "none" \
-    "$( { br_comment 1 me interrupted 9000; br_comment 2 me finished 60; } | resume)"
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 me finished 60; } | decide_resume)"
   assert_eq "--resume: ...but an earlier interrupted run of another branch still is" "resume $BR2 1" \
-    "$( { br2_comment 1 me interrupted 9000; br_comment 2 me interrupted 8000; br_comment 3 me finished 60; } | resume)"
+    "$( { br2_comment 1 me interrupted 9000; br_comment 2 me interrupted 8000; br_comment 3 me finished 60; } | decide_resume)"
   assert_eq "--resume: a finished run that was resumed again and interrupted is resumed" "resume $BR 3" \
-    "$( { br_comment 1 me interrupted 9000; br_comment 2 me finished 8000; br_comment 3 me interrupted 60; } | resume)"
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 me finished 8000; br_comment 3 me interrupted 60; } | decide_resume)"
   assert_eq "--resume: a finished comment by another author does not take the branch out" "resume $BR 1" \
-    "$( { br_comment 1 me interrupted 9000; br_comment 2 someone finished 60; } | resume)"
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 someone finished 60; } | decide_resume)"
   assert_eq "--resume: the latest one without a branch (an older comment): none" "none" \
-    "$( { br_comment 1 me interrupted 9000; comment 2 me interrupted 60; } | resume)"
+    "$( { br_comment 1 me interrupted 9000; comment 2 me interrupted 60; } | decide_resume)"
   assert_eq "--resume: a branch of another issue: none" "none" \
-    "$(br_comment 1 me interrupted 60 | jq -c '.body |= sub("jikkyo-12-"; "jikkyo-13-")' | resume)"
+    "$(br_comment 1 me interrupted 60 | jq -c '.body |= sub("jikkyo-12-"; "jikkyo-13-")' | decide_resume)"
   assert_eq "--resume: a branch whose number only starts with N: none" "none" \
-    "$(br_comment 1 me interrupted 60 | jq -c '.body |= sub("jikkyo-12-"; "jikkyo-123-")' | resume)"
+    "$(br_comment 1 me interrupted 60 | jq -c '.body |= sub("jikkyo-12-"; "jikkyo-123-")' | decide_resume)"
   assert_eq "--resume: a malformed branch does not count: none" "none" \
-    "$(comment 1 me interrupted 60 | jq -c '.body |= sub(" -->"; " branch=main;id -->")' | resume)"
-  assert_eq "--resume: another author's comment does not count" "none" "$(br_comment 1 someone interrupted 60 | resume)"
+    "$(comment 1 me interrupted 60 | jq -c '.body |= sub(" -->"; " branch=main;id -->")' | decide_resume)"
+  assert_eq "--resume: another author's comment does not count" "none" "$(br_comment 1 someone interrupted 60 | decide_resume)"
+  assert_eq "--resume: a comment whose id is not a number does not count" "resume $BR 1" \
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 me interrupted 60 | jq -c '.id = "2"'; } | decide_resume)"
   assert_eq "--resume: a live running comment still refuses" \
-    "refuse https://github.com/o/r/issues/12#issuecomment-2" "$( { br_comment 1 me interrupted 9000; br_comment 2 me running 60; } | resume)"
+    "refuse https://github.com/o/r/issues/12#issuecomment-2" "$( { br_comment 1 me interrupted 9000; br_comment 2 me running 60; } | decide_resume)"
   assert_eq "--resume: running, updated 14 m 59 s ago: still refuses" \
-    "refuse https://github.com/o/r/issues/12#issuecomment-2" "$( { br_comment 1 me interrupted 9000; br_comment 2 me running 899; } | resume)"
+    "refuse https://github.com/o/r/issues/12#issuecomment-2" "$( { br_comment 1 me interrupted 9000; br_comment 2 me running 899; } | decide_resume)"
   assert_eq "--resume: a stale running comment is rewritten first" "rewrite 2" \
-    "$( { br_comment 1 me interrupted 9000; br2_comment 2 me running 900; } | resume)"
+    "$( { br_comment 1 me interrupted 9000; br2_comment 2 me running 900; } | decide_resume)"
   # After that rewrite the same check, run again, resumes the run that died.
   rewritten="$(br2_comment 2 me running 900 | bash "$PRECHECK" --payload | jq -c '{id: 2, html_url: "x", user: {login: "me"}, body: .body, created_at: "2025-01-01T00:00:00Z"}')"
   assert_eq "--resume: ...and then resumes the run that died at running" "resume $BR2 2" \
-    "$( { br_comment 1 me interrupted 9000; printf '%s\n' "$rewritten"; } | resume)"
+    "$( { br_comment 1 me interrupted 9000; printf '%s\n' "$rewritten"; } | decide_resume)"
   rc=0; echo '[]' | bash "$PRECHECK" --author me --resume 12 --force >/dev/null 2>&1 || rc=$?
   assert_eq "--resume with --force is a usage error" "2" "$rc"
   for bad_n in "" 0 012 "12; id" abc; do
@@ -1099,11 +1136,11 @@ echo "precheck.sh"
   rc=0; out="$(printf '' | bash "$PRECHECK" --author me --resume 12 2>/dev/null)" || rc=$?
   assert_eq "--resume: a failed listing is an error, not none" "2:" "$rc:$out"
   # The only text that leaves for a command line: the branch shape and digits.
-  out="$( { br_comment 1 me interrupted 60; } | resume)"
+  out="$( { br_comment 1 me interrupted 60; } | decide_resume)"
   if [[ "$out" =~ ^resume\ worktree-jikkyo-12-[0-9]{8}-[0-9]{6}\ [0-9]+$ ]]; then ok "--resume prints only a validated branch and a numeric id"
   else bad "--resume prints only a validated branch and a numeric id ($out)"; fi
   assert_eq "--resume: Japanese comments count the same" "resume $BR 1" \
-    "$(jq -cn --arg b "$BR_RUNNING_BODY_JA" '{id: 1, html_url: "x", user: {login: "me"}, body: ($b | sub("state=running"; "state=interrupted")), created_at: "2025-01-01T00:00:00Z"}' | resume)"
+    "$(jq -cn --arg b "$BR_RUNNING_BODY_JA" '{id: 1, html_url: "x", user: {login: "me"}, body: ($b | sub("state=running"; "state=interrupted")), created_at: "2025-01-01T00:00:00Z"}' | decide_resume)"
 
   # Japanese status comments: the marker is the same, so the decisions are too.
   ja_comment() {  # <id> <login> <state> <age seconds>
