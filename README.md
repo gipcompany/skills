@@ -140,11 +140,11 @@ All four subagents run the `kabeuchi-voter` agent definition, which ships with t
 cp ~/.claude/skills/kabeuchi/agents/kabeuchi-voter.md ~/.claude/agents/
 ```
 
-Read it first; it is short. Its `tools:` allowlist is `Read, Grep, Glob, WebFetch, WebSearch` and the Context7 MCP server — no `Bash`, no file writes, no subagents of its own. The voters read web pages and whole codebases, so they are where a prompt injection would land, and this makes "read-only" a guarantee Claude Code enforces rather than a request in a prompt. If your Context7 server has a different name (plugin installs use `mcp__plugin_<plugin>_<server>`), change that one entry.
+Read it first; it is short. Copy it again whenever you update the skill: kabeuchi stops at startup if the definition in effect is older than the skill expects. Its `tools:` allowlist is `Read, Grep, Glob, WebFetch, WebSearch` and the Context7 MCP server — no `Bash`, no file writes, no subagents of its own. The voters read web pages and whole codebases, so they are where a prompt injection would land, and this makes "read-only" a guarantee Claude Code enforces rather than a request in a prompt. If your Context7 server has a different name (plugin installs use `mcp__plugin_<plugin>_<server>`), change that one entry.
 
 At startup kabeuchi stops if `kabeuchi-voter` is missing, **or if the definition in effect has broader tools than that** — a project's `.claude/agents/` overrides yours, so a repository you cloned could otherwise ship a `kabeuchi-voter` of its own. It never falls back to unvoted recommendations.
 
-Voting costs four subagent runs per question and makes each question take longer to appear. That trade is deliberate: the point of the vote is that a recommendation you see has been checked.
+Voting costs four subagent runs per question and makes each question take longer to appear. That trade is deliberate: the point of the vote is that a recommendation you see has been checked. What the vote does not need is to wait on anything else: the voters share one brief file instead of three copies of the same prompt, and the previous answer is written back into the target while they work.
 
 ### How it stays safe
 

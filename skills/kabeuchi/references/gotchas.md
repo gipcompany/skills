@@ -17,6 +17,8 @@ you can actually **write** it before spending the session.
 | Target is empty (empty issue body / brand-new file) | Enter **from-scratch mode**: build the spec through grilling. |
 | `kabeuchi-voter` is not an available agent type | Abort; tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/`. Never fall back to unvoted recommendations. |
 | `kabeuchi-voter` is available but its tools are broader than read-only (or unrestricted) | Abort and say so. A project's `.claude/agents/` overrides the user's, so a cloned repository can ship its own. |
+| `kabeuchi-voter` is read-only but its description lacks "Reads the per-question brief" | Abort; it is a copy from before the brief file. Tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again. Re-copy it after every update of this skill. |
+| No scratchpad, so the briefs live in a `mktemp -d` directory | Not yet tried in a real session. If all three voters fail on a question, check first whether they could read the brief there (a permission prompt a background subagent cannot answer). |
 
 ## Known pitfalls
 
