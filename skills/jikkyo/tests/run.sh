@@ -1872,8 +1872,9 @@ echo "cleanup.sh"
 echo "SKILL.md"
 {
   # SKILL.md runs each script by its path, not through `bash`, and the
-  # allowed-tools rules match that form, so every script must be executable.
-  for s in launch report precheck cleanup; do
+  # allowed-tools rules match that form, so every script must be executable;
+  # statusline.sh is run by path from the user's settings.
+  for s in launch report precheck cleanup statusline; do
     if [ -x "$SCRIPTS/$s.sh" ]; then ok "$s.sh is executable"; else bad "$s.sh is executable"; fi
   done
   fm="$(awk 'NR == 1 && /^---$/ { on = 1; next } on && /^---$/ { exit } on' "$SKILL_MD")"
@@ -1905,7 +1906,37 @@ echo "SKILL.md"
     assert_has "README.md: ticks after the push (#41)" "that todo's commits are pushed (one todo per task-list item; the order is complete, push, tick" "$readme"
     assert_lacks "README.md: no tick right after completing the todo (#41)" "right after completing that item's todo" "$readme"
     assert_has "README.md: resume redoes a box ticked without its work (#41)" "a box that is ticked with no work behind it on the branch is done again and stays ticked" "$readme"
+    assert_has "README.md: the status line section" "### In your status line" "$readme"
+    assert_has "README.md: the standalone setup, with refreshInterval" \
+      '{"statusLine": {"type": "command", "command": "/absolute/path/to/jikkyo/scripts/statusline.sh", "refreshInterval": 10}}' "$readme"
+    assert_has "README.md: the appended setup" "**Appended to the status line you already have**" "$readme"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: ...keeps refreshInterval too" 'keep (or add) `"refreshInterval": 10` on your `statusLine` entry' "$readme"
+    assert_has "README.md: why refreshInterval" "the session that launched it is idle" "$readme"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme"
+    assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme"
+    assert_has "README.md: after /clear, the status comment" "After \`/clear\` you are in a new session" "$readme"
+    # The appended example works as written, with its two paths filled in.
+    printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
+    chmod +x "$TMP/my-statusline.sh"
+    sed -n '/^  #!\/usr\/bin\/env bash$/,/^  printf/p' "$README_MD" | sed -e 's/^  //' \
+      -e "s|~/.claude/my-statusline.sh|$TMP/my-statusline.sh|" \
+      -e "s|/absolute/path/to/jikkyo/scripts/statusline.sh|$STATUSLINE|" > "$TMP/wrapper.sh"
+    sl_reset; put 27
+    assert_eq "README.md: the appended example appends the segment" "my line | jikkyo #27 · 60% · ~12m left" \
+      "$(sl_input | JIKKYO_CLOCK_FILE="$sl_clock" bash "$TMP/wrapper.sh")"
+    sl_reset
+    assert_eq "README.md: ...and adds nothing when there is no run" "my line" \
+      "$(sl_input | JIKKYO_CLOCK_FILE="$sl_clock" bash "$TMP/wrapper.sh")"
   fi
+  assert_has "SKILL.md: a Status line section" "## Status line" "$skill"
+  assert_has "SKILL.md: the skill never edits settings" "This skill never edits a settings file" "$skill"
+  assert_has "SKILL.md: refreshInterval and why" "with \`refreshInterval\`, needed because this session is idle while the run" "$skill"
+  # No script writes Claude Code settings.
+  for s in launch report precheck cleanup statusline; do
+    assert_lacks "$s.sh does not touch settings.json" "settings.json" "$(grep -v '^ *#' "$SCRIPTS/$s.sh")"
+  done
   assert_has "SKILL.md: ...and that it is asked, not enforced" "command line, and it is asked, not enforced: no script checks the log's" "$skill"
   assert_has "SKILL.md: usage has --resume" "/jikkyo [--force | --resume] <GitHub issue URL>" "$skill"
   assert_has "SKILL.md: resume asks precheck.sh with the issue number" "precheck.sh --author '<login>' --resume '<N>'" "$skill"

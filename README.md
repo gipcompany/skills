@@ -223,6 +223,40 @@ The comment follows the language of the issue. At the start, `report.sh` reads t
 
 The run ends in one of three states: `finished` (the child exited cleanly, which is not the same as the goal being met; the summary says which), `failed` (an error result), or `interrupted` (no result, or the reporter was killed).
 
+### In your status line
+
+The session you ran `/jikkyo` in can also show the run in Claude Code's [status line](https://code.claude.com/docs/en/statusline), so you can follow it without opening the issue:
+
+```
+jikkyo #27 · 60% · ~12m left | jikkyo #31 · finished
+```
+
+Each time `report.sh` writes the status comment, and at exit, it also writes a small state file, `<git common dir>/jikkyo/<N>.json` (inside `.git`, shared by the checkout and all its worktrees, never committed). `scripts/statusline.sh` reads the status line's JSON on stdin, finds those files for that checkout, and prints one line with a segment per run: the percentage and the remaining-time estimate (or the turn count when the run has no todos) while it runs, `finished`, `failed`, or `interrupted` for 5 minutes after it ends, and `stale` for a `running` file that has not been rewritten for 15 minutes (the run was killed or crashed without a word; it stays until the next run of that issue, typically `/jikkyo --resume`, overwrites it). Several runs go on one line, by issue number. The words follow the status comment's language (`jikkyo #27 · 60% · 残り ~12m`, `完了`, `失敗`, `中断`, and `応答なし` for stale). It uses no network, prints only numbers and those fixed words, and prints nothing at all when there is no run or anything goes wrong, so it cannot break your status line. Nothing deletes the state files; there is at most one per issue number, overwritten by the next run.
+
+**Only the session that launched (or resumed) a run shows it.** `/jikkyo` passes the session's id to `launch.sh`, and the status line compares it with its own `session_id`; runs started from other sessions on the same checkout are not shown. After `/clear` you are in a new session, so the run disappears from the line: the status comment on the issue is the place to look. Whether `/resume` into the earlier session brings it back depends on that session keeping its id, which the docs do not promise.
+
+`jikkyo` does not edit your settings; add it yourself, in one of two ways. Use the absolute path of the installed `scripts/statusline.sh` (for a personal install, usually `~/.claude/skills/jikkyo/scripts/statusline.sh`). It needs `jq` and `git`.
+
+- **As the whole status line**, in `~/.claude/settings.json`:
+
+  ```json
+  {"statusLine": {"type": "command", "command": "/absolute/path/to/jikkyo/scripts/statusline.sh", "refreshInterval": 10}}
+  ```
+
+- **Appended to the status line you already have**: give `statusline.sh` the same stdin from your own script and append what it prints, if anything:
+
+  ```bash
+  #!/usr/bin/env bash
+  input="$(cat)"
+  mine="$(printf '%s' "$input" | ~/.claude/my-statusline.sh)"   # what you print today
+  jikkyo="$(printf '%s' "$input" | /absolute/path/to/jikkyo/scripts/statusline.sh)"
+  printf '%s%s\n' "$mine" "${jikkyo:+ | $jikkyo}"
+  ```
+
+  and keep (or add) `"refreshInterval": 10` on your `statusLine` entry.
+
+**Set `refreshInterval` either way.** A status line otherwise runs only on session events, such as a new assistant message. While the child works, the session that launched it is idle (it only waits for the background command to exit), so without a refresh interval the line would stay at whatever it showed when the run started. With `refreshInterval: 10` it is re-read every 10 seconds; the file itself changes at most every 30 seconds, plus a heartbeat every 5 minutes.
+
 ### How it works
 
 A skill cannot start `/goal` in its own session, so `jikkyo` runs it in a headless child, `claude -p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'` (plus a resume instruction with `--resume`), and acts as the reporter:
@@ -238,6 +272,8 @@ A skill cannot start `/goal` in its own session, so `jikkyo` runs it in a headle
 ### What it runs on your machine
 
 Know this before you install it: **the child runs unattended with `--permission-mode auto`**, and you cannot steer it once it has started. On top of auto mode it gets a short deny list (`--disallowedTools`) blocking the plain forms of force pushes, remote-branch deletion, editing or deleting issue comments, and closing or deleting issues. Plain `git push` stays allowed so that it can open a PR, and `gh issue edit` stays allowed so that it can tick the task-list boxes it has verified. Deny rules match only the command as written, so the list is a limit on the obvious, not a sandbox. Read `skills/jikkyo/scripts/launch.sh`, where it is defined.
+
+Besides the worktree, the run writes one file outside it: the status line's state file, `<git common dir>/jikkyo/<N>.json` inside your checkout's `.git` (see *In your status line*). `statusline.sh` runs only if you add it to your settings yourself.
 
 `allowed-tools` pre-approves only `jikkyo`'s own `launch.sh`, `precheck.sh`, and `cleanup.sh`, for the turn that invokes the skill. Every `gh` and `git` call made by the parent session asks as usual. `/jikkyo` is `disable-model-invocation: true`, so you have to type it.
 

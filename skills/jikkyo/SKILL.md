@@ -225,7 +225,8 @@ The arguments are: $ARGUMENTS
 ## Phase 2: While it runs
 
 Nothing to do. If the user asks how it is going, read the background command's
-output so far, or point them at the status comment. Do not post anything.
+output so far, or point them at the status comment (or their status line, if
+they set it up; see *Status line*). Do not post anything.
 
 ## Phase 3: When the background command exits
 
@@ -370,6 +371,22 @@ Then, in this order:
 4. **Tell the user** the outcome in one or two lines, with the summary link,
    and the resume command when the run is resumable (with the same caveat
    when step 1 left the worktree or the local branch in place).
+
+## Status line
+
+`report.sh` also keeps a state file, `<git common dir>/jikkyo/<N>.json`
+(numbers, the state, the language, the session id, validated URLs), at every
+status-comment write and at exit. `scripts/statusline.sh` reads it and shows
+`jikkyo #<N> · 60% · ~12m left` (or the turn count, then the ended state for
+5 minutes, or `stale` for a `running` file 15 minutes old) in the status line
+of **the session that launched or resumed the run** only: it matches the
+`${CLAUDE_SESSION_ID}` passed to `launch.sh` against the status line's
+`session_id`. After `/clear` the run is no longer shown; point the user at the
+status comment. This skill never edits a settings file: if the user asks
+about the status line, point them at the README's *In your status line*,
+which shows both setups (the whole status line, or appended to their own)
+with `refreshInterval`, needed because this session is idle while the run
+goes.
 
 ## How the pieces fit
 
@@ -615,4 +632,5 @@ gipcompany/skills#12.
 - Token usage: no source in the stream is both live and accurate.
 - Steering the run while it is in progress.
 - Writing the issue body from the reporters (the child ticks verified boxes).
+- Editing the user's settings, the status line included.
 - Targets other than a GitHub issue URL.
