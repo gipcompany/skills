@@ -21,7 +21,7 @@ GitHub issue and reports start, progress, and finish on that issue as they
 happen.
 
 You are the **reporter's parent**, not the worker. The work is done by a
-headless child (`claude -p '/goal <URL> <todo instruction> <tick instruction>'`) that
+headless child (`claude -p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`) that
 `scripts/launch.sh` starts, and
 the live status is written by `scripts/report.sh`, which reads the child's
 stream. Your jobs are the ones around it: the check before the start, the
@@ -257,6 +257,25 @@ Then, in this order:
   constant, and since the `/goal` evaluator judges it too, it is worded as a
   way of working, not as a condition for the goal. It is asked, not enforced:
   the child may still make no todos, or a few large ones.
+- **The progress log.** So that an interrupted run leaves a record a later
+  run can resume from, `launch.sh` appends a third fixed instruction after
+  the todo and tick instructions, the log instruction: keep a progress log
+  in `.jikkyo/progress.md` on the run's own branch, and each time a todo is
+  completed, update it, commit, and run a plain `git push`, so a crash loses
+  at most the one step between a commit and its push. The log has a fixed
+  shape: a `key: value` header (`issue`, `branch`, `updated`, `next`), then
+  `## Todos` (a task list, with the commit of each completed todo),
+  `## Verified task-list items` (each box ticked on the issue and how it was
+  verified), and `## Dead ends and decisions`. Tokens, secrets, environment
+  values, and command output never go in it. As the last step, right before
+  opening the PR (or marking it ready), the child deletes the log in one
+  ordinary commit and pushes it, so it never reaches the base branch. Like
+  the other two it is a constant, so nothing from the issue reaches the
+  command line, and it is asked, not enforced: no script checks the log's
+  shape, and the child may skip an update, a push, or the deletion. A
+  log-deletion commit that was never pushed keeps the worktree, because
+  `cleanup.sh` keeps any worktree whose HEAD is not on a remote-tracking
+  branch.
 - **What the deny list covers.** On top of auto mode the child runs with a
   `--disallowedTools` list that blocks the plain forms of force pushes,
   deleting remote branches, editing or deleting issue comments (so the child

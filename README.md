@@ -222,9 +222,10 @@ The run ends in one of three states: `finished` (the child exited cleanly, which
 
 ### How it works
 
-A skill cannot start `/goal` in its own session, so `jikkyo` runs it in a headless child, `claude -p '/goal <URL> <todo instruction> <tick instruction>'`, and acts as the reporter:
+A skill cannot start `/goal` in its own session, so `jikkyo` runs it in a headless child, `claude -p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`, and acts as the reporter:
 
 - **The child does the work** in its own git worktree (`.claude/worktrees/jikkyo-<N>-<timestamp>`, branch `worktree-jikkyo-<N>-<timestamp>`), so you can keep using your checkout. Unpushed local commits are not visible to it.
+- **The child keeps a progress log** in `.jikkyo/progress.md` on its branch, committing and pushing it after every todo, so an interrupted run leaves a record a later run can resume from. It deletes the log in one pushed commit right before opening the PR, so the log never reaches the base branch. This is asked in the goal line, not enforced.
 - **A script reports.** `scripts/report.sh` reads the child's `stream-json` output and updates the status comment through `gh` on its own, without the model being awake.
 - **The parent session** checks the issue before the start and, at exit, removes the worktree when that is safe (`scripts/cleanup.sh` decides: no uncommitted changes, and pushed or no new commits) and posts the summary.
 - **At most one run per issue**, judged from the issue itself, so it works across terminals and machines. A `running` status comment updated in the last 15 minutes blocks a new run, and an older one is marked `interrupted`.
