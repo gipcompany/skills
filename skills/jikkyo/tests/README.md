@@ -120,19 +120,25 @@ timing and signal tests waiting on a real scheduler.
     the resume instruction last. The status comment is a new one with the
     same branch and a `Resumed from` row.
   - A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and backticks never
-    reaches the child's or any git command line and is never run. The git
-    command lines are exactly these five: `remote -v`, `worktree list`
-    (before the fetch), the fetch of the one branch, `show-ref`, and
-    `worktree add`.
+    reaches the child's or any git command line and is never run. Leaving
+    out `rev-parse`, the git command lines are exactly these five:
+    `remote -v`, `worktree list` (before the fetch), the fetch of the one
+    branch, `show-ref`, and `worktree add`.
   - The resumed child runs with `--setting-sources user` right after the
-    prompt and is told that the project's configuration is not loaded; a
-    fresh run has no `--setting-sources`. A branch carrying a hook, an
-    `.mcp.json`, a `.claude` symlink, and a `CLAUDE.md` symlink is resumed
-    with that flag and nothing in it runs (`claude` is a stub here; that
-    Claude Code honours the flag is its own behaviour).
+    prompt, with `GIT_CONFIG_*` pointing `core.hooksPath` at `/dev/null`
+    and `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, and is told that the project's
+    configuration is not loaded; a fresh run has none of these. A branch
+    carrying a hook, an `.mcp.json`, a `.claude` symlink, a `CLAUDE.md`
+    symlink, and a git hook is resumed with that flag, and launch.sh runs
+    nothing from it (`claude` is a stub here; that Claude Code honours the
+    flag is its own behaviour). With a relative `core.hooksPath` in the
+    checkout, a commit in the worktree under the child's environment does
+    not run the branch's git hook, and a plain one does.
   - Refused before the worktree lines: a branch checked out in another
     worktree, a local branch with a commit the remote lacks (left where it
-    was), a branch not on the remote, and a failed `git worktree add`.
+    was), a branch not on the remote, a failed `git worktree add`, a
+    failed `git worktree list` (before the fetch), and a worktree that
+    cannot be entered (launch.sh then removes it).
   - Resumed: with two remotes pointing at the issue's repository, from the
     first one listed; and a local branch behind the remote, brought up to
     the pushed tip.

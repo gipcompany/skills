@@ -16,9 +16,9 @@
 # The optional third argument, on a resumed run, is the numeric id of the
 # earlier run's status comment (launch.sh --resume passes it). It must match
 # ^[1-9][0-9]*$ (digits, no leading zero), or report.sh exits 2 before it
-# writes anything. It adds a
-# `Resumed from` row (`再開元`) linking that comment, built from the validated
-# owner, repository, and issue number. The earlier comment is not touched.
+# writes anything. It adds a `Resumed from` row (`再開元`) linking that
+# comment, built from the validated owner, repository, and issue number. The
+# earlier comment is not touched.
 #
 # It creates the status comment at once, rewrites it in place by comment id
 # (never --edit-last), and writes:

@@ -25,10 +25,11 @@
 # name that is only behind is moved up to the pushed tip), and starts
 # `claude -p` inside it. The worktree lines above name the resumed branch.
 # The child gets the resume instruction after the other three and runs with
-# `--setting-sources user`, so none of the branch's project configuration
-# (hooks, MCP servers, skills, CLAUDE.md files) is loaded; report.sh gets the
-# comment id, for a `Resumed from` row. Only the validated branch name and
-# the numeric id reach a command line.
+# `--setting-sources user`, so Claude Code loads none of the branch's project
+# configuration (settings, hooks, MCP servers, skills, CLAUDE.md files; this
+# needs Claude Code 2.1.211 or later), with git hooks off, and with auto
+# memory off. report.sh gets the comment id, for a `Resumed from` row. Only
+# the validated branch name and the numeric id reach a command line.
 #
 # Exit status: the pipeline's, or 2, before the worktree lines, when
 #   - an argument is bad, this is not a git repository, or no remote points
@@ -168,11 +169,13 @@ name="jikkyo-${num}-$(date '+%Y%m%d-%H%M%S')"
 
 prompt="/goal ${url} ${TODO_INSTRUCTION} ${TICK_INSTRUCTION} ${LOG_INSTRUCTION}"
 child_args=()
+child_env=(CLAUDE_CODE_ENABLE_TODO_TOOLS=1)
 
 if [ "$resuming" = true ]; then
   # Resume: put the pushed branch in a new worktree ourselves. git's own output
-  # goes to stderr so the three worktree lines stay first on stdout. The local
-  # checks come before the fetch, so a refusal costs no network round trip.
+  # goes to stderr so the three worktree lines stay first on stdout. The
+  # checked-out check comes before the fetch, so that refusal costs no network
+  # round trip; the local-commits check needs the fetched tip, so it follows.
   path="${root}/.claude/worktrees/${name}"
   tracking="refs/remotes/${remote}/${resume_branch}"
   # Read the list whole before matching: `grep -q` stops at the first hit, and
@@ -201,12 +204,24 @@ if [ "$resuming" = true ]; then
   branch="$resume_branch"
   prompt="${prompt} ${RESUME_INSTRUCTION}"
   # A fresh run's tree is this checkout's own; a resumed one is whatever
-  # anyone who can push put on the branch. Claude Code loads hooks (shell
-  # commands the deny list never sees), MCP servers, skills, subagents,
-  # commands, and CLAUDE.md files from the project, at any depth, so the
-  # resumed child loads the user's settings only: none of the branch's
-  # configuration takes effect, however it is named or linked.
+  # anyone who can push put on the branch. Claude Code loads settings, hooks
+  # (shell commands the deny list never sees), MCP servers, skills,
+  # subagents, commands, and CLAUDE.md files from the project, at any depth,
+  # so the resumed child loads the user's settings only: none of the branch's
+  # Claude Code configuration takes effect, however it is named or linked.
+  # Scripts and tests on the branch are another matter: the child may still
+  # run them.
   child_args=(--setting-sources user)
+  # Two things --setting-sources does not cover. git runs hooks on every
+  # commit the child makes, from core.hooksPath, which can point into the
+  # tree (husky and the like set a relative path): point it at /dev/null for
+  # the child, which also turns off hooks the user installed. And auto memory
+  # is read and written whatever the setting sources, and shared with the
+  # user's other sessions in this repository, so text from the branch could
+  # land there: turn it off. GIT_CONFIG_COUNT replaces any GIT_CONFIG_* the
+  # caller had set.
+  child_env+=(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath
+    GIT_CONFIG_VALUE_0=/dev/null CLAUDE_CODE_DISABLE_AUTO_MEMORY=1)
   report_args=("$url" "$branch" "$resume_id")
   dir="$path"
 else
@@ -220,7 +235,8 @@ fi
 
 if ! cd "$dir"; then
   echo "launch.sh: could not enter ${dir}" >&2
-    # A worktree this run just added for a resume is clean: take it back out.
+  # A worktree this run just added for a resume is clean: take it back out.
+  # The local branch `worktree add -B` set stays, at the remote's tip.
   [ "$resuming" = true ] && git -C "$root" worktree remove "$path" >&2
   exit 2
 fi
@@ -235,8 +251,9 @@ echo "jikkyo: worktree branch ${branch}"
 # --disallowedTools takes the rest of the command line, so it stays last.
 # stdin is /dev/null: `claude -p` otherwise waits for piped input, and the
 # child has no business reading ours. child_args is `--worktree <name>` for a
-# fresh run and `--setting-sources user` for a resumed one.
-CLAUDE_CODE_ENABLE_TODO_TOOLS=1 claude -p "$prompt" \
+# fresh run and `--setting-sources user` for a resumed one; child_env turns
+# the todo tools on, and on resume adds the settings above.
+env "${child_env[@]}" claude -p "$prompt" \
   "${child_args[@]}" \
   --output-format stream-json \
   --verbose \
