@@ -1,13 +1,13 @@
 issue: https://github.com/gipcompany/skills/issues/31
 branch: worktree-jikkyo-31-20261114-181026
-updated: 2026-11-14T09:40:00Z
-next: verify and tick AC2 (a live run by another trusted account refuses)
+updated: 2026-11-14T09:44:00Z
+next: verify and tick AC3 (a stale running comment by another trusted account is resumed from, never edited)
 
 ## Todos
 
 - [x] Bring the branch up to date with main (#30 merged) (ae00cfa)
 - [x] AC1: A comment by an account without write permission, or whose permission check fails, is ignored. (f001f0c)
-- [ ] AC2: A live run by another trusted account refuses the resume.
+- [x] AC2: A live run by another trusted account refuses the resume. (f001f0c)
 - [ ] AC3: A stale running comment by another trusted account can be resumed from and is never edited.
 - [x] Document the permission check in SKILL.md Phase 1 and the design notes (bbf32ca)
 - [ ] AC4: `bash tests/run.sh` passes, with cases for foreign authors (trusted and untrusted, live and stale).
@@ -16,6 +16,7 @@ next: verify and tick AC2 (a live run by another trusted account refuses)
 ## Verified task-list items
 
 - A comment by an account without write permission, or whose permission check fails, is ignored: the "takeover: an untrusted account's ..." cases in tests/run.sh pass, and the SKILL.md step 3r flow run against the real permission API left a read-only account and a 404 account untrusted, giving none.
+- A live run by another trusted account refuses the resume: the three "takeover: a trusted account's live running comment refuses" cases in tests/run.sh pass (60 s, 14 m 59 s, and next to this account's stale comment).
 
 ## Dead ends and decisions
 
