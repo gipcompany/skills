@@ -416,7 +416,9 @@ Then, in this order:
   soon as it is done, add todos as new steps come up, and, when the issue has
   a task list, make one todo per task-list item and tick its box right after
   the push for that todo, in the order complete the todo, update and push
-  the log, then tick, because progress and the
+  the log, then tick (an item with no commits of its own, such as an open
+  draft PR, has no push to wait for and is ticked once verified), because
+  progress and the
   remaining time are computed from them. Like the tick instruction it is a
   constant, and since the `/goal` evaluator judges it too, it is worded as a
   way of working, not as a condition for the goal. It is asked, not enforced:
@@ -431,8 +433,9 @@ Then, in this order:
   The log has a fixed
   shape: a `key: value` header (`issue`, `branch`, `updated`, `next`), then
   `## Todos` (a task list, with the commit of each completed todo),
-  `## Verified task-list items` (each box ticked on the issue and how it was
-  verified), and `## Dead ends and decisions`. Tokens, secrets, environment
+  `## Verified task-list items` (each task-list item verified and how,
+  including the one about to be ticked: the log is pushed before the tick,
+  so it may list an item whose box is not ticked yet), and `## Dead ends and decisions`. Tokens, secrets, environment
   values, and command output never go in it. As the last step, right before
   opening the PR (or marking it ready), the child deletes the log in one
   ordinary commit and pushes it, so it never reaches the base branch. Like
