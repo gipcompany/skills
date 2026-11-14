@@ -30,6 +30,15 @@
 # that session's ${CLAUDE_SESSION_ID} and report.sh records it as `session`.
 # With no matching run it prints nothing.
 #
+# It is local and quiet: no network and no `gh`, only `git rev-parse`, `head`,
+# and `jq` on local files. It prints nothing but numbers it has checked and
+# the fixed words above, so no text from an issue or a terminal escape
+# sequence can reach the terminal. A state file that is malformed, too large,
+# not a regular file, or not of this session is skipped; anything else that
+# goes wrong (no jq, bad stdin, not a git checkout) prints nothing. It always
+# exits 0 and writes nothing to stderr, so it never breaks the status line it
+# is part of.
+#
 # For tests: JIKKYO_CLOCK_FILE (read "now" in epoch seconds from this file).
 #
 set -uo pipefail
@@ -119,8 +128,9 @@ main() {
   done < <(for f in "${files[@]}"; do
              # One line per file, `<file name>\t<contents>`, so the name goes
              # with what it holds; a state file is one short line of JSON.
-             c=""
-             IFS= read -r -d '' c < "$f"
+             # Regular files only (a FIFO would block), and at most 4 KiB read.
+             [ -f "$f" ] || continue
+             c="$(head -c 4097 "$f")" || continue
              [ "${#c}" -le 4096 ] || continue
              printf '%s\t%s\n' "${f##*/}" "${c//$'\n'/ }"
            done | jq -n -R -r --arg sid "$sid" --argjson now "$t" --argjson ended_shown "$ENDED_SHOWN" \

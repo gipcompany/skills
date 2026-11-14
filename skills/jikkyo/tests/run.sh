@@ -1348,6 +1348,109 @@ echo "statusline.sh"
     "$(sl "$(jq -cn --arg sid "$SID" --arg d "$TMP/sl-wt" '{session_id: $sid, cwd: $d}')")"
   git -C "$sl_repo" worktree remove --force "$TMP/sl-wt"
 
+  # Quiet and local: any bad input prints nothing, exits 0, and says nothing
+  # on stderr; a bad state file is skipped and the good ones still show.
+  sl_reset; put 27
+  sl_quiet() {  # <label> <stdin> [expected stdout]
+    local o e rc=0
+    o="$(printf '%s' "$2" | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE" 2> "$TMP/sl-err")" || rc=$?
+    e="$(cat "$TMP/sl-err")"
+    if [ "$rc" = 0 ] && [ -z "$e" ] && [ "$o" = "${3:-}" ]; then ok "$1"
+    else bad "$1 (rc=$rc, stdout [$o], stderr [$e])"; fi
+  }
+  sl_quiet "empty stdin: nothing" ""
+  sl_quiet "stdin that is not JSON: nothing" "not json {"
+  sl_quiet "a JSON array: nothing" "[1,2]"
+  sl_quiet "no session_id: nothing" "$(jq -cn --arg d "$sl_repo" '{workspace: {project_dir: $d}}')"
+  sl_quiet "a session_id that is not a session id: nothing" "$(sl_input "../$SID")"
+  sl_quiet "a numeric session_id: nothing" "$(jq -cn --arg d "$sl_repo" '{session_id: 1, workspace: {project_dir: $d}}')"
+  sl_quiet "no directory: nothing" "$(jq -cn --arg sid "$SID" '{session_id: $sid}')"
+  sl_quiet "a relative directory: nothing" "$(sl_input "$SID" "sl")"
+  sl_quiet "a directory that does not exist: nothing" "$(sl_input "$SID" "$TMP/nowhere")"
+  sl_quiet "a directory outside any git checkout: nothing" "$(sl_input "$SID" "$TMP/nogit")"
+  sl_quiet "a good run is shown quietly" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rm -f "$TMP/bad-clock"; echo "soon" > "$TMP/bad-clock"
+  rc=0; o="$(sl_input | JIKKYO_CLOCK_FILE="$TMP/bad-clock" bash "$STATUSLINE" 2>&1)" || rc=$?
+  assert_eq "a clock that is not a number: nothing, exit 0" "0:" "$rc:$o"
+
+  # Each of these files is skipped; #27 still shows.
+  bad_files=(
+    'not json'
+    '{"v":1'
+    '[]'
+    '"a string"'
+  )
+  for content in "${bad_files[@]}"; do
+    printf '%s\n' "$content" > "$sl_dir/31.json"
+    sl_quiet "a state file holding [$content] is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  done
+  for o in '{"v": 2}' '{"number": 32}' '{"number": "31"}' '{"number": 0}' '{"state": "running\u001b[2J"}' \
+      '{"state": "paused"}' '{"state": null}' '{"done": -1}' '{"done": 1.5}' '{"done": "3"}' '{"done": 6}' \
+      '{"total": null}' '{"turns": "x"}' '{"updated": "9990"}' '{"updated": null}' '{"eta_secs": -5}' \
+      '{"eta_secs": "720"}' '{"session": "x"}'; do
+    put 31 "$o"
+    sl_quiet "a state file with $o is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  done
+  rm -f "$sl_dir/31.json"
+  put 31; mv "$sl_dir/31.json" "$sl_dir/x31.json"
+  sl_quiet "a file whose name is not <N>.json is not read" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rm -f "$sl_dir/x31.json"
+  put 31; head -c 5000 /dev/zero | tr '\0' ' ' >> "$sl_dir/31.json"
+  sl_quiet "a state file over 4 KiB is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  put 31; printf '%s' "$(cat "$sl_dir/31.json")" > "$sl_dir/31.tmp"; mv "$sl_dir/31.tmp" "$sl_dir/31.json"
+  put 32; printf '%s' "$(cat "$sl_dir/32.json")" > "$sl_dir/32.tmp"; mv "$sl_dir/32.tmp" "$sl_dir/32.json"
+  sl_quiet "files without a trailing newline are each read whole" "$(sl_input)" \
+    "jikkyo #27 · 60% · ~12m left | jikkyo #31 · 60% · ~12m left | jikkyo #32 · 60% · ~12m left"
+  rm -f "$sl_dir/31.json" "$sl_dir/32.json"
+  mkfifo "$sl_dir/33.json"
+  sl_quiet "a FIFO named like a state file is skipped, not waited on" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rm -f "$sl_dir/33.json"
+  mkdir "$sl_dir/34.json"
+  sl_quiet "a directory named like a state file is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rmdir "$sl_dir/34.json"
+  put 35; chmod 000 "$sl_dir/35.json"
+  if [ -r "$sl_dir/35.json" ]; then ok "an unreadable state file is skipped (skipped: running as root)"
+  else sl_quiet "an unreadable state file is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"; fi
+  rm -f "$sl_dir/35.json"
+
+  # Nothing from the file but checked numbers and fixed words is printed.
+  put 27 '{"issue": "\u001b]0;pwned\u0007", "comment": "pwned", "lang": "en", "extra": "\u001b[2J pwned"}'
+  o="$(sl)"
+  assert_eq "extra or odd fields never reach the output" "jikkyo #27 · 60% · ~12m left" "$o"
+  put 27
+
+  # No network: gh, curl, and wget are stubs that log, and none is called.
+  mkdir -p "$TMP/sl-net"
+  for tool in gh curl wget nc ssh; do
+    printf '#!/usr/bin/env bash\necho %s >> "%s/sl-net/called"\n' "$tool" "$TMP" > "$TMP/sl-net/$tool"
+    chmod +x "$TMP/sl-net/$tool"
+  done
+  rm -f "$TMP/sl-net/called"
+  o="$(sl_input | PATH="$TMP/sl-net:$PATH" JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE")"
+  assert_eq "no network tool is run" "absent" "$([ -e "$TMP/sl-net/called" ] && cat "$TMP/sl-net/called" || echo absent)"
+  sl_src="$(grep -v '^ *#' "$STATUSLINE")"
+  for word in "gh " "curl" "wget" "http"; do
+    assert_lacks "statusline.sh's code has no [$word]" "$word" "$sl_src"
+  done
+
+  # Without jq: nothing, exit 0. PATH keeps only what bash needs to start.
+  mkdir -p "$TMP/sl-nojq"
+  for tool in git head date cat; do ln -sf "$(command -v "$tool")" "$TMP/sl-nojq/$tool"; done
+  rc=0; o="$(sl_input | PATH="$TMP/sl-nojq" JIKKYO_CLOCK_FILE="$sl_clock" "$(command -v bash)" "$STATUSLINE" 2>&1)" || rc=$?
+  assert_eq "without jq: nothing, exit 0" "0:" "$rc:$o"
+
+  # Fast: 50 state files, 10 of them this session's, well under a second.
+  sl_reset
+  for n in $(seq 100 149); do
+    if [ $((n % 5)) = 0 ]; then put "$n"; else put "$n" "{\"session\": \"$OTHER_SID\"}"; fi
+  done
+  TIMEFORMAT=%R
+  secs="$( { time sl > "$TMP/sl-out"; } 2>&1 )"
+  unset TIMEFORMAT
+  assert_eq "...shows the 10 runs of this session" "10" "$(tr '|' '\n' < "$TMP/sl-out" | grep -c 'jikkyo #')"
+  if awk -v s="$secs" 'BEGIN { exit !(s < 1.0) }'; then ok "50 state files take under a second (${secs}s)"
+  else bad "50 state files take under a second (${secs}s)"; fi
+
   # End to end: what report.sh writes, statusline.sh shows.
   sl_reset
   { create t1 1; create t2 2; update u1 1 completed; result_ok; } > "$TMP/sl-stream.jsonl"
