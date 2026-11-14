@@ -240,7 +240,42 @@ Then, in this order:
    The exit-time `git` steps may ask for permission: the `allowed-tools` grant
    lasted only for the turn that invoked `/jikkyo`.
 
-2. **Post the closing summary** as a **new** comment (a new comment notifies
+2. **Check the run's branch on the remote**, so the summary can say whether
+   the run is resumable and what is left on the remote. Take the branch from
+   the `jikkyo: worktree branch` line and use it only if it matches
+   `^worktree-jikkyo-<N>-[0-9]{8}-[0-9]{6}$` for this issue's `<N>`; if the
+   line is missing or does not match, skip this step and treat the branch
+   as not on the remote. `launch.sh` passes that same branch to `report.sh`,
+   so when the line is there the status comment's marker carries
+   `branch=<branch>`. Run these two, one at a time:
+
+   ```
+   gh api 'repos/<owner>/<repo>/branches/<branch>' --jq .name
+   gh pr list --repo '<owner>/<repo>' --head '<branch>' --state all --json url --jq '.[].url'
+   ```
+
+   - The branch is **on the remote** when the first prints the branch name.
+     A 404 means it is not; any other error means it is unknown, which
+     counts as not on the remote for the resume line. This is the same
+     condition `launch.sh --resume` needs. Do not judge it from the
+     `cleanup.sh` reason: `remove` also covers a branch with no commits
+     beyond its base, which was never pushed.
+   - The run **opened a PR** when the second prints a URL. Do not judge it
+     from the final message, which is the child's text. If the listing
+     fails, say in the summary that whether a PR exists is unknown, and
+     still name the branch if it is on the remote.
+
+   The run is **resumable** when its state is `interrupted` or `failed`
+   and the branch is on the remote. If step 1 left the worktree or the
+   local branch in place (`cleanup.sh` printed `keep`, or a git step
+   refused), the resume command may be refused until a person deals with
+   it: `launch.sh --resume` will not start on a branch that is checked out
+   in another worktree or has local commits the remote lacks. The summary
+   then says so (below). Never delete, rename, or push to the
+   remote branch, whatever these show: a person decides what to do with it.
+   Like the `git` steps, these two may ask for permission.
+
+3. **Post the closing summary** as a **new** comment (a new comment notifies
    subscribers; the edited status comment does not):
 
    ```
@@ -263,8 +298,27 @@ Then, in this order:
      `/goal` evaluator may have ruled the goal impossible, or the no-progress
      guard may have stopped the loop. Say which, if the final message says. If
      there is no final message, say the run ended without one and that whether
-     the goal was met is unknown.
+     the goal was met is unknown. **Do not classify why a run stopped**
+     (usage limit, crash, error): mention a cause only when the final
+     message names it, quoted in at most one sentence.
    - Any PR or branch the final message names, as a link.
+   - **When the run is resumable** (step 2), say so and give the exact
+     command, with the URL single-quoted as on every command line here:
+     `/jikkyo --resume '<URL>'`, with only the command in a code span. For
+     `en`: Resumable: `` `/jikkyo --resume '<URL>'` ``. For `ja`: 再開できます:
+     `` `/jikkyo --resume '<URL>'` ``. When step 1 left the worktree or the
+     local branch in place, add in the same language that the command may
+     be refused until a person removes what was left (a worktree that is
+     still there, a local branch whose commits are not on the remote),
+     after pushing or dropping its commits. Do not offer the
+     command for a `finished` run or when the branch is not on the remote.
+   - **When the run opened no PR** (step 2) and its branch is on the remote,
+     name the branch as a link, `https://github.com/<owner>/<repo>/tree/<branch>`,
+     and say it is left on the remote for a person to delete once it is no
+     longer needed (for a resumable run, that is after it is resumed or
+     abandoned). For `en`: `No PR was opened. Branch <link> is left on the
+     remote; jikkyo does not delete it, so delete it once it is no longer
+     needed.` For `ja`: `PR は作られていません。ブランチ <link> はリモートに残っています。jikkyo は削除しないので、不要になったら削除してください。`
    - The worktree: removed, or kept at `<path>` (branch `<branch>`) with the
      reason `cleanup.sh` gave, and any git step that refused.
 
@@ -274,7 +328,9 @@ Then, in this order:
    or environment values. Make sure no line of the summary is exactly
    `JIKKYO_EOF`.
 
-3. **Tell the user** the outcome in one or two lines, with the summary link.
+4. **Tell the user** the outcome in one or two lines, with the summary link,
+   and the resume command when the run is resumable (with the same caveat
+   when step 1 left the worktree or the local branch in place).
 
 ## How the pieces fit
 
@@ -452,6 +508,27 @@ Then, in this order:
 - **How a run ends.** `finished` (a non-error `result` line), `failed` (an
   error `result` line), or `interrupted` (no `result` line, or `report.sh` was
   sent SIGTERM, SIGHUP, or SIGINT — it writes `interrupted` before it exits).
+- **How a stop is reported as resumable.** A run that ends `interrupted` or
+  `failed`, whose marker carries `branch=`, and whose branch is on the
+  remote is resumable, and the closing summary gives
+  `/jikkyo --resume '<URL>'` in the status comment's language (Phase 3).
+  jikkyo does not try to tell why a run stopped, and mentions a cause only
+  when the final message names it, quoted in at most one sentence. There is
+  no reliable signal to classify on: a stop on an API error, usage limits
+  included, ends with a `result` line of subtype `success` with
+  `is_error: true`, which covers more than usage limits; the retry and
+  rate-limit events report a retry or a change of status, not the stop; a
+  crash or a closed laptop leaves no `result` line at all; and no test
+  stream covers a usage-limit stop. Resumability does not depend on the
+  cause anyway, only on the recorded branch and the pushed log.
+- **What is left on the remote.** jikkyo never deletes a remote branch.
+  The run's branch is its PR's head branch, which GitHub's "Automatically
+  delete head branches" setting removes on merge when the repository has it
+  on (otherwise a person does). A run that never opened a PR keeps its
+  branch on the remote, whether it is resumed later or abandoned, so the
+  closing summary names it for a person to delete. Phase 3 checks the branch
+  and the PR with `gh`, not from the final message or `cleanup.sh`'s reason,
+  and only after validating the branch name from `launch.sh`'s output.
 
 The full rationale is in the issue that specified this skill,
 gipcompany/skills#12.
