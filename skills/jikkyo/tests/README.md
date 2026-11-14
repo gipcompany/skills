@@ -1,12 +1,15 @@
 # jikkyo tests
 
-Regression tests for the four scripts that make up everything deterministic in
-`jikkyo`: `report.sh`, `launch.sh`, `precheck.sh`, and `cleanup.sh`. The parent
+Regression tests for the five scripts that make up everything deterministic in
+`jikkyo`: `report.sh`, `launch.sh`, `precheck.sh`, `cleanup.sh`, and
+`statusline.sh`. The parent
 session's part (carrying out what the scripts print, and writing the closing
 summary) is prompt-driven, so there is nothing to unit-test there.
 
 Dependencies: `bash`, `git`, and `jq`. `gh` and `claude` are replaced by stubs
-on `PATH`, so the suite never touches GitHub and never starts a model.
+on `PATH`, so the suite never touches GitHub and never starts a model. It
+runs from a scratch git repository, so the state files `report.sh` writes into
+the git common dir never land in the checkout you run it from.
 
 ## Run
 
@@ -15,7 +18,7 @@ bash skills/jikkyo/tests/run.sh
 ```
 
 Exit status is non-zero if any assertion fails; the last line reports
-`total: <n> passed, <m> failed`. It takes about 15 seconds, most of it the
+`total: <n> passed, <m> failed`. It takes about 40 seconds, most of it the
 timing and signal tests waiting on a real scheduler.
 
 ## What is covered
@@ -84,6 +87,17 @@ timing and signal tests waiting on a real scheduler.
 - **`report.sh`, signals** — SIGTERM, SIGHUP, and SIGINT each write
   `interrupted` with an end time before `report.sh` exits (143, 129, 130),
   also when the signal comes after the `result` line.
+- **`report.sh`, the state file** — `<git common dir>/jikkyo/<N>.json` with
+  exactly the documented keys (one line of JSON, no temp file left beside
+  it): the final state, counts, epoch `started` and `updated`, `eta_secs`,
+  `lang`, the `--session` id, and the comment URL rebuilt from a numeric id
+  (null, with `session`, when unknown). Against the fake clock it is written
+  at the first comment write, on a todo write (with the same estimate as the
+  comment, in seconds), on a heartbeat, and as `interrupted` on SIGTERM. A
+  Japanese issue records `ja`. Nothing from the issue, the result line, or
+  `gh`'s answer (escape sequences included) reaches it. From a linked
+  worktree it goes to the shared common dir; outside a git repository, or
+  with an unwritable directory, there is no file and the run goes on.
 - **`launch.sh`** — anything that is not exactly a GitHub issue URL is rejected
   with exit 2 before the child or `gh` runs, as is an issue whose repository is
   not a remote of the checkout (a host like `notgithub.com` does not count),
@@ -105,7 +119,8 @@ timing and signal tests waiting on a real scheduler.
   `git push`. The worktree name, path, and branch are printed before the child
   starts, and the path is under the repository root even from a subdirectory.
   That branch is passed to `report.sh`, so it ends up in the comment's
-  marker and `Branch` row. A fresh run gets no resume instruction.
+  marker and `Branch` row. A fresh run gets no resume instruction. The run's
+  state file lands in the repository's common dir with the session id.
 - **`launch.sh --resume`** — against a real bare remote reached through the
   issue's GitHub URL (`url.<file>.insteadOf`, with a thin `git` wrapper that
   shows the GitHub URL in `remote -v` and logs every git command line).
@@ -147,6 +162,42 @@ timing and signal tests waiting on a real scheduler.
   - Resumed: with two remotes pointing at the issue's repository, from the
     first one listed; and a local branch behind the remote, brought up to
     the pushed tip.
+- **`launch.sh` and `report.sh`, the session id** — a copy of `launch.sh`
+  next to a stub `report.sh` shows `--session <id>` handed over, before the
+  URL, for a fresh and a resumed launch. An empty id, a wrong shape, a
+  trailing character or `$(…)`, underscores, a non-hex digit, or a path is
+  refused with exit 2 by both scripts before the child or any `gh` write, as
+  is a launch with no session id or `--session` with no value; an
+  upper-case id is accepted.
+- **`statusline.sh`** — against a fake clock, with state files written into
+  a scratch checkout's common dir:
+  - Nothing with no state directory or an empty one. Running:
+    `jikkyo #27 · 60% · ~12m left`, `0%` with no estimate yet, estimates in
+    seconds, minutes, and hours, and `12 turns` / `1 turn` with no todos; one
+    line ending in a newline.
+  - `finished`, `failed`, `interrupted` shown 4 m 59 s after `updated`, gone
+    at 5 minutes. `stale` for a `running` file 15 minutes old (not at
+    14 m 59 s), however old, also with no todos, cleared by the next write,
+    and replaced when `report.sh` runs that issue again.
+  - Several runs on one line by issue number, joined with ` | `, an expired
+    one dropped; another session's run and a run with no session not shown,
+    while the other session sees its own; found from a linked worktree's
+    subdirectory with only `current_dir` or `cwd`.
+  - Japanese: `残り ~12m`, `12 ターン`, `1 ターン`, `完了`, `失敗`, `中断`,
+    `応答なし`, mixed languages on one line, an unknown or missing `lang`
+    skipped, and the words checked against `report.sh`'s own labels.
+  - Quiet: empty or non-JSON stdin, a missing, malformed, or numeric
+    `session_id`, no, relative, missing, or non-git directory, a bad clock,
+    and no `jq` all print nothing, exit 0, and write nothing to stderr.
+    Malformed JSON, wrong types, a number that does not match the file name,
+    a bad state, negative or fractional numbers, `done` over `total`, a file
+    over 4 KiB, a misnamed file, a FIFO, a directory, and an unreadable file
+    are skipped while good runs still show; files without a trailing newline
+    are read whole; odd extra fields never reach the output.
+  - No network tool (`gh`, `curl`, `wget`, `nc`, `ssh`) is run, and 50 state
+    files take well under a second.
+  - End to end, what `report.sh` writes (English and Japanese) is what it
+    shows.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and
@@ -221,8 +272,14 @@ timing and signal tests waiting on a real scheduler.
   two options and runs no hook from the branch.
 - **`SKILL.md`** — `allowed-tools` pins exactly `launch.sh`, `precheck.sh`, and
   `cleanup.sh` under `${CLAUDE_SKILL_DIR}`, with no rule for `claude`, `gh`, or
-  `git`, and the skill has no injected commands; it tells the parent to write
-  the closing summary in the status comment's language, and documents the
-  `--resume` flow: the usage line, `precheck.sh --resume '<N>'`, stopping
-  when no valid branch is found, and `launch.sh --resume` with the branch
-  and comment id.
+  `git`, and the skill has no injected commands; every script is executable;
+  it tells the parent to write the closing summary in the status comment's
+  language, and documents the `--resume` flow: the usage line,
+  `precheck.sh --resume '<N>'`, stopping when no valid branch is found, and
+  `launch.sh --resume` with the branch, comment id, and
+  `${CLAUDE_SESSION_ID}`; a fresh launch passes `${CLAUDE_SESSION_ID}` too.
+  It has a Status line section saying the skill edits no settings, and no
+  script mentions `settings.json`. The repository README documents both
+  status line setups with `refreshInterval` and why, and its appended
+  example, run as written, appends the segment (and nothing when there is
+  no run).
