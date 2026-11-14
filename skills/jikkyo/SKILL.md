@@ -301,8 +301,15 @@ Then, in this order:
 - **Concurrent runs.** One run per issue, judged from the issue itself, so it
   works across terminals and machines: a `running` status comment by the same
   account that was updated within 15 minutes blocks a new run. The state lives
-  in the hidden `<!-- jikkyo:status v=1 state=… -->` marker; the visible text
-  is for people.
+  in the hidden `<!-- jikkyo:status v=1 state=… branch=… -->` marker; the
+  visible text is for people.
+- **Which branch.** `launch.sh` passes the worktree branch
+  (`worktree-jikkyo-<N>-<timestamp>`) to `report.sh`, which writes it into
+  the marker after `state=` and into a visible `Branch` row (`ブランチ` in
+  Japanese). `report.sh` accepts only that exact shape for this issue's
+  number, and exits 2 before any write otherwise. `precheck.sh` reads markers
+  with or without `branch=` (comments written before it have none), and
+  `--payload` keeps the field when it rewrites the state.
 - **How a run ends.** `finished` (a non-error `result` line), `failed` (an
   error `result` line), or `interrupted` (no `result` line, or `report.sh` was
   sent SIGTERM, SIGHUP, or SIGINT — it writes `interrupted` before it exits).

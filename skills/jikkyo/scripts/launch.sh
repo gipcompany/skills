@@ -13,7 +13,8 @@
 #   jikkyo: worktree path <repo>/.claude/worktrees/jikkyo-<N>-<timestamp>
 #   jikkyo: worktree branch worktree-jikkyo-<N>-<timestamp>
 #
-# Everything after that is report.sh's output. Exit status: 2 for a bad
+# The branch is also passed to report.sh, which records it in the status
+# comment. Everything after that is report.sh's output. Exit status: 2 for a bad
 # argument or a repository that does not match the issue, otherwise
 # the pipeline's.
 #
@@ -128,4 +129,4 @@ CLAUDE_CODE_ENABLE_TODO_TOOLS=1 claude -p "/goal ${url} ${TODO_INSTRUCTION} ${TI
   --permission-mode auto \
   --disallowedTools "${DENY_RULES[@]}" \
   < /dev/null \
-  | "$HERE/report.sh" "$url"
+  | "$HERE/report.sh" "$url" "worktree-${name}"

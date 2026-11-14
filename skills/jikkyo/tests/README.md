@@ -42,6 +42,13 @@ timing and signal tests waiting on a real scheduler.
   on the issue, every later write a PATCH of that comment by id; `--edit-last`
   and the issue body are never used; the hidden marker is the first line; a
   create that fails is retried as a create.
+- **`report.sh`, the branch** — with a second argument
+  `worktree-jikkyo-12-<8 digits>-<6 digits>`, every write's marker carries
+  `branch=<name>` after `state=`, and a `Branch` row (`ブランチ` in Japanese)
+  right after State shows it; with no second argument the marker has no
+  `branch=` and the row is empty. A branch for another issue number, wrong
+  digit counts, another prefix, a newline, ` -->`, `$(…)`, an empty string,
+  or a third argument is exit 2 with no `gh` write.
 - **`report.sh`, the language of the issue** — the `gh` stub answers the
   issue read (`gh api repos/o/r/issues/12`, logged apart from the writes) with
   `$GH_ISSUE`. An English issue gives today's English text; Japanese in the
@@ -88,6 +95,8 @@ timing and signal tests waiting on a real scheduler.
   and closing or deleting issues — and no rule that blocks a plain
   `git push`. The worktree name, path, and branch are printed before the child
   starts, and the path is under the repository root even from a subdirectory.
+  That branch is passed to `report.sh`, so it ends up in the comment's
+  marker and `Branch` row.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and
@@ -103,7 +112,11 @@ timing and signal tests waiting on a real scheduler.
   stale, and each ended state, also next to an English one), and `--payload`
   rewriting a Japanese one, including the running comment `report.sh` itself
   wrote with an estimate (suffix dropped, `Remaining` row emptied, Elapsed
-  and Progress untouched).
+  and Progress untouched). Markers with `branch=` after the state give the
+  same decisions as markers without it (also side by side), a malformed
+  `branch=` does not count, and `--payload` keeps the `branch=` field and
+  the Branch row, for a built comment and for the comments `report.sh`
+  itself wrote with a branch in English and in Japanese.
 - **`cleanup.sh`** — `remove` only for a worktree with no uncommitted changes
   (untracked, modified, and staged files all count) whose HEAD is on a
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed

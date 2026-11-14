@@ -14,7 +14,7 @@
 #                          `interrupted` (see --payload), then start.
 #
 # Only jikkyo's own status comments count: a body that starts with the hidden
-# `<!-- jikkyo:status v=1 state=… -->` marker AND an author (`user.login`)
+# `<!-- jikkyo:status v=1 state=… [branch=…] -->` marker AND an author (`user.login`)
 # equal to --author. A `running` comment whose `updated_at` is 15 minutes old
 # or more is stale: the heartbeat refreshes a live one every 5 minutes. With
 # --force nothing blocks, and every `running` comment is rewritten.
@@ -55,7 +55,10 @@ while [ "$#" -gt 0 ]; do
 done
 
 # The marker is the only machine-readable state; the visible text is for people.
-MARKER_RE='^<!-- jikkyo:status v=1 state=(?<state>[a-z]+) -->'
+# report.sh writes the run's branch after the state (`state=running
+# branch=worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> -->`); comments written
+# before that have no `branch=` field. Both forms are read.
+MARKER_RE='^<!-- jikkyo:status v=1 state=(?<state>[a-z]+)(?: branch=(?<branch>worktree-jikkyo-[0-9]+-[0-9]{8}-[0-9]{6}))? -->'
 
 if [ "$payload" = true ]; then
   if [ -n "$author" ] || [ -n "$now" ] || [ "$force" = true ]; then usage; fi
@@ -65,7 +68,8 @@ if [ "$payload" = true ]; then
     | ($b | capture($re).state? // null) as $s
     | if $s != "running" then empty
       else {body: ($b
-        | sub("^<!-- jikkyo:status v=1 state=running -->"; "<!-- jikkyo:status v=1 state=interrupted -->")
+        # Only the state changes; a `branch=` field after it is kept as is.
+        | sub("^<!-- jikkyo:status v=1 state=running(?<r>(?: branch=[^ ]+)?) -->"; "<!-- jikkyo:status v=1 state=interrupted\(.r) -->")
         | sub("### jikkyo · running"; "### jikkyo · interrupted")
         # A dead run keeps no forward-looking estimate: drop the heading
         # suffix (` · ~` occurs nowhere else) and empty the Remaining cell,

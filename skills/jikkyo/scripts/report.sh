@@ -3,7 +3,15 @@
 # report.sh — read a `claude -p --output-format stream-json` stream on stdin
 # and keep one status comment on the GitHub issue up to date while it runs.
 #
-#   claude -p ... --output-format stream-json --verbose | report.sh '<issue URL>'
+#   claude -p ... --output-format stream-json --verbose \
+#     | report.sh '<issue URL>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS>]
+#
+# The optional second argument is the run's branch (launch.sh passes it). It
+# must be `worktree-jikkyo-<N>-<8 digits>-<6 digits>`, with <N> the issue's
+# number, or report.sh exits 2 before it writes anything. It goes into the
+# hidden marker after `state=` (`... state=running branch=<name> -->`), so a
+# later run can find this one's branch, and into a visible `Branch` row. With
+# no branch the marker has no `branch=` field and the row is empty.
 #
 # It creates the status comment at once, rewrites it in place by comment id
 # (never --edit-last), and writes:
@@ -45,15 +53,26 @@ TICK="${JIKKYO_TICK:-1}"
 MIN_GAP="${JIKKYO_MIN_GAP:-1}"
 
 usage() {
-  echo "usage: ... | report.sh '<https://github.com/<owner>/<repo>/issues/<N>>'" >&2
+  echo "usage: ... | report.sh '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS>]" >&2
   exit 2
 }
-[ "$#" -eq 1 ] || usage
+[ "$#" -eq 1 ] || [ "$#" -eq 2 ] || usage
 re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)$'
 [[ "$1" =~ $re ]] || usage
 owner="${BASH_REMATCH[1]}"
 repo="${BASH_REMATCH[2]}"
 num="${BASH_REMATCH[3]}"
+
+# The branch is written into the marker and the comment, so only the exact
+# shape launch.sh makes, for this issue's number, gets through.
+branch="${2:-}"
+if [ "$#" -eq 2 ]; then
+  branch_re="^worktree-jikkyo-${num}-[0-9]{8}-[0-9]{6}\$"
+  if ! [[ "$branch" =~ $branch_re ]]; then
+    echo "report.sh: not a jikkyo branch for issue ${num}: $branch" >&2
+    usage
+  fi
+fi
 
 command -v jq >/dev/null 2>&1 || { echo "report.sh: jq is required" >&2; exit 2; }
 
@@ -100,12 +119,12 @@ detect_lang() {
 set_labels() {
   if [ "$1" = ja ]; then
     L_FIELD="項目" L_VALUE="値" L_STATE="状態" L_STARTED="開始" L_ENDED="終了"
-    L_PROGRESS="進捗" L_TURNS="ターン数" L_ELAPSED="経過" L_REMAINING="残り"
+    L_BRANCH="ブランチ" L_PROGRESS="進捗" L_TURNS="ターン数" L_ELAPSED="経過" L_REMAINING="残り"
     L_ESTIMATE="（推定）" L_LEFT_PRE=" · 残り ~" L_LEFT_POST=""
     L_TURN_ONE="1 ターン" L_TURN_MANY=" ターン"
   else
     L_FIELD="Field" L_VALUE="Value" L_STATE="State" L_STARTED="Started" L_ENDED="Ended"
-    L_PROGRESS="Progress" L_TURNS="Turns" L_ELAPSED="Elapsed" L_REMAINING="Remaining"
+    L_BRANCH="Branch" L_PROGRESS="Progress" L_TURNS="Turns" L_ELAPSED="Elapsed" L_REMAINING="Remaining"
     L_ESTIMATE=" (estimate)" L_LEFT_PRE=" · ~" L_LEFT_POST=" left"
     L_TURN_ONE="1 turn" L_TURN_MANY=" turns"
   fi
@@ -208,10 +227,15 @@ body() {
     eta_suffix="${L_LEFT_PRE}${eta}${L_LEFT_POST}"
   fi
   word="$(state_word "$st")"
-  printf '<!-- jikkyo:status v=1 state=%s -->\n' "$st"
+  if [ -n "$branch" ]; then
+    printf '<!-- jikkyo:status v=1 state=%s branch=%s -->\n' "$st" "$branch"
+  else
+    printf '<!-- jikkyo:status v=1 state=%s -->\n' "$st"
+  fi
   printf '### jikkyo · %s · %s%s\n\n' "$word" "$heading" "$eta_suffix"
   printf '| %s | %s |\n| --- | --- |\n' "$L_FIELD" "$L_VALUE"
   printf '| %s | %s |\n' "$L_STATE" "$word"
+  printf '| %s | %s |\n' "$L_BRANCH" "${branch:+\`$branch\`}"
   printf '| %s | %s |\n' "$L_STARTED" "$(fmt_time "$start_ts")"
   printf '| %s | %s |\n' "$L_ENDED" "$ended"
   printf '| %s | %s |\n' "$label" "$value"
