@@ -21,6 +21,7 @@ REPORT="${SCRIPTS}/report.sh"
 LAUNCH="${SCRIPTS}/launch.sh"
 PRECHECK="${SCRIPTS}/precheck.sh"
 CLEANUP="${SCRIPTS}/cleanup.sh"
+STATUSLINE="${SCRIPTS}/statusline.sh"
 SKILL_MD="${HERE}/../SKILL.md"
 README_MD="${HERE}/../../../README.md"
 URL="https://github.com/o/r/issues/12"
@@ -1231,6 +1232,106 @@ EOF2
   new_log; rc=0
   printf '%s\n' "$(result_ok)" | bash "$REPORT" --session "$(printf '%s' "$SID" | tr '[:lower:]' '[:upper:]')" "$URL" >/dev/null 2>&1 || rc=$?
   assert_eq "report.sh accepts an upper-case session id" "0" "$rc"
+}
+
+# ===========================================================================
+echo "statusline.sh"
+{
+  # A checkout with state files under its common dir, a fake clock at 10000,
+  # and the status line's stdin for this session ($SID) in that checkout.
+  sl_repo="$TMP/sl"
+  git init -q "$sl_repo"
+  sl_repo="$(cd "$sl_repo" && pwd -P)"
+  sl_dir="$sl_repo/.git/jikkyo"
+  sl_clock="$TMP/sl-clock"; echo 10000 > "$sl_clock"
+  OTHER_SID="11111111-2222-4333-8444-555555555555"
+  put() {  # <number> [jq object merged over the defaults]
+    local o="${2:-}"
+    [ -n "$o" ] || o='{}'
+    mkdir -p "$sl_dir"
+    jq -cn --argjson n "$1" --arg sid "$SID" --argjson o "$o" \
+      '{v: 1, issue: "https://github.com/o/r/issues/\($n)", number: $n, state: "running",
+        done: 3, total: 5, turns: 12, started: 9000, updated: 9990, eta_secs: 720,
+        lang: "en", session: $sid, comment: null} + $o' > "$sl_dir/$1.json"
+  }
+  sl_input() {  # [session id] [project dir]
+    jq -cn --arg sid "${1:-$SID}" --arg d "${2:-$sl_repo}" \
+      '{session_id: $sid, workspace: {project_dir: $d, current_dir: $d}, cwd: $d}'
+  }
+  sl() {  # [stdin] -> the status line's output
+    local in="${1:-}"
+    [ -n "$in" ] || in="$(sl_input)"
+    printf '%s' "$in" | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE"
+  }
+  sl_reset() { rm -rf "$sl_dir"; }
+
+  sl_reset
+  assert_eq "no state directory: nothing" "" "$(sl)"
+  mkdir -p "$sl_dir"
+  assert_eq "an empty state directory: nothing" "" "$(sl)"
+
+  put 27
+  assert_eq "running with todos: percentage and remaining time" "jikkyo #27 · 60% · ~12m left" "$(sl)"
+  put 27 '{"done": 0, "eta_secs": null}'
+  assert_eq "running before the first completed todo: no estimate" "jikkyo #27 · 0%" "$(sl)"
+  put 27 '{"eta_secs": 45}'
+  assert_eq "an estimate under a minute in seconds" "jikkyo #27 · 60% · ~45s left" "$(sl)"
+  put 27 '{"eta_secs": 3900}'
+  assert_eq "an estimate over an hour in hours and minutes" "jikkyo #27 · 60% · ~1h 05m left" "$(sl)"
+  put 27 '{"done": 5, "eta_secs": 0}'
+  assert_eq "all todos done while still running" "jikkyo #27 · 100% · ~0s left" "$(sl)"
+  put 27 '{"done": 0, "total": 0, "eta_secs": null}'
+  assert_eq "running with no todos: the turn count" "jikkyo #27 · 12 turns" "$(sl)"
+  put 27 '{"done": 0, "total": 0, "turns": 1, "eta_secs": null}'
+  assert_eq "...one turn" "jikkyo #27 · 1 turn" "$(sl)"
+  printf '%s' "$(sl)" > "$TMP/sl-out"
+  assert_eq "the output is a single line" "0" "$(tr -cd '\n' < "$TMP/sl-out" | wc -c | tr -d ' ')"
+  assert_eq "...ending in a newline" "1" "$(sl | wc -l | tr -d ' ')"
+
+  for st in finished failed interrupted; do
+    put 27 "{\"state\": \"$st\", \"updated\": 9701, \"eta_secs\": null}"
+    assert_eq "$st: shown for 5 minutes after updated (4 m 59 s)" "jikkyo #27 · $st" "$(sl)"
+    put 27 "{\"state\": \"$st\", \"updated\": 9700, \"eta_secs\": null}"
+    assert_eq "$st: gone at 5 minutes" "" "$(sl)"
+  done
+  sl_reset
+
+  put 31 '{"state": "finished", "updated": 9950}'
+  put 27
+  put 5 '{"done": 0, "total": 0, "turns": 3, "eta_secs": null}'
+  assert_eq "several runs: one line, by issue number, joined with ' | '" \
+    "jikkyo #5 · 3 turns | jikkyo #27 · 60% · ~12m left | jikkyo #31 · finished" "$(sl)"
+  put 40 '{"state": "finished", "updated": 1000}'
+  assert_eq "...an ended run past its 5 minutes drops out" \
+    "jikkyo #5 · 3 turns | jikkyo #27 · 60% · ~12m left | jikkyo #31 · finished" "$(sl)"
+
+  sl_reset
+  put 27 "{\"session\": \"$OTHER_SID\"}"
+  assert_eq "another session's run is not shown" "" "$(sl)"
+  put 31
+  assert_eq "...only this session's runs are" "jikkyo #31 · 60% · ~12m left" "$(sl)"
+  assert_eq "...and the other session sees only its own" "jikkyo #27 · 60% · ~12m left" "$(sl "$(sl_input "$OTHER_SID")")"
+  put 31 '{"session": null}'
+  assert_eq "a run with no session is shown nowhere" "" "$(sl)"
+
+  # From a linked worktree of the checkout, with only current_dir known.
+  sl_reset; put 27
+  git -C "$sl_repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+  git -C "$sl_repo" worktree add -q "$TMP/sl-wt" 2>/dev/null
+  mkdir -p "$TMP/sl-wt/sub"
+  assert_eq "from a linked worktree's subdirectory (current_dir only) the run is found" "jikkyo #27 · 60% · ~12m left" \
+    "$(sl "$(jq -cn --arg sid "$SID" --arg d "$TMP/sl-wt/sub" '{session_id: $sid, workspace: {current_dir: $d}}')")"
+  assert_eq "...and from cwd alone" "jikkyo #27 · 60% · ~12m left" \
+    "$(sl "$(jq -cn --arg sid "$SID" --arg d "$TMP/sl-wt" '{session_id: $sid, cwd: $d}')")"
+  git -C "$sl_repo" worktree remove --force "$TMP/sl-wt"
+
+  # End to end: what report.sh writes, statusline.sh shows.
+  sl_reset
+  { create t1 1; create t2 2; update u1 1 completed; result_ok; } > "$TMP/sl-stream.jsonl"
+  new_log
+  (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a run report.sh just finished shows as finished" "jikkyo #12 · finished" \
+    "$(sl_input | bash "$STATUSLINE")"
 }
 
 # ===========================================================================
