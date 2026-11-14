@@ -498,6 +498,27 @@ Then, in this order:
 - **How a run ends.** `finished` (a non-error `result` line), `failed` (an
   error `result` line), or `interrupted` (no `result` line, or `report.sh` was
   sent SIGTERM, SIGHUP, or SIGINT — it writes `interrupted` before it exits).
+- **How a stop is reported as resumable.** A run that ends `interrupted` or
+  `failed`, whose marker carries `branch=`, and whose branch is on the
+  remote is resumable, and the closing summary gives
+  `/jikkyo --resume '<URL>'` in the status comment's language (Phase 3).
+  jikkyo does not try to tell why a run stopped, and mentions a cause only
+  when the final message names it, quoted in at most one sentence. There is
+  no reliable signal to classify on: a stop on an API error, usage limits
+  included, ends with a `result` line of subtype `success` with
+  `is_error: true`, which covers more than usage limits; the retry and
+  rate-limit events report a retry or a change of status, not the stop; a
+  crash or a closed laptop leaves no `result` line at all; and no test
+  stream covers a usage-limit stop. Resumability does not depend on the
+  cause anyway, only on the recorded branch and the pushed log.
+- **What is left on the remote.** jikkyo never deletes a remote branch.
+  The run's branch is its PR's head branch, which GitHub's "Automatically
+  delete head branches" setting removes on merge when the repository has it
+  on (otherwise a person does). A run that never opened a PR keeps its
+  branch on the remote, whether it is resumed later or abandoned, so the
+  closing summary names it for a person to delete. Phase 3 checks the branch
+  and the PR with `gh`, not from the final message or `cleanup.sh`'s reason,
+  and only after validating the branch name from `launch.sh`'s output.
 
 The full rationale is in the issue that specified this skill,
 gipcompany/skills#12.
