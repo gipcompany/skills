@@ -1229,7 +1229,7 @@ echo "precheck.sh"
 
   # Takeover by another account (#31): the parent checks each other author's
   # permission and passes the trusted ones with --trusted.
-  decide_takeover() { decide --resume 12 --trusted alice "$@"; }
+  decide_takeover() { decide --resume 12 --trusted alice; }
   # --authors: the candidates for the permission check.
   assert_eq "--authors: no comments: nothing" "" "$(echo '[]' | bash "$PRECHECK" --author me --authors)"
   assert_eq "--authors: the other accounts with a status comment, each once, sorted" "$(printf 'alice\nbob')" \
