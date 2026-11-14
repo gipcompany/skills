@@ -1348,6 +1348,42 @@ echo "statusline.sh"
     "$(sl "$(jq -cn --arg sid "$SID" --arg d "$TMP/sl-wt" '{session_id: $sid, cwd: $d}')")"
   git -C "$sl_repo" worktree remove --force "$TMP/sl-wt"
 
+  # Language: each segment follows its run's lang.
+  sl_reset
+  put 27 '{"lang": "ja"}'
+  assert_eq "ja, running: 残り ~<eta>, as in the comment's heading" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
+  put 27 '{"lang": "ja", "done": 0, "eta_secs": null}'
+  assert_eq "ja, running before the first completed todo" "jikkyo #27 · 0%" "$(sl)"
+  put 27 '{"lang": "ja", "done": 0, "total": 0, "eta_secs": null}'
+  assert_eq "ja, no todos: <turns> ターン" "jikkyo #27 · 12 ターン" "$(sl)"
+  put 27 '{"lang": "ja", "done": 0, "total": 0, "turns": 1, "eta_secs": null}'
+  assert_eq "ja, one turn: 1 ターン" "jikkyo #27 · 1 ターン" "$(sl)"
+  for pair in finished:完了 failed:失敗 interrupted:中断; do
+    put 27 "{\"lang\": \"ja\", \"state\": \"${pair%%:*}\", \"updated\": 9900}"
+    assert_eq "ja, ${pair%%:*}: ${pair#*:}" "jikkyo #27 · ${pair#*:}" "$(sl)"
+  done
+  put 27 '{"lang": "ja", "updated": 9100}'
+  assert_eq "ja, stale: 応答なし" "jikkyo #27 · 応答なし" "$(sl)"
+  put 27 '{"lang": "ja"}'
+  put 31 '{"state": "finished", "updated": 9900}'
+  assert_eq "runs in both languages on one line, each in its own" "jikkyo #27 · 60% · 残り ~12m | jikkyo #31 · finished" "$(sl)"
+  put 31 '{"lang": "fr"}'
+  assert_eq "an unknown lang is skipped" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
+  put 31 '{"lang": null}'
+  assert_eq "...as is a missing one" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
+  # The Japanese words are the status comment's own.
+  report_src="$(cat "$REPORT")"
+  for w in '"完了"' '"失敗"' '"中断"' 'L_LEFT_PRE=" · 残り ~"' 'L_TURN_MANY=" ターン"'; do
+    assert_has "report.sh's comment uses [$w] too" "$w" "$report_src"
+  done
+  # End to end in Japanese.
+  sl_reset
+  new_log
+  { create t1 1; result_ok; } > "$TMP/sl-ja-stream.jsonl"
+  (cd "$sl_repo" && GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-ja-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a Japanese issue's run shows in Japanese" "jikkyo #12 · 完了" "$(sl_input | bash "$STATUSLINE")"
+  sl_reset; put 27
+
   # Quiet and local: any bad input prints nothing, exits 0, and says nothing
   # on stderr; a bad state file is skipped and the good ones still show.
   sl_reset; put 27

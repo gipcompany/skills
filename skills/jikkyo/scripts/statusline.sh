@@ -26,6 +26,13 @@
 #     crash, and the status line may be the only sign left. A live run shown
 #     as stale (after sleep, say) clears on its next heartbeat.
 #
+# Each segment is in its run's status-comment language (`lang` in the state
+# file), using the comment's own Japanese words for `ja`:
+#
+#   jikkyo #27 · 60% · 残り ~12m | jikkyo #28 · 12 ターン | jikkyo #31 · 完了
+#
+# (失敗 failed, 中断 interrupted, 応答なし stale).
+#
 # Only the session that launched (or resumed) a run shows it: launch.sh gets
 # that session's ${CLAUDE_SESSION_ID} and report.sh records it as `session`.
 # With no matching run it prints nothing.
@@ -60,8 +67,38 @@ fmt_eta() {
   else printf '%dh %02dm' $((s / 3600)) $((s % 3600 / 60)); fi
 }
 
-# One line per run to show, tab-separated: number, kind (running or the
-# ended state), percentage (-1 with no todos), eta seconds (-1 for none), turns.
+# segment <number> <kind> <pct> <eta> <turns> <lang>: one run's segment, in
+# the status comment's language. The Japanese words are the status comment's
+# own labels (report.sh's set_labels and state_word), so the two agree;
+# `stale` has no label there and is 応答なし ("no response").
+segment() {
+  local n="$1" kind="$2" pct="$3" eta="$4" turns="$5" lang="$6" seg="jikkyo #$1"
+  case "$kind" in
+    running)
+      if [ "$pct" -ge 0 ]; then
+        seg="${seg} · ${pct}%"
+        if [ "$eta" -ge 0 ]; then
+          if [ "$lang" = ja ]; then seg="${seg} · 残り ~$(fmt_eta "$eta")"
+          else seg="${seg} · ~$(fmt_eta "$eta") left"; fi
+        fi
+      elif [ "$lang" = ja ]; then seg="${seg} · ${turns} ターン"
+      elif [ "$turns" = 1 ]; then seg="${seg} · 1 turn"
+      else seg="${seg} · ${turns} turns"; fi ;;
+    finished | failed | interrupted | stale)
+      if [ "$lang" = ja ]; then
+        case "$kind" in
+          finished) seg="${seg} · 完了" ;; failed) seg="${seg} · 失敗" ;;
+          interrupted) seg="${seg} · 中断" ;; stale) seg="${seg} · 応答なし" ;;
+        esac
+      else seg="${seg} · ${kind}"; fi ;;
+    *) return 1 ;;
+  esac
+  printf '%s' "$seg"
+}
+
+# One line per run to show, tab-separated: number, kind (running, stale, or
+# the ended state), percentage (-1 with no todos), eta seconds (-1 for none),
+# turns, and language.
 # shellcheck disable=SC2016  # jq program
 SELECT='
 def nat: type == "number" and . >= 0 and . == floor;
@@ -77,6 +114,7 @@ def nat: type == "number" and . >= 0 and . == floor;
   | select(.state | IN("running", "finished", "failed", "interrupted"))
   | select((.done | nat) and (.total | nat) and (.turns | nat) and .done <= .total and (.updated | nat))
   | select(.eta_secs == null or (.eta_secs | nat))
+  | select(.lang | IN("en", "ja"))
   | ($now - .updated) as $age
   | if .state == "running" and $age >= $stale_after then .kind = "stale"
     elif .state == "running" then .kind = "running"
@@ -84,10 +122,10 @@ def nat: type == "number" and . >= 0 and . == floor;
     else empty end
   | {n: .number, kind,
      pct: (if .total > 0 then (.done * 100 / .total | floor) else -1 end),
-     eta: (.eta_secs // -1), turns}
+     eta: (.eta_secs // -1), turns, lang}
 ]
 | group_by(.n) | map(last) | sort_by(.n) | .[]
-| [.n, .kind, .pct, .eta, .turns] | @tsv
+| [.n, .kind, .pct, .eta, .turns, .lang] | @tsv
 '
 
 main() {
@@ -111,19 +149,11 @@ main() {
   [ "${#files[@]}" -gt 0 ] || return 0
   t="$(now)"
   [[ "$t" =~ ^[0-9]+$ ]] || return 0
-  while IFS=$'\t' read -r n kind pct eta turns; do
-    # Only checked numbers and the enum state reach the terminal.
+  while IFS=$'\t' read -r n kind pct eta turns lang; do
+    # Only checked numbers and fixed words reach the terminal.
     [[ "$n" =~ ^[1-9][0-9]*$ && "$pct" =~ ^-?[0-9]+$ && "$eta" =~ ^-?[0-9]+$ && "$turns" =~ ^[0-9]+$ ]] || continue
-    case "$kind" in
-      running)
-        if [ "$pct" -ge 0 ]; then
-          seg="jikkyo #${n} · ${pct}%"
-          [ "$eta" -ge 0 ] && seg="${seg} · ~$(fmt_eta "$eta") left"
-        elif [ "$turns" = 1 ]; then seg="jikkyo #${n} · 1 turn"
-        else seg="jikkyo #${n} · ${turns} turns"; fi ;;
-      finished | failed | interrupted | stale) seg="jikkyo #${n} · ${kind}" ;;
-      *) continue ;;
-    esac
+    case "$lang" in en | ja) ;; *) continue ;; esac
+    seg="$(segment "$n" "$kind" "$pct" "$eta" "$turns" "$lang")" || continue
     line="${line:+${line} | }${seg}"
   done < <(for f in "${files[@]}"; do
              # One line per file, `<file name>\t<contents>`, so the name goes
