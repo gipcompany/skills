@@ -824,7 +824,7 @@ EOF
   for bad_args in "--resume|$BR|1" "--resume|$BR|$URL" "--resume|worktree-jikkyo-13-20261114-132452|1|$URL" \
       "--resume|main|1|$URL" "--resume|$BR -->|1|$URL" "--resume|$BR\$(id)|1|$URL" "--resume|$BR|0|$URL" \
       "--resume|$BR|1a|$URL" "--resume|$BR|1 2|$URL" "--resume|$BR|1|$URL|extra" "$URL|--resume|$BR|1" \
-      "--resume|$BR|1|https://github.com/o/r/issues/13"; do
+      "--resume|$BR|1|https://github.com/o/r/issues/13" "--resume|||$URL" "--resume||4242|$URL" "--resume|$BR||$URL"; do
     IFS='|' read -r -a a <<<"$bad_args"
     launch_resume "${a[@]}"
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
@@ -879,6 +879,7 @@ EOF
       "-C $rroot fetch --quiet origin +refs/heads/$BR:refs/remotes/origin/$BR" \
       "-C $rroot worktree list --porcelain" \
       "-C $rroot show-ref --verify --quiet refs/heads/$BR" \
+      "-C $rroot diff --quiet HEAD...refs/remotes/origin/$BR -- .claude .mcp.json :(glob)**/CLAUDE.md :(glob)**/CLAUDE.local.md" \
       "-C $rroot worktree add --quiet --track -B $BR $wpath refs/remotes/origin/$BR")" \
     "$(grep -v -e '^rev-parse' "$rs/git.log")"
   b="$(last_body)"
@@ -918,6 +919,25 @@ EOF
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: refuses a branch that is not on the remote"
   else bad "resume: refuses a branch that is not on the remote (rc=$rc)"; fi
   assert_lacks "...before printing worktree lines" "jikkyo: worktree" "$out"
+
+  # A branch that changes what Claude Code loads from the tree (project
+  # settings with hooks, MCP servers, CLAUDE.md) is refused before a worktree.
+  n=0
+  for cfg in .claude/settings.json .mcp.json CLAUDE.md sub/dir/CLAUDE.md; do
+    n=$((n + 1))
+    cbr="worktree-jikkyo-12-20261114-20000$n"
+    rg -C "$rs/seed" checkout -q -b "$cbr" main
+    mkdir -p "$rs/seed/$(dirname "$cfg")"
+    echo '{}' > "$rs/seed/$cfg"
+    rg -C "$rs/seed" add "$cfg"
+    rg -C "$rs/seed" commit -q -m "cfg"
+    rg -C "$rs/seed" push -q origin "$cbr" 2>/dev/null
+    launch_resume --resume "$cbr" 4242 "$URL"
+    if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
+      ok "resume: refuses a branch that changes $cfg"
+    else bad "resume: refuses a branch that changes $cfg (rc=$rc)"; fi
+    assert_has "...and says so" "the child would load them" "$out"
+  done
 }
 
 # ===========================================================================
@@ -1041,6 +1061,14 @@ echo "precheck.sh"
   assert_eq "--resume: a finished run is not resumed" "none" "$(br_comment 1 me finished 60 | resume)"
   assert_eq "--resume: a later finished run does not hide an earlier interrupted one" "resume $BR 1" \
     "$( { br_comment 1 me interrupted 9000; br2_comment 2 me finished 60; } | resume)"
+  assert_eq "--resume: a branch that was resumed and then finished is not resumed again" "none" \
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 me finished 60; } | resume)"
+  assert_eq "--resume: ...but an earlier interrupted run of another branch still is" "resume $BR2 1" \
+    "$( { br2_comment 1 me interrupted 9000; br_comment 2 me interrupted 8000; br_comment 3 me finished 60; } | resume)"
+  assert_eq "--resume: a finished run that was resumed again and interrupted is resumed" "resume $BR 3" \
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 me finished 8000; br_comment 3 me interrupted 60; } | resume)"
+  assert_eq "--resume: a finished comment by another author does not take the branch out" "resume $BR 1" \
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 someone finished 60; } | resume)"
   assert_eq "--resume: the latest one without a branch (an older comment): none" "none" \
     "$( { br_comment 1 me interrupted 9000; comment 2 me interrupted 60; } | resume)"
   assert_eq "--resume: a branch of another issue: none" "none" \

@@ -21,7 +21,8 @@
 #                          again, so a run that died at `running` can be the
 #                          one resumed.
 #   resume <branch> <id>   resume the branch named in status comment <id>:
-#                          the latest `interrupted` or `failed` one counted.
+#                          the latest `interrupted` or `failed` one counted,
+#                          leaving out a branch with a later `finished` one.
 #   none                   nothing to resume: no such comment, or the latest
 #                          one names no branch, or a branch of another issue.
 #
@@ -138,8 +139,13 @@ jq -r -s --arg re "$MARKER_RE" --arg author "$author" --argjson now "$now" \
       elif $running != [] then "rewrite " + ($running | map(.id | tostring) | join(" "))
       else
         # Comment ids grow with creation, so the largest is the latest run.
-        ([ $counted[] | select(.state == "interrupted" or .state == "failed")
-           | select((.id | type) == "number") ] | max_by(.id)) as $last
+        # Earlier comments are never edited, so a branch that was resumed and
+        # then finished still has its old `interrupted` comment: a `finished`
+        # comment for the same branch, posted later, takes the branch out.
+        ([ $counted[] | select(.state == "finished" and .branch != null and (.id | type) == "number") ]) as $done
+        | ([ $counted[] | select(.state == "interrupted" or .state == "failed")
+           | select((.id | type) == "number")
+           | . as $c | select(all($done[]; .branch != $c.branch or .id < $c.id)) ] | max_by(.id)) as $last
         | if $last == null then "none"
           elif ($last.branch // "" | test("^worktree-jikkyo-" + $resume + "-[0-9]{8}-[0-9]{6}$"))
             then "resume " + $last.branch + " " + ($last.id | tostring)

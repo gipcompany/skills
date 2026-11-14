@@ -27,7 +27,9 @@
 # inside it. The worktree lines above name the resumed branch. It exits 2,
 # before printing them, if the branch cannot be fetched, is checked out in
 # another worktree, or exists locally with commits the remote branch lacks: it
-# never moves or drops someone's commits. The child gets the resume
+# never moves or drops someone's commits. It also exits 2 if the branch changed
+# .claude/, .mcp.json, or a CLAUDE.md since it left this checkout's HEAD, since
+# the child would load those from the branch. The child gets the resume
 # instruction after the other three, and report.sh gets the comment id, for a
 # `Resumed from` row. Only the validated branch name and the numeric id reach
 # a command line; nothing here reads the branch's files.
@@ -94,9 +96,10 @@ usage() {
   exit 2
 }
 
-resume_branch="" resume_id=""
+resuming=false resume_branch="" resume_id=""
 if [ "$#" -ge 1 ] && [ "$1" = --resume ]; then
   [ "$#" -eq 4 ] || usage
+  resuming=true
   resume_branch="$2"
   resume_id="$3"
   shift 3
@@ -114,8 +117,9 @@ repo="${BASH_REMATCH[2]}"
 num="${BASH_REMATCH[3]}"
 
 # On resume these two are the only values besides the URL that reach a
-# command line, so only the exact shapes get through.
-if [ -n "$resume_branch$resume_id" ]; then
+# command line, so only the exact shapes get through. The flag, not the values,
+# decides: `--resume '' ''` must fail here, not quietly start a fresh run.
+if [ "$resuming" = true ]; then
   branch_re="^worktree-jikkyo-${num}-[0-9]{8}-[0-9]{6}\$"
   if ! [[ "$resume_branch" =~ $branch_re ]]; then
     echo "launch.sh: not a jikkyo branch for issue ${num}: $resume_branch" >&2
@@ -156,7 +160,7 @@ fi
 # worktree an earlier run kept.
 name="jikkyo-${num}-$(date '+%Y%m%d-%H%M%S')"
 
-if [ -n "$resume_branch" ]; then
+if [ "$resuming" = true ]; then
   # Resume: put the pushed branch in a new worktree ourselves. git's own output
   # goes to stderr so the three worktree lines stay first on stdout.
   path="${root}/.claude/worktrees/${name}"
@@ -174,6 +178,20 @@ if [ -n "$resume_branch" ]; then
     echo "launch.sh: the local ${resume_branch} has commits that ${remote} lacks; push or remove them first" >&2
     exit 2
   fi
+  # A fresh run's tree is this checkout's own HEAD; a resumed one is whatever
+  # was pushed to the branch, by the earlier child or by anyone who can push.
+  # Claude Code reads its project settings (hooks run shell commands outside
+  # the deny list), MCP servers, and CLAUDE.md files from that tree, so a
+  # branch that changed any of them since it left this HEAD is refused.
+  git -C "$root" diff --quiet "HEAD...${tracking}" -- \
+    .claude .mcp.json ':(glob)**/CLAUDE.md' ':(glob)**/CLAUDE.local.md' >&2
+  case "$?" in
+    0) ;;
+    1) echo "launch.sh: ${resume_branch} changes .claude/, .mcp.json, or a CLAUDE.md; the child would load them, so it is not resumed. Review the branch, or start a fresh run" >&2
+       exit 2 ;;
+    *) echo "launch.sh: could not compare ${resume_branch} with this checkout's HEAD" >&2
+       exit 2 ;;
+  esac
   if ! git -C "$root" worktree add --quiet --track -B "$resume_branch" "$path" "$tracking" >&2; then
     echo "launch.sh: could not add a worktree for ${resume_branch}" >&2
     exit 2
