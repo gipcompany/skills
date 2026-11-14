@@ -29,9 +29,10 @@ formatting noise. See `gotchas.md` for the details.
 
 Each time `/grilling` settles a point, reflect it into the target with this
 loop. Run it after launching the next question's votes, while they work — the
-brief already gives them the settled point, so nothing waits on the write — and see
-`voting.md` (*Overlapping the write-back*) for what to do when the loop needs
-the user. Reflection means **rewriting the target in place** into the current agreed
+brief already gives them the settled point, so nothing waits on the write — or
+at once when no vote follows. Either way the order below is the same: the diff
+goes out before the write. See `voting.md` (*Overlapping the write-back*) for
+what to do when the loop needs the user. Reflection means **rewriting the target in place** into the current agreed
 spec — an `Edit`-style overwrite of the affected section — **not** appending, not
 keeping a changelog, not logging the Q&A. Before every write, **present the
 concrete diff**; if the user objects, roll it back.
