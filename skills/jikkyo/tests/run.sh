@@ -1227,6 +1227,86 @@ echo "precheck.sh"
   assert_eq "--resume: Japanese comments count the same" "resume $BR 1" \
     "$(jq -cn --arg b "$BR_RUNNING_BODY_JA" '{id: 1, html_url: "x", user: {login: "me"}, body: ($b | sub("state=running"; "state=interrupted")), created_at: "2025-01-01T00:00:00Z"}' | decide_resume)"
 
+  # Takeover by another account (#31): the parent checks each other author's
+  # permission and passes the trusted ones with --trusted.
+  decide_takeover() { decide --resume 12 --trusted alice; }
+  # --authors: the candidates for the permission check.
+  assert_eq "--authors: no comments: nothing" "" "$(echo '[]' | bash "$PRECHECK" --author me --authors)"
+  assert_eq "--authors: the other accounts with a status comment, each once, sorted" "$(printf 'alice\nbob')" \
+    "$( { br_comment 1 bob interrupted 60; br_comment 2 me running 9000; comment 3 alice finished 50; br_comment 4 bob failed 10; } | jq -s . | bash "$PRECHECK" --author me --authors)"
+  assert_eq "--authors: a comment without the marker does not name its author" "" \
+    "$( { comment 1 carol none 60; } | jq -s . | bash "$PRECHECK" --author me --authors)"
+  assert_eq "--authors: a login that is not a GitHub login is left out" "ok-1" \
+    "$( { br_comment 1 "x';id" interrupted 60; br_comment 2 "-dash" interrupted 60; br_comment 3 'bot[bot]' interrupted 60;
+          br_comment 4 "$(printf 'a%.0s' $(seq 40))" interrupted 60; br_comment 5 ok-1 interrupted 60; } | jq -s . | bash "$PRECHECK" --author me --authors)"
+  rc=0; printf '' | bash "$PRECHECK" --author me --authors >/dev/null 2>&1 || rc=$?
+  assert_eq "--authors: a failed listing is an error" "2" "$rc"
+  for bad_flags in "--authors --resume 12" "--authors --force" "--authors --now 1" "--authors --trusted alice"; do
+    rc=0; read -r -a a <<<"$bad_flags"; echo '[]' | bash "$PRECHECK" --author me "${a[@]}" >/dev/null 2>&1 || rc=$?
+    assert_eq "[$bad_flags] is a usage error" "2" "$rc"
+  done
+  # Untrusted: no write permission, or the check failed, so not passed.
+  assert_eq "takeover: an untrusted account's interrupted comment is ignored" "none" \
+    "$(br_comment 1 bob interrupted 60 | decide_takeover)"
+  assert_eq "takeover: an untrusted account's live running comment does not refuse" "resume $BR 1" \
+    "$( { br_comment 1 me interrupted 9000; br2_comment 2 bob running 60; } | decide_takeover)"
+  assert_eq "takeover: an untrusted account's stale running comment is ignored, not rewritten" "none" \
+    "$(br_comment 1 bob running 5000 | decide_takeover)"
+  assert_eq "takeover: an untrusted account's finished comment does not take the branch out" "resume $BR 1" \
+    "$( { br_comment 1 alice interrupted 9000; br_comment 2 bob finished 60; } | decide_takeover)"
+  # Trusted: the --trusted account's comments count.
+  assert_eq "takeover: a trusted account's interrupted comment is resumed" "resume $BR 1" \
+    "$(br_comment 1 alice interrupted 60 | decide_takeover)"
+  assert_eq "takeover: a trusted account's failed comment is resumed" "resume $BR 1" \
+    "$(br_comment 1 alice failed 60 | decide_takeover)"
+  assert_eq "takeover: the latest comment of any trusted account wins" "resume $BR2 3" \
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 alice interrupted 8000; br2_comment 3 alice interrupted 60; } | decide_takeover)"
+  assert_eq "takeover: ...this account's own later one too" "resume $BR2 3" \
+    "$( { br_comment 1 alice interrupted 9000; br2_comment 3 me failed 60; } | decide_takeover)"
+  assert_eq "takeover: a trusted account's finished comment takes the branch out" "none" \
+    "$( { br_comment 1 me interrupted 9000; br_comment 2 alice finished 60; } | decide_takeover)"
+  assert_eq "takeover: several --trusted accounts all count" "resume $BR2 2" \
+    "$( { br_comment 1 alice interrupted 9000; br2_comment 2 bob interrupted 60; } | decide --resume 12 --trusted alice --trusted bob)"
+  # A live run by a trusted account refuses.
+  assert_eq "takeover: a trusted account's live running comment refuses" \
+    "refuse https://github.com/o/r/issues/12#issuecomment-2" "$( { br_comment 1 me interrupted 9000; br2_comment 2 alice running 60; } | decide_takeover)"
+  assert_eq "takeover: ...updated 14 m 59 s ago: still refuses" \
+    "refuse https://github.com/o/r/issues/12#issuecomment-1" "$(br_comment 1 alice running 899 | decide_takeover)"
+  assert_eq "takeover: ...even next to this account's stale one, which waits" \
+    "refuse https://github.com/o/r/issues/12#issuecomment-2" "$( { br_comment 1 me running 5000; br2_comment 2 alice running 60; } | decide_takeover)"
+  # A stale running comment by a trusted account: resumed from, never rewritten.
+  assert_eq "takeover: a trusted account's stale running comment is resumed from" "resume $BR 1" \
+    "$(br_comment 1 alice running 900 | decide_takeover)"
+  assert_eq "takeover: ...when it is the latest" "resume $BR2 2" \
+    "$( { br_comment 1 me interrupted 9000; br2_comment 2 alice running 5000; } | decide_takeover)"
+  assert_eq "takeover: ...unless a later finished comment names its branch" "none" \
+    "$( { br_comment 1 alice running 9000; br_comment 2 me finished 60; } | decide_takeover)"
+  assert_eq "takeover: ...and a later run of this account on it wins" "resume $BR 2" \
+    "$( { br_comment 1 alice running 9000; br_comment 2 me interrupted 60; } | decide_takeover)"
+  assert_eq "takeover: ...one without a branch: none" "none" "$(comment 1 alice running 5000 | decide_takeover)"
+  assert_eq "takeover: only this account's stale running comment is rewritten" "rewrite 2" \
+    "$( { br_comment 1 alice running 5000; br2_comment 2 me running 5000; } | decide_takeover)"
+  # ...and after that rewrite, the check run again picks the latest.
+  rewritten="$(br2_comment 2 me running 5000 | bash "$PRECHECK" --payload --author me | jq -c '{id: 2, html_url: "x", user: {login: "me"}, body: .body, created_at: "2025-01-01T00:00:00Z"}')"
+  assert_eq "takeover: ...then the latest is resumed, and the other account's comment is left as it is" "resume $BR2 2" \
+    "$( { br_comment 1 alice running 5000; printf '%s\n' "$rewritten"; } | decide_takeover)"
+  for bad_t in "" "x';id" "-dash" "bot[bot]" "a b" "$(printf 'a%.0s' $(seq 40))"; do
+    rc=0; echo '[]' | bash "$PRECHECK" --author me --resume 12 --trusted "$bad_t" >/dev/null 2>&1 || rc=$?
+    assert_eq "--trusted [$bad_t] is a usage error" "2" "$rc"
+  done
+  rc=0; echo '[]' | bash "$PRECHECK" --author me --trusted alice >/dev/null 2>&1 || rc=$?
+  assert_eq "--trusted without --resume is a usage error" "2" "$rc"
+  rc=0; echo '[]' | bash "$PRECHECK" --author me --force --trusted alice >/dev/null 2>&1 || rc=$?
+  assert_eq "--trusted with --force is a usage error" "2" "$rc"
+  # --payload --author: another account's comment is never edited.
+  rc=0; out="$(br_comment 1 alice running 5000 | bash "$PRECHECK" --payload --author me 2>/dev/null)" || rc=$?
+  assert_eq "--payload --author refuses another account's running comment" "1:" "$rc:$out"
+  p="$(br_comment 1 me running 5000 | bash "$PRECHECK" --payload --author me | jq -r .body)"
+  assert_eq "--payload --author rewrites this account's own" \
+    "<!-- jikkyo:status v=1 state=interrupted branch=$BR -->" "$(printf '%s\n' "$p" | head -n 1)"
+  rc=0; br_comment 1 me running 5000 | bash "$PRECHECK" --payload --trusted alice >/dev/null 2>&1 || rc=$?
+  assert_eq "--payload with --trusted is a usage error" "2" "$rc"
+
   # Japanese status comments: the marker is the same, so the decisions are too.
   ja_comment() {  # <id> <login> <state> <age seconds>
     local w b
@@ -1380,6 +1460,15 @@ echo "SKILL.md"
   assert_has "SKILL.md: no valid branch stops the resume" "Never pick a branch any other" "$skill"
   assert_has "SKILL.md: resume launches with the validated branch and id" "launch.sh --resume '<branch>' '<comment id>' '<URL>'" "$skill"
   assert_has "SKILL.md: documents resuming" "**Resuming a run.**" "$skill"
+  assert_has "SKILL.md: resume lists the other authors first" "precheck.sh --author '<login>' --authors" "$skill"
+  assert_has "SKILL.md: ...checks each one's permission" "gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission" "$skill"
+  assert_has "SKILL.md: ...trusts only admin or write on success" "Trust the account only when this exits 0 **and** prints exactly \`admin\`" "$skill"
+  assert_has "SKILL.md: ...and a 404 or any error is not trusted" "a 404, any other error" "$skill"
+  assert_has "SKILL.md: ...not author_association" "Do not use the comment's \`author_association\`" "$skill"
+  assert_has "SKILL.md: ...and passes the trusted ones" "--resume '<N>' [--trusted '<trusted login>' …]" "$skill"
+  assert_has "SKILL.md: the rewrite never edits another account's comment" "precheck.sh --payload --author '<login>' | gh api -X PATCH" "$skill"
+  assert_lacks "SKILL.md: no rewrite without --author" "precheck.sh --payload | gh api" "$skill"
+  assert_has "SKILL.md: documents the takeover" "**Takeover by another account.**" "$skill"
   assert_eq "allowed-tools has exactly three rules" "3" "$(printf '%s\n' "$allowed" | grep -o 'Bash(' | wc -l | tr -d ' ')"
   # shellcheck disable=SC2016  # a literal backtick pattern
   if grep -n '^ *!`\|^```!' "$SKILL_MD" | grep -q .; then bad "SKILL.md has no injected commands"

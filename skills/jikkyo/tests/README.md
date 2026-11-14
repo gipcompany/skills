@@ -184,6 +184,31 @@ timing and signal tests waiting on a real scheduler.
   - Exit 2 for `--force` with `--resume`, a bad issue number (empty, `0`, a
     leading zero, `$(…)`-like text, letters), `--payload` with `--resume`,
     or a failed listing.
+
+  Takeover by another account (`--authors`, `--trusted <login>`):
+  - `--authors` prints each other account with a status comment once,
+    sorted, leaves out comments without the marker and logins not of
+    GitHub's shape (`'`, a leading `-`, `[bot]`, over 39 characters), exits
+    2 on a failed listing, and does not combine with the decision flags.
+  - An untrusted account (not passed with `--trusted`) is ignored: its
+    `interrupted` comment is not resumed, its live `running` one does not
+    refuse, its stale `running` one is neither resumed nor rewritten, and
+    its `finished` one takes no branch out.
+  - A trusted account's `interrupted` or `failed` comment is resumed, the
+    latest of all counted accounts wins, several `--trusted` all count, and
+    its `finished` comment takes the branch out.
+  - A trusted account's live `running` comment refuses (also at 14 m 59 s,
+    and next to this account's stale one).
+  - A trusted account's stale `running` comment is resumed from, unless a
+    later `finished` comment names its branch or a later run on it is
+    newer, gives `none` without a branch, and is never on the `rewrite`
+    list: only this account's stale one is, and after that rewrite the
+    check resumes the latest.
+  - Exit 2 for a `--trusted` that is not a login (empty, `'`, a leading `-`,
+    `[bot]`, a space, 40 characters), for `--trusted` without `--resume` or
+    with `--force`, and for `--payload` with `--trusted`.
+  - `--payload --author` exits 1 for another account's `running` comment
+    and rewrites this account's own.
 - **`cleanup.sh`** — `remove` only for a worktree with no uncommitted changes
   (untracked, modified, and staged files all count) whose HEAD is on a
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed

@@ -5,7 +5,8 @@ description: "Use when you want to run /goal on a GitHub issue and have the run
   estimate of the time remaining in one status comment edited in place, plus a
   closing summary comment. Invoked explicitly as /jikkyo [--force |
   --resume] <GitHub issue URL>; the user never types a /goal line. --resume
-  continues an interrupted or failed run from its pushed branch. Starts /goal in a headless `claude -p` child in its
+  continues an interrupted or failed run from its pushed branch, also one
+  started by another account with write access. Starts /goal in a headless `claude -p` child in its
   own git worktree, so the user cannot steer the run while it is in
   progress. Requires gh and jq. Not for targets other than a GitHub issue
   URL, and not for runs you want to steer interactively (type /goal yourself
@@ -42,7 +43,9 @@ The arguments are: $ARGUMENTS
   say so and stop.
 - `--force` starts the run even when another run looks active on the issue.
 - `--resume` continues the latest `interrupted` or `failed` run on the issue
-  from its pushed branch, instead of starting from scratch. Without it,
+  from its pushed branch, instead of starting from scratch, also a run
+  started by another account with `admin` or `write` permission on the
+  repository. Without it,
   `/jikkyo` starts fresh. `--force` and `--resume` cannot be combined.
 - Run it from a checkout of `<owner>/<repo>`: one of its git remotes must point
   at that repository. `launch.sh` refuses otherwise.
@@ -105,30 +108,59 @@ The arguments are: $ARGUMENTS
      `interrupted`:
 
      ```
-     gh api 'repos/<owner>/<repo>/issues/comments/<id>' | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --payload | gh api -X PATCH 'repos/<owner>/<repo>/issues/comments/<id>' --input -
+     gh api 'repos/<owner>/<repo>/issues/comments/<id>' | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --payload --author '<login>' | gh api -X PATCH 'repos/<owner>/<repo>/issues/comments/<id>' --input -
      ```
 
      `--payload` exits 1 when that comment is no longer `running` (another
-     run took it over, or it finished since the listing). The PATCH after it
+     run took it over, or it finished since the listing), or, with
+     `--author`, when another account wrote it. The PATCH after it
      then fails on empty input and changes nothing; move on to the next id.
      When every id is done, go to step 4.
 
    If the listing in this step fails, `precheck.sh` exits 2 instead of
    guessing: report the `gh` error and stop.
 
-   **3r. With `--resume`**, ask `precheck.sh` which run to resume instead,
-   passing the issue number:
+   **3r. With `--resume`**, the run may have been started by another
+   account (one that hit its usage limit, say), so first find which other
+   accounts' status comments to trust. List the other accounts that wrote
+   one:
 
    ```
-   gh api --paginate 'repos/<owner>/<repo>/issues/<N>/comments' | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --author '<login>' --resume '<N>'
+   gh api --paginate 'repos/<owner>/<repo>/issues/<N>/comments' | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --author '<login>' --authors
    ```
+
+   It prints one login per line (none if no other account wrote one), each
+   already checked to have the shape of a GitHub login. For each, ask GitHub
+   for that account's permission on the repository:
+
+   ```
+   gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission
+   ```
+
+   Trust the account only when this exits 0 **and** prints exactly `admin`
+   or `write`. Anything else — `read`, `none`, a 404, any other error (on
+   an error `gh` may print the error body, which is not a permission) —
+   means not trusted. Do not use the comment's `author_association`, and
+   do not trust an account any other way. Then ask `precheck.sh` which run
+   to resume, passing the issue number and one `--trusted` per trusted
+   account (none at all if no account was trusted):
+
+   ```
+   gh api --paginate 'repos/<owner>/<repo>/issues/<N>/comments' | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --author '<login>' --resume '<N>' [--trusted '<trusted login>' …]
+   ```
+
+   A trusted account's live `running` comment refuses like this account's
+   own; its stale one counts like `interrupted` and is never rewritten.
 
    - `refuse <comment URL>` — a live run is reporting there; a resume would
      race it. Tell the user, link the comment, and **stop** (`--force` does
      not combine with `--resume`).
-   - `rewrite <id> [<id> …]` — rewrite each to `interrupted` with the same
-     command as in step 3 (moving on to the next id the same way), then run
-     this step 3r **once more**: the rewritten run is now a candidate to
+   - `rewrite <id> [<id> …]` — these are this account's own comments only.
+     Rewrite each to `interrupted` with the same command as in step 3, whose
+     `--author` keeps a comment by another account from ever being edited
+     (moving on to the next id the same way), then run the
+     last `precheck.sh --resume` command of this step **once more**, with the
+     same `--trusted` accounts: the rewritten run is now a candidate to
      resume. Do not go to step 4 from here. If the second check prints
      `rewrite` again, a rewrite did not take: tell the user which comments
      are still `running`, and **stop** rather than loop.
@@ -137,7 +169,8 @@ The arguments are: $ARGUMENTS
      `precheck.sh` has validated both, and they are the only things taken
      from the comments onto a command line.
    - `none` — there is no run to resume: no `interrupted` or `failed` status
-     comment by this account (a branch with a later `finished` comment does
+     comment (or stale `running` one of a trusted account) by this account
+     or a trusted one (a branch with a later `finished` comment does
      not count: that run was resumed and completed), or the latest one names
      no branch (it predates branch recording) or a branch of another issue.
      Only a `finished` comment on the same branch removes a candidate: an
@@ -437,7 +470,8 @@ Then, in this order:
 - **Resuming a run.** `/jikkyo --resume <URL>` continues an interrupted or
   failed run from its pushed branch, so another machine can pick it up.
   The branch comes only from the latest `interrupted` or `failed` status
-  comment `precheck.sh` counts (jikkyo's marker, by this account), leaving
+  comment `precheck.sh` counts (jikkyo's marker, by this account or a
+  trusted one, see "Takeover by another account" below), leaving
   out a branch that a later `finished` comment names (earlier comments are
   never edited, so a resumed run that completed leaves its old
   `interrupted` comment behind), checked against
@@ -452,6 +486,28 @@ Then, in this order:
   (exit 2) if the branch is not on the remote, is already checked out in
   another worktree, or exists locally with commits the remote lacks,
   rather than move or drop any of them.
+- **Takeover by another account.** `--resume` may pick up a run started by
+  another GitHub account, for example one that hit its usage limit. The
+  parent, not a script, decides whom to trust: `precheck.sh --authors`
+  lists the other accounts that wrote a status comment (only logins of
+  GitHub's shape, since they go on command lines), and each is trusted only
+  when `GET /repos/{owner}/{repo}/collaborators/{username}/permission`
+  succeeds with `admin` or `write`, GitHub's effective role after every
+  source of grants is combined. `read`, `none`, a 404, or any error means
+  not trusted. `author_association` is not used: it is a relationship
+  label, not a permission level, and marker text alone is something anyone
+  can post on a public repository. `precheck.sh` stays a filter over the
+  comments it is given, counting this account's and each `--trusted`
+  account's. "One run per issue" covers them all: a `running` comment
+  updated within 15 minutes by any of them refuses, so a live run by
+  someone else is never taken over. Another account's comment is read,
+  never edited: a stale `running` one (a run that died without saying so)
+  counts like `interrupted`, as a source of the branch that does not block,
+  and is never put on the `rewrite` list; `--payload --author` refuses
+  another account's comment as a second guard. The resuming run posts its
+  own new status comment and leaves the old one as it is. Accounts are
+  checked a moment before the decision is listed, so a comment posted by a
+  new account in between is simply not counted.
 
   A fresh run's tree is the user's own, but a resumed one is whatever
   anyone who can push put on the branch, and Claude Code loads hooks
