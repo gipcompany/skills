@@ -189,8 +189,11 @@ timing and signal tests waiting on a real scheduler.
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed
   commit, a dirty pushed worktree, a pushed branch with a newer unpushed
   commit, a missing path, a directory that is not a worktree, or a path
-  inside one. A `core.fsmonitor` command in git config is not run by its
-  `git status`, while a plain `git status` would run it.
+  inside one. A `core.fsmonitor` command in git config, and a git hook the
+  worktree's branch carries under a relative `core.hooksPath`, are not run
+  by its `git status`, while a plain `git status` would run them. The
+  `git worktree remove` that `SKILL.md` gives the parent carries the same
+  two options and runs no hook from the branch.
 - **`SKILL.md`** — `allowed-tools` pins exactly `launch.sh`, `precheck.sh`, and
   `cleanup.sh` under `${CLAUDE_SKILL_DIR}`, with no rule for `claude`, `gh`, or
   `git`, and the skill has no injected commands; it tells the parent to write

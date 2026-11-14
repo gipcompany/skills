@@ -1321,6 +1321,33 @@ echo "cleanup.sh"
   assert_eq "...while a plain git status would (the case is real)" "ran" "$(head -n 1 "$base/fsmonitor-ran" 2>/dev/null)"
   g "$base/main" config --unset core.fsmonitor
 
+  # A git hook the worktree's branch carries, under a relative core.hooksPath
+  # (as husky sets), is not run by cleanup.sh's git status (a plain one would
+  # run it when it refreshes the index).
+  w="$(wt hooked)"
+  mkdir -p "$w/.githooks"
+  printf '#!/bin/sh\necho ran >> "%s/hook-ran"\n' "$base" > "$w/.githooks/post-index-change"
+  chmod +x "$w/.githooks/post-index-change"
+  g "$w" add .githooks; g "$w" -c user.name=t -c user.email=t@t commit -q -m hooks
+  g "$w" push -q -u origin worktree-hooked 2>/dev/null
+  g "$base/main" config core.hooksPath .githooks
+  touch "$w/.githooks/post-index-change"   # a stale index entry to refresh
+  assert_eq "a branch's git hook does not stop the decision" "remove" "$(first "$w")"
+  assert_eq "...and cleanup.sh does not run it" "" "$(cat "$base/hook-ran" 2>/dev/null)"
+  touch "$w/.githooks/post-index-change"
+  g "$w" status --porcelain >/dev/null 2>&1
+  assert_eq "...while a plain git status would (the case is real)" "ran" "$(head -n 1 "$base/hook-ran" 2>/dev/null)"
+  # The worktree remove that SKILL.md has the parent run does not run it.
+  rm -f "$base/hook-ran"; touch "$w/.githooks/post-index-change"
+  remove_cmd="$(sed -n 's/^ *git \(-c core.hooksPath.*\) worktree remove .*/\1/p' "$SKILL_MD")"
+  assert_eq "SKILL.md removes the worktree with hooks and fsmonitor off" \
+    "-c core.hooksPath=/dev/null -c core.fsmonitor=false" "$remove_cmd"
+  # shellcheck disable=SC2086  # the options are split on purpose
+  git $remove_cmd -C "$base/main" worktree remove "$w" 2>/dev/null
+  assert_eq "...and that remove runs no hook from the branch" "" "$(cat "$base/hook-ran" 2>/dev/null)"
+  assert_eq "...and removes the worktree" "no" "$([ -d "$w" ] && echo yes || echo no)"
+  g "$base/main" config --unset core.hooksPath
+
   rc=0; bash "$CLEANUP" >/dev/null 2>&1 || rc=$?
   assert_eq "no argument is a usage error" "2" "$rc"
 }

@@ -218,9 +218,15 @@ Then, in this order:
 
      ```
      git worktree unlock '<worktree path>'
-     git worktree remove '<worktree path>'
+     git -c core.hooksPath=/dev/null -c core.fsmonitor=false worktree remove '<worktree path>'
      git branch -d '<worktree branch>'
      ```
+
+     Keep the two `-c` options on `remove`: it checks the worktree with a
+     `git status` inside it, which runs git hooks from `core.hooksPath`,
+     and a relative one (husky and the like) is read from the worktree,
+     that is, from the branch, which on a resumed run anyone who can push
+     may have changed.
 
      `-p` runs leave the worktree locked, so `unlock` comes first; a "not
      locked" error from it is fine. Never add `--force` to `remove` and never
@@ -403,8 +409,10 @@ Then, in this order:
   loaded. It also turns off two things the flag does not cover. git runs
   hooks on checkout and on every commit, from `core.hooksPath`, which tools
   such as husky point into the tree, so `launch.sh` runs its
-  `git worktree add` with `core.hooksPath` set to `/dev/null`, and the
-  child gets the same through `GIT_CONFIG_*`. That covers every git the
+  `git worktree add` with `core.hooksPath` set to `/dev/null`, the child
+  gets the same through `GIT_CONFIG_*`, and so do `cleanup.sh`'s
+  `git status` and the `git worktree remove` in Phase 3, which run in the
+  worktree. That covers every git the
   child runs, its tests included, and the user's own git hooks are off in
   a resumed run too. Auto memory is read and written whatever the setting
   sources, and shared with the user's other sessions in the repository,
