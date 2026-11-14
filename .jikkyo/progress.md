@@ -1,13 +1,13 @@
 issue: https://github.com/gipcompany/skills/issues/32
 branch: worktree-jikkyo-32-20261114-181224
-updated: 2026-11-14T18:20:00+09:00
-next: Edit SKILL.md Phase 3 for the resumable-stop line
+updated: 2026-11-14T18:35:00+09:00
+next: Document the design in "How the pieces fit" (resumable stop, branch left, cause not classified)
 
 ## Todos
 
 - [x] Start progress log .jikkyo/progress.md
-- [ ] Edit SKILL.md Phase 3: resumable stop gives /jikkyo --resume <URL> in the status comment's language
-- [ ] Edit SKILL.md Phase 3: run with no PR names the branch left on the remote
+- [x] Edit SKILL.md Phase 3: resumable stop gives /jikkyo --resume <URL> in the status comment's language (5acebb6)
+- [x] Edit SKILL.md Phase 3: run with no PR names the branch left on the remote (5acebb6)
 - [ ] SKILL.md documents both and that the cause is not classified
 - [ ] Verify: run test suite and dry-run Phase 3 on mock hand-overs
 - [ ] Delete progress log, push, open PR
