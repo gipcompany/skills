@@ -47,6 +47,13 @@ assert_lacks() {
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/jikkyo-tests.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
 
+# report.sh writes a state file into the git common dir of the directory it
+# runs in, so everything runs from a scratch repository, never this checkout.
+CWD_REPO="$TMP/cwd"
+git init -q "$CWD_REPO"
+cd "$CWD_REPO" || exit 1
+STATE="$(cd "$CWD_REPO" && pwd -P)/.git/jikkyo/12.json"
+
 # --- stubs -----------------------------------------------------------------
 # gh: every call is logged as $GH_LOG/<n>.args and $GH_LOG/<n>.body (stdin).
 # A POST answers with a comment id and URL, the way `--jq '[.id,.html_url]|@tsv'`
@@ -657,6 +664,101 @@ echo "report.sh: a signal after the result line"
   rm -f "$fifo"
 }
 
+# ===========================================================================
+echo "report.sh: the state file"
+{
+  rm -f "$STATE"
+  f="$TMP/state-stream.jsonl"
+  { create t1 1; create t2 2; update u1 1 completed; result_ok; } > "$f"
+  new_log
+  bash "$REPORT" --session "$SID" "$URL" < "$f" > "$TMP/out" 2>&1
+  if [ -f "$STATE" ]; then ok "the state file is <git common dir>/jikkyo/<N>.json"
+  else bad "the state file is <git common dir>/jikkyo/<N>.json (no $STATE)"; fi
+  assert_eq "it has exactly the documented keys" \
+    '["comment","done","eta_secs","issue","lang","number","session","started","state","total","turns","updated","v"]' \
+    "$(jq -c 'keys' "$STATE" 2>/dev/null)"
+  assert_eq "...with the final state, counts, language, session, and URLs" \
+    "$(jq -cn --arg sid "$SID" '{v: 1, issue: "https://github.com/o/r/issues/12", number: 12, state: "finished",
+       done: 1, total: 2, eta_secs: null, lang: "en", session: $sid,
+       comment: "https://github.com/o/r/issues/12#issuecomment-777"}')" \
+    "$(jq -c '{v, issue, number, state, done, total, eta_secs, lang, session, comment}' "$STATE" 2>/dev/null)"
+  assert_eq "...and epoch numbers for started and updated" "true" \
+    "$(jq '(.started | type) == "number" and (.updated | type) == "number" and .updated >= .started' "$STATE" 2>/dev/null)"
+  assert_eq "it is one line of JSON" "1" "$(wc -l < "$STATE" | tr -d ' ')"
+  assert_eq "no temp file is left beside it" "12.json" "$(ls -A "${STATE%/*}")"
+
+  # Text from the issue, the result line, or gh's answer never reaches the file.
+  mkdir -p "$TMP/stubs-odd"
+  cat > "$TMP/stubs-odd/gh" <<'EOF2'
+#!/usr/bin/env bash
+case "$*" in
+  "api repos/o/r/issues/12") echo '{"title":"\u001b[31mred pwned","body":"x"}' ;;
+  *"-X POST"*) cat > /dev/null; printf '9x9\thttps://evil.example/pwned\n' ;;
+  *) cat > /dev/null ;;
+esac
+EOF2
+  chmod +x "$TMP/stubs-odd/gh"
+  { assistant_text; jq -cn '{type: "result", subtype: "success", is_error: false, result: "\u001b[2J pwned"}'; } > "$f"
+  rm -f "$STATE"
+  PATH="$TMP/stubs-odd:$PATH" bash "$REPORT" "$URL" < "$f" > /dev/null 2>&1
+  assert_eq "without --session, session is null; a comment id that is not a number gives no URL" \
+    '{"session":null,"comment":null,"turns":1,"state":"finished"}' \
+    "$(jq -c '{session, comment, turns, state}' "$STATE" 2>/dev/null)"
+  assert_lacks "...and nothing from the issue, the result, or gh's answer is in it" "pwned" "$(cat "$STATE")"
+  assert_lacks "...no escape character either" "$(printf '\033')" "$(cat "$STATE")"
+
+  # It is written with every comment write, not only at the end.
+  new_log; rm -f "$STATE"
+  clock="$TMP/clock"; echo 1000 > "$clock"
+  fifo="$TMP/fifo-state"; rm -f "$fifo"; mkfifo "$fifo"
+  JIKKYO_CLOCK_FILE="$clock" JIKKYO_TODO_INTERVAL=0 bash "$REPORT" --session "$SID" "$URL" < "$fifo" > "$TMP/out" 2>&1 &
+  rpid=$!
+  exec 4> "$fifo"
+  sleep 0.6
+  assert_eq "the first comment write writes a running state file" '{"state":"running","done":0,"total":0,"eta_secs":null,"updated":1000}' \
+    "$(jq -c '{state, done, total, eta_secs, updated}' "$STATE" 2>/dev/null)"
+  echo 1100 > "$clock"; { create t1 1; create t2 2; update u1 1 completed; } >&4; sleep 0.6
+  assert_eq "a todo write updates it, with the remaining-time estimate in seconds" \
+    '{"state":"running","done":1,"total":2,"eta_secs":100,"updated":1100,"started":1000}' \
+    "$(jq -c '{state, done, total, eta_secs, updated, started}' "$STATE" 2>/dev/null)"
+  assert_has "...the same estimate the comment shows" "~1m 40s left" "$(heading "$(last_body)")"
+  echo 1500 > "$clock"; sleep 0.6
+  assert_eq "a heartbeat write refreshes updated" "1500" "$(jq -r '.updated' "$STATE" 2>/dev/null)"
+  echo 1510 > "$clock"
+  kill -s TERM "$rpid"; wait "$rpid" 2>/dev/null
+  exec 4>&-
+  assert_eq "a signal writes the interrupted state" '{"state":"interrupted","updated":1510,"eta_secs":null}' \
+    "$(jq -c '{state, updated, eta_secs}' "$STATE" 2>/dev/null)"
+  rm -f "$fifo"
+
+  # A Japanese issue records ja.
+  printf '%s\n' '{"title":"日本語の issue","body":"本文"}' > "$TMP/issue-ja-state.json"
+  new_log; rm -f "$STATE"
+  printf '%s\n' "$(result_ok)" | GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" "$URL" > /dev/null 2>&1
+  assert_eq "the language goes into the state file" "ja" "$(jq -r '.lang' "$STATE" 2>/dev/null)"
+
+  # From a linked worktree the file goes to the shared common dir.
+  git -C "$CWD_REPO" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+  git -C "$CWD_REPO" worktree add -q "$TMP/cwd-wt" 2>/dev/null
+  new_log; rm -f "$STATE"
+  printf '%s\n' "$(result_ok)" | (cd "$TMP/cwd-wt" && bash "$REPORT" "$URL") > /dev/null 2>&1
+  if [ -f "$STATE" ] && [ ! -e "$TMP/cwd-wt/.git/jikkyo" ]; then ok "from a linked worktree it is written to the common dir"
+  else bad "from a linked worktree it is written to the common dir"; fi
+  git -C "$CWD_REPO" worktree remove --force "$TMP/cwd-wt"
+
+  # Outside a git repository, or when the directory cannot be written, the run goes on.
+  mkdir -p "$TMP/nogit"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | (cd "$TMP/nogit" && bash "$REPORT" "$URL") > "$TMP/out" 2>&1 || rc=$?
+  assert_eq "outside a git repository the run still reports and exits 0" "0:2" "$rc:$(calls)"
+  rm -f "$STATE"; chmod 500 "${STATE%/*}"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+  chmod 700 "${STATE%/*}"
+  assert_eq "an unwritable state directory does not stop the run" "0:2" "$rc:$(calls)"
+  assert_eq "...and leaves no file" "" "$(ls -A "${STATE%/*}")"
+}
+
 echo "launch.sh"
 {
   repo="$TMP/repo"
@@ -767,6 +869,9 @@ echo "launch.sh"
     "<!-- jikkyo:status v=1 state=finished branch=worktree-$name -->" "$(last_body | head -n 1)"
   assert_has "...and into the Branch row" "| Branch | \`worktree-$name\` |" "$(last_body)"
   assert_has "the final message reaches the output" "All done. Opened PR #99." "$out"
+  assert_eq "the run's state file is in the repository's common dir, with the session id" \
+    "$(jq -cn --arg sid "$SID" '{state: "finished", session: $sid, number: 12}')" \
+    "$(jq -c '{state, session, number}' "$root/.git/jikkyo/12.json" 2>/dev/null)"
 
   # From a subdirectory the worktree path is still under the repository root.
   mkdir -p "$repo/sub/dir"

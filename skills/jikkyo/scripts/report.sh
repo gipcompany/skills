@@ -53,6 +53,23 @@
 # once and printed as `jikkyo: language <ja|en>`. The hidden marker, the state
 # values in it, and the number and duration formats are the same in both.
 #
+# State file: every time it writes the status comment, and at exit, it also
+# writes <git common dir>/jikkyo/<N>.json (the common dir of the checkout it
+# runs in, shared by all its worktrees, never committed) for the status line
+# (scripts/statusline.sh). It is written to a temp file in the same directory
+# and renamed into place, so a reader never sees half of one. It holds only
+# numbers, the state, the language, the session id, and URLs built from
+# validated parts:
+#
+#   {"v":1,"issue":"<issue URL>","number":<N>,"state":"running","done":3,
+#    "total":5,"turns":12,"started":<epoch>,"updated":<epoch>,"eta_secs":720,
+#    "lang":"en","session":"<session id>","comment":"<status comment URL>"}
+#
+# eta_secs is the remaining-time estimate in seconds, null when there is
+# none; session and comment are null when unknown. Nothing deletes the file;
+# the next run of the issue overwrites it. Outside a git repository, or when
+# the directory cannot be written, there is no state file and the run goes on.
+#
 # Tuning, for tests: JIKKYO_TODO_INTERVAL (30), JIKKYO_HEARTBEAT_INTERVAL (300),
 # JIKKYO_TICK (1, seconds between scheduler passes), JIKKYO_MIN_GAP (1, seconds
 # between two writes), JIKKYO_CLOCK_FILE (read "now" in epoch seconds from this
@@ -219,12 +236,58 @@ state_file="$work/state.json"
 printf '%s\n' '{"done":0,"total":0,"turns":0,"result":null}' > "$state_file"
 
 start_ts="$(now)"
+
+state_out=""
+if common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+   && [ -n "$common_dir" ]; then
+  state_out="${common_dir}/jikkyo/${num}.json"
+fi
 comment_id=""
 comment_url=""
 last_write=""        # clock time of the last write
 last_write_real=""   # $SECONDS at the last write, for the 1-second gap
 last_key=""          # progress shown by the last write
 final_done=""
+
+# eta_secs <state> <done> <total> <elapsed secs>: the estimated seconds left,
+# or nothing. The run-wide rate so far, applied to the todos left. Only while
+# running, and only with at least one completed todo; with no rate to go on
+# there is no estimate rather than a made-up time.
+eta_secs() {
+  local st="$1" completed="$2" total="$3" secs="$4"
+  if [ "$st" = running ] && [ "$total" -gt 0 ] && [ "$completed" -gt 0 ]; then
+    [ "$secs" -lt 0 ] && secs=0
+    echo $((secs * (total - completed) / completed))
+  fi
+}
+
+# publish <state> <state.json contents> <end ts or empty>: write the state
+# file (see the top of this file). Any failure leaves the old file and is
+# otherwise ignored: the status line is a convenience, the comment is the record.
+publish() {
+  [ -n "$state_out" ] || return 0
+  local st="$1" json="$2" end_ts="$3" t dir tmp eta comment=""
+  t="${end_ts:-$(now)}"
+  dir="${state_out%/*}"
+  eta="$(eta_secs "$st" "$(jq -r '.done' <<<"$json")" "$(jq -r '.total' <<<"$json")" $((t - start_ts)))"
+  [[ "$comment_id" =~ ^[1-9][0-9]*$ ]] \
+    && comment="https://github.com/${owner}/${repo}/issues/${num}#issuecomment-${comment_id}"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  tmp="$(mktemp "${dir}/.${num}.json.XXXXXX" 2>/dev/null)" || return 0
+  if jq -c -n --argjson s "$json" --arg st "$st" --arg lang "$LANG_CODE" --arg session "$session" \
+       --arg issue "https://github.com/${owner}/${repo}/issues/${num}" --arg comment "$comment" \
+       --argjson number "$num" --argjson started "$start_ts" --argjson updated "$t" \
+       --arg eta "$eta" \
+       '{v: 1, issue: $issue, number: $number, state: $st, done: $s.done, total: $s.total,
+         turns: $s.turns, started: $started, updated: $updated,
+         eta_secs: (if $eta == "" then null else ($eta | tonumber) end), lang: $lang,
+         session: (if $session == "" then null else $session end),
+         comment: (if $comment == "" then null else $comment end)}' > "$tmp" 2>/dev/null \
+     && mv -f "$tmp" "$state_out" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp"
+}
 
 # body <state> <state.json contents> <end ts or empty>
 body() {
@@ -248,12 +311,9 @@ body() {
   if [ -n "$end_ts" ]; then ended="$(fmt_time "$end_ts")"; t="$end_ts"; fi
   secs=$((t - start_ts))
   elapsed="$(fmt_duration "$secs")"
-  # Estimated time remaining: the run-wide rate so far, applied to the todos
-  # left. Only while running, and only with at least one completed todo; with
-  # no rate to go on the cell stays empty rather than showing a made-up time.
-  if [ "$st" = running ] && [ "$total" -gt 0 ] && [ "$completed" -gt 0 ]; then
-    [ "$secs" -lt 0 ] && secs=0
-    eta="$(fmt_duration $((secs * (total - completed) / completed)))"
+  eta="$(eta_secs "$st" "$completed" "$total" "$secs")"
+  if [ -n "$eta" ]; then
+    eta="$(fmt_duration "$eta")"
     eta_cell="~${eta}${L_ESTIMATE}"
     eta_suffix="${L_LEFT_PRE}${eta}${L_LEFT_POST}"
   fi
@@ -313,6 +373,7 @@ _write() {
       --input - >/dev/null 2>&1 \
       || echo "jikkyo: could not update the status comment ${comment_id}" >&2
   fi
+  publish "$st" "$json" "$end_ts"
   last_write="$(now)"
   last_write_real="$SECONDS"
   last_key="$(jq -c '[.done, .total]' <<<"$json")"
