@@ -4,7 +4,7 @@
 # issue's comments alone, so the answer is the same on every machine.
 #
 #   gh api --paginate repos/<o>/<r>/issues/<N>/comments \
-#     | precheck.sh --author <login> [--now <epoch>] [--force]
+#     | precheck.sh --author <login> [--now <epoch>] [--force | --resume <N>]
 #
 # Prints exactly one decision line:
 #
@@ -12,6 +12,22 @@
 #   refuse <comment URL>   a live run is reporting there; do not start.
 #   rewrite <id> [<id>…]   rewrite each of these status comments to
 #                          `interrupted` (see --payload), then start.
+#
+# With --resume <N> (<N> is the issue's number) the question is whether an
+# earlier run can be resumed, and the lines are:
+#
+#   refuse <comment URL>   as above: a live run is reporting there.
+#   rewrite <id> [<id>…]   as above; after rewriting, run the same check
+#                          again, so a run that died at `running` can be the
+#                          one resumed.
+#   resume <branch> <id>   resume the branch named in status comment <id>:
+#                          the latest `interrupted` or `failed` one counted.
+#   none                   nothing to resume: no such comment, or the latest
+#                          one names no branch, or a branch of another issue.
+#
+# The branch printed with `resume` is always exactly
+# `worktree-jikkyo-<N>-<8 digits>-<6 digits>` and the id is all digits: that
+# is the only text from the comments that leaves this script for a command line.
 #
 # Only jikkyo's own status comments count: a body that starts with the hidden
 # `<!-- jikkyo:status v=1 state=… [branch=…] -->` marker AND an author (`user.login`)
@@ -36,20 +52,21 @@ set -uo pipefail
 STALE_AFTER=900
 
 usage() {
-  echo "usage: precheck.sh --author <login> [--now <epoch>] [--force] < comments.json" >&2
+  echo "usage: precheck.sh --author <login> [--now <epoch>] [--force | --resume <N>] < comments.json" >&2
   echo "       precheck.sh --payload < comment.json" >&2
   exit 2
 }
 
 command -v jq >/dev/null 2>&1 || { echo "precheck.sh: jq is required" >&2; exit 2; }
 
-author="" now="" force=false payload=false
+author="" now="" force=false payload=false resume="" resuming=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --author) [ "$#" -ge 2 ] || usage; author="$2"; shift 2 ;;
     --now) [ "$#" -ge 2 ] || usage; now="$2"; shift 2 ;;
     --force) force=true; shift ;;
     --payload) payload=true; shift ;;
+    --resume) [ "$#" -ge 2 ] || usage; resume="$2"; resuming=true; shift 2 ;;
     *) usage ;;
   esac
 done
@@ -61,7 +78,7 @@ done
 MARKER_RE='^<!-- jikkyo:status v=1 state=(?<state>[a-z]+)(?: branch=(?<branch>worktree-jikkyo-[0-9]+-[0-9]{8}-[0-9]{6}))? -->'
 
 if [ "$payload" = true ]; then
-  if [ -n "$author" ] || [ -n "$now" ] || [ "$force" = true ]; then usage; fi
+  if [ -n "$author" ] || [ -n "$now" ] || [ "$force" = true ] || [ "$resuming" = true ]; then usage; fi
   out="$(jq -c --arg re "$MARKER_RE" '
     if type == "array" then .[0] else . end
     | (.body // "") as $b
@@ -93,6 +110,11 @@ fi
 [ -n "$author" ] || usage
 [ -n "$now" ] || now="$(date '+%s')"
 case "$now" in '' | *[!0-9]*) usage ;; esac
+# A forced resume would take a live run's branch out from under it.
+if [ "$resuming" = true ]; then
+  [ "$force" = false ] || usage
+  [[ "$resume" =~ ^[1-9][0-9]*$ ]] || usage
+fi
 input="$(cat)"
 
 # `gh api --paginate` prints one array per page; slurp and flatten them. A
@@ -103,14 +125,27 @@ if ! jq -e -s 'length > 0 and all(.[]; type == "array")' >/dev/null 2>&1 <<<"$in
   exit 2
 fi
 jq -r -s --arg re "$MARKER_RE" --arg author "$author" --argjson now "$now" \
-  --argjson force "$force" --argjson stale "$STALE_AFTER" '
+  --argjson force "$force" --argjson stale "$STALE_AFTER" --arg resume "$resume" '
   [ flatten(1)[]
     | select(type == "object" and .user.login? == $author)
-    | ((.body // "") | capture($re).state? // null) as $s
-    | select($s == "running")
-    | {id, url: .html_url,
-       age: ($now - ((.updated_at // .created_at) | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601))} ] as $running
-  | if $running == [] then "start"
+    | ((.body // "") | capture($re)? // null) as $m
+    | select($m != null)
+    | {id, url: .html_url, state: $m.state, branch: $m.branch,
+       age: ($now - ((.updated_at // .created_at) | sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601))} ] as $counted
+  | [ $counted[] | select(.state == "running") ] as $running
+  | if $resume != "" then
+      if any($running[]; .age < $stale) then "refuse " + ([$running[] | select(.age < $stale)][0].url)
+      elif $running != [] then "rewrite " + ($running | map(.id | tostring) | join(" "))
+      else
+        # Comment ids grow with creation, so the largest is the latest run.
+        ([ $counted[] | select(.state == "interrupted" or .state == "failed")
+           | select((.id | type) == "number") ] | max_by(.id)) as $last
+        | if $last == null then "none"
+          elif ($last.branch // "" | test("^worktree-jikkyo-" + $resume + "-[0-9]{8}-[0-9]{6}$"))
+            then "resume " + $last.branch + " " + ($last.id | tostring)
+          else "none" end
+      end
+    elif $running == [] then "start"
     elif $force then "rewrite " + ($running | map(.id | tostring) | join(" "))
     elif any($running[]; .age < $stale) then "refuse " + ([$running[] | select(.age < $stale)][0].url)
     else "rewrite " + ($running | map(.id | tostring) | join(" "))

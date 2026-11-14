@@ -48,7 +48,16 @@ timing and signal tests waiting on a real scheduler.
   right after State shows it; with no second argument the marker has no
   `branch=` and the row is empty. A branch for another issue number, wrong
   digit counts, another prefix, a newline, ` -->`, `$(…)`, an empty string,
-  or a third argument is exit 2 with no `gh` write.
+  or a third argument that is not a comment id is exit 2 with no `gh` write.
+- **`report.sh`, a resumed run** — with a third argument, the numeric id of
+  the earlier run's status comment, a new comment is posted (the earlier one
+  is never written), its marker carries the same branch, and a
+  `Resumed from` row right after `Branch` links
+  `https://github.com/o/r/issues/12#issuecomment-<id>` (`再開元` /
+  `前回の実行` in Japanese); a fresh run has no such row; `--payload` on a
+  resumed Japanese comment keeps the row. An empty id, `0`, a leading zero,
+  letters, a space, `$(…)`, a newline, a URL, or a fourth argument is exit 2
+  with no `gh` write.
 - **`report.sh`, the language of the issue** — the `gh` stub answers the
   issue read (`gh api repos/o/r/issues/12`, logged apart from the writes) with
   `$GH_ISSUE`. An English issue gives today's English text; Japanese in the
@@ -96,7 +105,25 @@ timing and signal tests waiting on a real scheduler.
   `git push`. The worktree name, path, and branch are printed before the child
   starts, and the path is under the repository root even from a subdirectory.
   That branch is passed to `report.sh`, so it ends up in the comment's
-  marker and `Branch` row.
+  marker and `Branch` row. A fresh run gets no resume instruction.
+- **`launch.sh --resume`** — against a real bare remote reached through the
+  issue's GitHub URL (`url.<file>.insteadOf`, with a thin `git` wrapper that
+  shows the GitHub URL in `remote -v` and logs every git command line):
+  missing or extra arguments, `--resume` after the URL, a branch for another
+  issue, `main`, ` -->`, `$(…)`, a bad comment id, or a URL of another issue
+  are exit 2 before any worktree, child, or `gh` write. A good resume adds a
+  new worktree `jikkyo-<N>-<timestamp>` on the branch at the pushed tip,
+  tracking `origin/<branch>`, prints the worktree lines (naming the resumed
+  branch) first, and runs the child inside it without `--worktree`, with the
+  same flags and deny list and the resume instruction last, after the log
+  instruction. A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and
+  backticks never reaches the child's or any git command line and is never
+  run; the git command lines are exactly the expected five. The status
+  comment is a new one with the same branch and a `Resumed from` row. It
+  refuses, before printing the worktree lines, a branch checked out in
+  another worktree, a local branch with a commit the remote lacks (left
+  where it was), and a branch not on the remote; a local branch behind the
+  remote is brought up to the pushed tip.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and
@@ -116,7 +143,17 @@ timing and signal tests waiting on a real scheduler.
   same decisions as markers without it (also side by side), a malformed
   `branch=` does not count, and `--payload` keeps the `branch=` field and
   the Branch row, for a built comment and for the comments `report.sh`
-  itself wrote with a branch in English and in Japanese.
+  itself wrote with a branch in English and in Japanese. With `--resume <N>`:
+  `none` with no comments, for a `finished` run, another author, a latest
+  run without a branch, a branch of another issue (also `jikkyo-123-` for
+  12), or a malformed one; `resume <branch> <id>` for the latest
+  `interrupted` or `failed` comment (by id, also when a later run
+  `finished`), in English or Japanese, and nothing but that shape on the
+  line; `refuse` for a live `running` comment (also at 14 m 59 s); `rewrite`
+  for a stale one, after which the same check resumes it; and exit 2 for
+  `--force` with `--resume`, a bad issue number (empty, `0`, a leading zero,
+  `$(…)`-like text, letters), `--payload` with `--resume`, or a failed
+  listing.
 - **`cleanup.sh`** — `remove` only for a worktree with no uncommitted changes
   (untracked, modified, and staged files all count) whose HEAD is on a
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed
@@ -126,4 +163,7 @@ timing and signal tests waiting on a real scheduler.
 - **`SKILL.md`** — `allowed-tools` pins exactly `launch.sh`, `precheck.sh`, and
   `cleanup.sh` under `${CLAUDE_SKILL_DIR}`, with no rule for `claude`, `gh`, or
   `git`, and the skill has no injected commands; it tells the parent to write
-  the closing summary in the status comment's language.
+  the closing summary in the status comment's language, and documents the
+  `--resume` flow: the usage line, `precheck.sh --resume '<N>'`, stopping
+  when no valid branch is found, and `launch.sh --resume` with the branch
+  and comment id.
