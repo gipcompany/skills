@@ -1296,6 +1296,29 @@ echo "statusline.sh"
   done
   sl_reset
 
+  # Stale: a running file 15 minutes without a write.
+  put 27 '{"updated": 9101}'
+  assert_eq "running, 14 m 59 s since updated: still running" "jikkyo #27 · 60% · ~12m left" "$(sl)"
+  put 27 '{"updated": 9100}'
+  assert_eq "running, 15 minutes since updated: stale, not running" "jikkyo #27 · stale" "$(sl)"
+  put 27 '{"updated": 1}'
+  assert_eq "...and stays stale however old (no 5-minute window)" "jikkyo #27 · stale" "$(sl)"
+  put 27 '{"done": 0, "total": 0, "eta_secs": null, "updated": 9100}'
+  assert_eq "...also with no todos" "jikkyo #27 · stale" "$(sl)"
+  put 27 '{"updated": 9100}'
+  echo 9105 > "$sl_clock"; put 27 '{"updated": 9105}'
+  assert_eq "the next write (a heartbeat or the next run) clears stale" "jikkyo #27 · 60% · ~12m left" "$(sl)"
+  echo 10000 > "$sl_clock"
+  sl_reset
+  put 12 '{"updated": 1}'
+  assert_eq "issue 12 left stale" "jikkyo #12 · stale" "$(sl)"
+  { create t1 1; result_ok; } > "$TMP/sl-stale.jsonl"
+  new_log
+  (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stale.jsonl" > /dev/null 2>&1)
+  assert_eq "...until the next run of issue 12 overwrites its file" \
+    "jikkyo #12 · finished" "$(sl_input | bash "$STATUSLINE")"
+  sl_reset
+
   put 31 '{"state": "finished", "updated": 9950}'
   put 27
   put 5 '{"done": 0, "total": 0, "turns": 3, "eta_secs": null}'

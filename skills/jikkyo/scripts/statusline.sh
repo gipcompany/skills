@@ -18,7 +18,13 @@
 #     before the first completed todo), or `jikkyo #<N> · <turns> turns`
 #     when the run has no todos;
 #   - finished, failed, interrupted: `jikkyo #<N> · <state>` for 5 minutes
-#     after the file's `updated`, then nothing.
+#     after the file's `updated`, then nothing;
+#   - stale: `jikkyo #<N> · stale` for a `running` file whose `updated` is 15
+#     minutes old or more, for as long as the file stays (until the next run
+#     of the issue overwrites it). report.sh writes `interrupted` on TERM,
+#     HUP, and INT, so a file is left at `running` only after a SIGKILL or a
+#     crash, and the status line may be the only sign left. A live run shown
+#     as stale (after sleep, say) clears on its next heartbeat.
 #
 # Only the session that launched (or resumed) a run shows it: launch.sh gets
 # that session's ${CLAUDE_SESSION_ID} and report.sh records it as `session`.
@@ -29,6 +35,9 @@
 set -uo pipefail
 
 ENDED_SHOWN=300   # seconds an ended run stays on the line
+# A `running` file not rewritten for this long belongs to a run that is gone:
+# the heartbeat rewrites it every 5 minutes. The same threshold as precheck.sh.
+STALE_AFTER=900
 
 now() {
   if [ -n "${JIKKYO_CLOCK_FILE:-}" ]; then cat "$JIKKYO_CLOCK_FILE"; else date '+%s'; fi
@@ -60,7 +69,8 @@ def nat: type == "number" and . >= 0 and . == floor;
   | select((.done | nat) and (.total | nat) and (.turns | nat) and .done <= .total and (.updated | nat))
   | select(.eta_secs == null or (.eta_secs | nat))
   | ($now - .updated) as $age
-  | if .state == "running" then .kind = "running"
+  | if .state == "running" and $age >= $stale_after then .kind = "stale"
+    elif .state == "running" then .kind = "running"
     elif $age < $ended_shown then .kind = .state
     else empty end
   | {n: .number, kind,
@@ -102,7 +112,7 @@ main() {
           [ "$eta" -ge 0 ] && seg="${seg} · ~$(fmt_eta "$eta") left"
         elif [ "$turns" = 1 ]; then seg="jikkyo #${n} · 1 turn"
         else seg="jikkyo #${n} · ${turns} turns"; fi ;;
-      finished | failed | interrupted) seg="jikkyo #${n} · ${kind}" ;;
+      finished | failed | interrupted | stale) seg="jikkyo #${n} · ${kind}" ;;
       *) continue ;;
     esac
     line="${line:+${line} | }${seg}"
@@ -113,7 +123,8 @@ main() {
              IFS= read -r -d '' c < "$f"
              [ "${#c}" -le 4096 ] || continue
              printf '%s\t%s\n' "${f##*/}" "${c//$'\n'/ }"
-           done | jq -n -R -r --arg sid "$sid" --argjson now "$t" --argjson ended_shown "$ENDED_SHOWN" "$SELECT")
+           done | jq -n -R -r --arg sid "$sid" --argjson now "$t" --argjson ended_shown "$ENDED_SHOWN" \
+               --argjson stale_after "$STALE_AFTER" "$SELECT")
   [ -n "$line" ] && printf '%s\n' "$line"
   return 0
 }
