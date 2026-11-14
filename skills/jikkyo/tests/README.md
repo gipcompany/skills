@@ -108,34 +108,41 @@ timing and signal tests waiting on a real scheduler.
   marker and `Branch` row. A fresh run gets no resume instruction.
 - **`launch.sh --resume`** — against a real bare remote reached through the
   issue's GitHub URL (`url.<file>.insteadOf`, with a thin `git` wrapper that
-  shows the GitHub URL in `remote -v` and logs every git command line):
-  missing or extra arguments, empty branch or id (`--resume '' ''` included),
-  `--resume` after the URL, a branch for another issue, `main`, ` -->`,
-  `$(…)`, a bad comment id, or a URL of another issue are exit 2 before any
-  worktree, child, or `gh` write. A good resume adds a
-  new worktree `jikkyo-<N>-<timestamp>` on the branch at the pushed tip,
-  tracking `origin/<branch>`, prints the worktree lines (naming the resumed
-  branch) first, and runs the child inside it without `--worktree`, with the
-  same flags and deny list and the resume instruction last, after the log
-  instruction. A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and
-  backticks never reaches the child's or any git command line and is never
-  run; the git command lines are exactly the expected seven, with the
-  worktree list read before the fetch and the default branch fetched with
-  the resumed one. The status
-  comment is a new one with the same branch and a `Resumed from` row. It
-  refuses, before printing the worktree lines, a branch checked out in
-  another worktree, a local branch with a commit the remote lacks (left
-  where it was), a branch not on the remote, a branch whose configuration
-  differs from the remote's default branch (`.claude/settings.json`,
-  `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md`, a nested `CLAUDE.md`, a
-  nested `.claude/skills/`, and `.Claude/settings.json`, `.mcp.JSON`,
-  `pkg/claude.md` in another case), a branch still carrying a hook the
-  default branch has since removed, and a failed `git worktree add`, and
-  leaves no `refs/jikkyo/` ref behind. It resumes a branch that kept the
-  default branch's `CLAUDE.md` even from a stale checkout, and with two
-  remotes pointing at the issue's repository it fetches from and tracks
-  the first one listed. A local branch behind the remote is brought up to
-  the pushed tip.
+  shows the GitHub URL in `remote -v` and logs every git command line).
+  - Exit 2 before any worktree, child, or `gh` write for missing or extra
+    arguments, an empty branch or id (`--resume '' ''` included),
+    `--resume` after the URL, a branch for another issue, `main`, ` -->`,
+    `$(…)`, a bad comment id, or a URL of another issue.
+  - A good resume adds a new worktree `jikkyo-<N>-<timestamp>` on the
+    branch at the pushed tip, tracking `origin/<branch>`, prints the
+    worktree lines (naming the resumed branch) first, and runs the child
+    inside it without `--worktree`, with the same flags and deny list and
+    the resume instruction last. The status comment is a new one with the
+    same branch and a `Resumed from` row.
+  - A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and backticks never
+    reaches the child's or any git command line and is never run. The git
+    command lines are exactly the expected nine: the worktree list before
+    the fetch, the default branch fetched with the resumed one into a ref
+    named after the run, the whole-tree raw diff, the default branch's
+    tree, the diff of the configuration names, and the ref's removal.
+  - Refused before the worktree lines: a branch checked out in another
+    worktree, a local branch with a commit the remote lacks (left where it
+    was), a branch not on the remote, and a failed `git worktree add`.
+  - Refused for what Claude Code loads, compared with the remote's default
+    branch: a change to `.claude/settings.json`, `.mcp.json`, `CLAUDE.md`,
+    `CLAUDE.local.md`, a nested `CLAUDE.md`, or a nested `.claude/skills/`;
+    the same in another case (`.Claude/settings.json`, `.mcp.JSON`,
+    `pkg/claude.md`); a `.claude` symlink, a nested one, any new symlink,
+    and a submodule; a non-ASCII name that folds to `.mcp.json` or
+    `CLAUDE.md`; a change to the file a `CLAUDE.md` symlink on the default
+    branch points to; and a hook the default branch has since removed.
+    No `refs/jikkyo/` ref is left behind.
+  - Resumed: a branch that kept the default branch's `CLAUDE.md`, even
+    from a stale checkout; a branch with a non-ASCII name that cannot be a
+    configuration name; a branch next to a `CLAUDE.md` symlink that leaves
+    its target alone; with two remotes pointing at the issue's repository,
+    from the first one listed; and a local branch behind the remote,
+    brought up to the pushed tip.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and
@@ -155,20 +162,24 @@ timing and signal tests waiting on a real scheduler.
   same decisions as markers without it (also side by side), a malformed
   `branch=` does not count, and `--payload` keeps the `branch=` field and
   the Branch row, for a built comment and for the comments `report.sh`
-  itself wrote with a branch in English and in Japanese. With `--resume <N>`:
-  `none` with no comments, for a `finished` run, another author, a latest
-  run without a branch, a branch of another issue (also `jikkyo-123-` for
-  12), or a malformed one; `resume <branch> <id>` for the latest
-  `interrupted` or `failed` comment (by id, also when a later run of
-  another branch `finished`), but `none` once a later `finished` comment
-  names the same branch (and the branch again if it was then interrupted
-  once more; a `finished` comment by another author does not count), a
-  comment whose id is not a number never counts, in English or Japanese, and nothing but that shape on the
-  line; `refuse` for a live `running` comment (also at 14 m 59 s); `rewrite`
-  for a stale one, after which the same check resumes it; and exit 2 for
-  `--force` with `--resume`, a bad issue number (empty, `0`, a leading zero,
-  `$(…)`-like text, letters), `--payload` with `--resume`, or a failed
-  listing.
+  itself wrote with a branch in English and in Japanese.
+
+  With `--resume <N>`:
+  - `none` with no comments, for a `finished` run, another author, a latest
+    run without a branch, a branch of another issue (also `jikkyo-123-`
+    for 12), or a malformed one.
+  - `resume <branch> <id>` for the latest `interrupted` or `failed`
+    comment, by id, in English or Japanese, and nothing but that shape on
+    the line. A later `finished` run of another branch does not hide it.
+  - `none` once a later `finished` comment names the same branch, but that
+    branch again if it was then interrupted once more. A `finished` comment
+    by another author does not count, nor does a comment whose id is not a
+    number.
+  - `refuse` for a live `running` comment (also at 14 m 59 s), and
+    `rewrite` for a stale one, after which the same check resumes it.
+  - Exit 2 for `--force` with `--resume`, a bad issue number (empty, `0`, a
+    leading zero, `$(…)`-like text, letters), `--payload` with `--resume`,
+    or a failed listing.
 - **`cleanup.sh`** — `remove` only for a worktree with no uncommitted changes
   (untracked, modified, and staged files all count) whose HEAD is on a
   remote-tracking branch: pushed, or no new commits. `keep` for an unpushed

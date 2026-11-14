@@ -877,10 +877,12 @@ EOF
   assert_eq "resume: the git calls" "$(printf '%s\n' \
       "-C $rroot remote -v" \
       "-C $rroot worktree list --porcelain" \
-      "-C $rroot fetch --quiet origin +refs/heads/$BR:refs/remotes/origin/$BR +HEAD:refs/jikkyo/resume-base" \
+      "-C $rroot fetch --quiet origin +refs/heads/$BR:refs/remotes/origin/$BR +HEAD:refs/jikkyo/resume-base-$name" \
       "-C $rroot show-ref --verify --quiet refs/heads/$BR" \
-      "-C $rroot diff --quiet refs/jikkyo/resume-base refs/remotes/origin/$BR -- :(glob,icase)**/.claude/** :(glob,icase)**/.mcp.json :(glob,icase)**/CLAUDE.md :(glob,icase)**/CLAUDE.local.md" \
-      "-C $rroot update-ref -d refs/jikkyo/resume-base" \
+      "-C $rroot diff --raw -z --no-renames --no-abbrev refs/jikkyo/resume-base-$name refs/remotes/origin/$BR" \
+      "-C $rroot ls-tree -r -z refs/jikkyo/resume-base-$name" \
+      "-C $rroot diff --quiet refs/jikkyo/resume-base-$name refs/remotes/origin/$BR -- :(glob,icase)**/.claude :(glob,icase)**/.claude/** :(glob,icase)**/.mcp.json :(glob,icase)**/CLAUDE.md :(glob,icase)**/CLAUDE.local.md" \
+      "-C $rroot update-ref -d refs/jikkyo/resume-base-$name" \
       "-C $rroot worktree add --quiet --track -B $BR $wpath refs/remotes/origin/$BR")" \
     "$(grep -v -e '^rev-parse' "$rs/git.log")"
   b="$(last_body)"
@@ -943,8 +945,45 @@ EOF
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
       ok "resume: refuses a branch that changes $cfg"
     else bad "resume: refuses a branch that changes $cfg (rc=$rc)"; fi
-    assert_has "...and says so" "the child would load those files" "$out"
+    assert_has "...and says so" "the child would load it" "$out"
   done
+  assert_eq "resume: ...and leaves no ref behind" "" "$(git_t -C "$rs/repo" for-each-ref refs/jikkyo/)"
+
+  # What the names alone would miss. Each case is a branch off main.
+  cfg_case() {  # <n> <label> <expected text>; the branch's change is staged in seed
+    local cbr="worktree-jikkyo-12-20261114-4000$1"
+    git_t -C "$rs/seed" commit -q -m "cfg $1"
+    git_t -C "$rs/seed" push -q origin "$cbr" 2>/dev/null
+    launch_resume --resume "$cbr" 4242 "$URL"
+    if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
+      ok "resume: refuses $2"
+    else bad "resume: refuses $2 (rc=$rc)"; fi
+    assert_has "...and says so" "$3" "$out"
+  }
+  new_case() { git_t -C "$rs/seed" checkout -q -b "worktree-jikkyo-12-20261114-4000$1" main; }
+  # A .claude symlink brings in a directory the names never see.
+  new_case 01; mkdir -p "$rs/seed/evil"; echo '{"hooks":{}}' > "$rs/seed/evil/settings.json"
+  ln -s evil "$rs/seed/.claude"; git_t -C "$rs/seed" add evil .claude
+  cfg_case 01 "a .claude symlink" "a symlink or a submodule"
+  new_case 02; mkdir -p "$rs/seed/sub" "$rs/seed/evil2"; echo x > "$rs/seed/evil2/SKILL.md"
+  ln -s ../evil2 "$rs/seed/sub/.claude"; git_t -C "$rs/seed" add sub evil2
+  cfg_case 02 "a nested .claude symlink" "a symlink or a submodule"
+  new_case 03; ln -s README "$rs/seed/link"; git_t -C "$rs/seed" add link
+  cfg_case 03 "any new symlink" "a symlink or a submodule"
+  new_case 04; git_t -C "$rs/seed" update-index --add --cacheinfo "160000,$tip,lib"
+  cfg_case 04 "a submodule" "a symlink or a submodule"
+  new_case 05; printf '{}\n' > "$rs/seed/.mcp.j$(printf '\305\277')on"; git_t -C "$rs/seed" add -A
+  cfg_case 05 "a non-ASCII name that folds to .mcp.json" "non-ASCII characters"
+  new_case 06; printf 'x\n' > "$rs/seed/CLAUDE$(printf '\314\201').md"; git_t -C "$rs/seed" add -A
+  cfg_case 06 "CLAUDE.md with a combining mark" "non-ASCII characters"
+  # A non-ASCII name that cannot be a configuration name is fine.
+  new_case 07; mkdir -p "$rs/seed/docs"; printf 'x\n' > "$rs/seed/docs/$(printf '\346\227\245\346\234\254').md"
+  git_t -C "$rs/seed" add -A; git_t -C "$rs/seed" commit -q -m "docs"
+  git_t -C "$rs/seed" push -q origin worktree-jikkyo-12-20261114-400007 2>/dev/null
+  launch_resume --resume worktree-jikkyo-12-20261114-400007 4242 "$URL"
+  assert_eq "resume: a non-ASCII name that is no configuration name is resumed" "0" "$rc"
+  wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
+  git_t -C "$rs/repo" worktree remove "$wpath"
   assert_eq "resume: ...and leaves no ref behind" "" "$(git_t -C "$rs/repo" for-each-ref refs/jikkyo/)"
 
   # A fresh branch for the cases below, so none of the ones above is in the way.
@@ -1014,7 +1053,31 @@ EOF
   launch_resume --resume "$BR8" 4242 "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: refuses a branch still carrying a hook main removed"
   else bad "resume: refuses a branch still carrying a hook main removed (rc=$rc)"; fi
-  assert_has "...and says how to clear it" "rebase it on the default branch" "$out"
+  assert_has "...and says how to clear it" "merge origin's default branch into it and push it with a plain git push" "$out"
+
+  # CLAUDE.md on main is a symlink to AGENTS.md: a branch that changes
+  # AGENTS.md changes what the child loads, and is refused; a branch that
+  # changes something else is resumed.
+  git_t -C "$rs/seed" checkout -q main
+  git_t -C "$rs/seed" rm -q CLAUDE.md
+  printf 'agents\n' > "$rs/seed/AGENTS.md"
+  ln -s AGENTS.md "$rs/seed/CLAUDE.md"
+  git_t -C "$rs/seed" add AGENTS.md CLAUDE.md
+  git_t -C "$rs/seed" commit -q -m "main: CLAUDE.md -> AGENTS.md"
+  git_t -C "$rs/seed" push -q origin main 2>/dev/null
+  git_t -C "$rs/seed" checkout -q -b worktree-jikkyo-12-20261114-500001 main
+  printf 'injected\n' >> "$rs/seed/AGENTS.md"
+  git_t -C "$rs/seed" commit -q -am "branch: AGENTS.md"
+  git_t -C "$rs/seed" push -q origin worktree-jikkyo-12-20261114-500001 2>/dev/null
+  launch_resume --resume worktree-jikkyo-12-20261114-500001 4242 "$URL"
+  if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "resume: refuses a branch that changes the file CLAUDE.md links to"
+  else bad "resume: refuses a branch that changes the file CLAUDE.md links to (rc=$rc)"; fi
+  assert_has "...and says so" "a file one of them links to" "$out"
+  BR9="worktree-jikkyo-12-20261114-500002"
+  push_branch "$BR9"
+  launch_resume --resume "$BR9" 4242 "$URL"
+  assert_eq "resume: ...but resumes one that leaves it alone" "0" "$rc"
+  assert_eq "resume: no ref is left behind at the end" "" "$(git_t -C "$rs/repo" for-each-ref refs/jikkyo/)"
 }
 
 # ===========================================================================

@@ -114,8 +114,8 @@ fi
 case "$now" in '' | *[!0-9]*) usage ;; esac
 # A forced resume would take a live run's branch out from under it.
 if [ "$resuming" = true ]; then
-  [ "$force" = false ] || usage
-  [[ "$resume_num" =~ ^[1-9][0-9]*$ ]] || usage
+  [ "$force" = false ] || { echo "precheck.sh: --force and --resume cannot be combined" >&2; usage; }
+  [[ "$resume_num" =~ ^[1-9][0-9]*$ ]] || { echo "precheck.sh: --resume takes the issue number: $resume_num" >&2; usage; }
 fi
 input="$(cat)"
 

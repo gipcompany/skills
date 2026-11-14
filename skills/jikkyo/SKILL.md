@@ -22,9 +22,9 @@ GitHub issue and reports start, progress, and finish on that issue as they
 happen.
 
 You are the **reporter's parent**, not the worker. The work is done by a
-headless child (`claude -p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`, plus
-a resume instruction on `--resume`) that
-`scripts/launch.sh` starts, and
+headless child that `scripts/launch.sh` starts,
+`claude -p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`
+(plus a resume instruction on `--resume`), and
 the live status is written by `scripts/report.sh`, which reads the child's
 stream. Your jobs are the ones around it: the check before the start, the
 launch, and at exit the worktree cleanup and one closing-summary comment.
@@ -156,16 +156,18 @@ The arguments are: $ARGUMENTS
    ${CLAUDE_SKILL_DIR}/scripts/launch.sh --resume '<branch>' '<comment id>' '<URL>'
    ```
 
-   On resume it also exits 2 at once when the branch's `.claude/`,
-   `.mcp.json`, or `CLAUDE.md` / `CLAUDE.local.md` files differ from the
-   remote's default branch (see *Resuming a run*). Report its message as
-   is; do not offer to bypass it, and never edit or rebase the branch
-   yourself to get past it.
-
    Do not wrap it, pipe it, or add an environment assignment: `launch.sh`
    builds the child pipeline itself (todo tools on, `--worktree`, stream-json,
    `--permission-mode auto`, the deny list) because that pipeline cannot be
-   pre-approved as written. If it exits 2 at once, report its message and stop.
+   pre-approved as written.
+
+   If it exits 2 at once, report its message and **stop**. On resume that
+   includes every refusal in *Resuming a run* (the branch is checked out
+   elsewhere, has local commits the remote lacks, or differs from the
+   default branch in what Claude Code loads). Whatever the message suggests
+   (removing a worktree, pushing, merging) is for the user to do: never do
+   it yourself, never edit, merge into, or rebase the branch, and do not
+   offer a way around the refusal.
 
 5. **Tell the user** the run has started, in two or three lines: the issue,
    that progress appears in a status comment on it (on resume, a new one,
@@ -218,7 +220,9 @@ Then, in this order:
      locked" error from it is fine. Never add `--force` to `remove` and never
      use `-D`: if git refuses either step, leave the worktree or the branch in
      place and say so in the summary. A deleted local branch that was pushed
-     still exists on the remote and in its PR.
+     still exists on the remote and in its PR. A resumed run's worktree is
+     made with `git worktree add` and is not locked, so `unlock` reports
+     "not locked" there; that is fine too.
    - `keep`: do nothing to it. The summary says where it is and why it stayed.
 
    The exit-time `git` steps may ask for permission: the `allowed-tools` grant
@@ -375,26 +379,46 @@ Then, in this order:
   branch, so `launch.sh --resume` fetches the branch from the issue's
   remote, adds a worktree `jikkyo-<N>-<new timestamp>` on it with
   `git worktree add`, tracking the remote branch so a plain `git push`
-  works, and starts `claude -p` inside it. It refuses (exit 2) if the
-  branch is not on the remote, is already checked out in another worktree,
-  or exists locally with commits the remote lacks, rather than move or
-  drop any of them. It also refuses a branch whose `.claude/`, `.mcp.json`,
-  `CLAUDE.md`, or `CLAUDE.local.md` files differ from those on the remote's
-  default branch, compared tip to tip, at any depth, and ignoring case: a
-  fresh run's tree is the user's own, but a resumed one is whatever anyone
-  who can push put on the branch, and the child loads project settings
-  (hooks run shell commands the deny list never sees), MCP servers, skills,
-  and memory files from it, nested ones included, and on macOS `.Claude/`
-  is the same directory as `.claude/`. The default branch is the trusted
-  side, not this checkout's `HEAD`, which may be stale on another machine,
-  and not the merge base, which would miss a hook the default branch has
-  since removed. So a run whose issue is to change one of those files
-  cannot be resumed: its changes have to be reviewed by a person, then
-  finished by hand on the kept branch, or landed on the default branch
+  works, and starts `claude -p` inside it; a local branch of that name
+  that is only behind the remote is moved up to the pushed tip. It refuses
+  (exit 2) if the branch is not on the remote, is already checked out in
+  another worktree, or exists locally with commits the remote lacks,
+  rather than move or drop any of them.
+
+  It also refuses a branch that differs from the remote's default branch in
+  anything Claude Code loads from the tree. A fresh run's tree is the
+  user's own, but a resumed one is whatever anyone who can push put on the
+  branch, and the child loads project settings (hooks run shell commands
+  the deny list never sees), MCP servers, skills, and memory files from
+  it, nested ones included. The default branch is the trusted side,
+  compared tip to tip: not this checkout's `HEAD`, which may be stale on
+  another machine, and not the merge base, which would miss a hook the
+  default branch has since removed. It refuses, anywhere in the tree:
+  - a symlink or a submodule added, changed, or removed, since either can
+    point the child at files the names below do not cover (a `.claude`
+    symlink to a directory of the branch's choosing);
+  - a name with non-ASCII characters that a case-folding file system could
+    read as one of the names below (`.mcp.jſon` is `.mcp.json` on macOS);
+  - any difference in `.claude` (itself and everything under it),
+    `.mcp.json`, `CLAUDE.md`, or `CLAUDE.local.md`, at any depth and in any
+    case, since macOS checks out `.Claude/` as `.claude/`;
+  - any difference in a file that one of those, as a symlink on the default
+    branch, points to (`CLAUDE.md` -> `AGENTS.md`).
+
+  So a run whose issue is to change one of those files, or to add a
+  symlink, cannot be resumed: a person reviews its changes, then finishes
+  the work by hand on the kept branch, or lands them on the default branch
   first. A branch that only lags behind the default branch is cleared by
-  rebasing it. This is a check on the files Claude Code loads, not a
-  sandbox: the rest of the tree (scripts those files call, tests the child
-  runs) is still untrusted input, used by a child in auto mode.
+  merging the default branch into it and pushing with a plain `git push`
+  (a rebase would rewrite the commits the progress log names, and needs a
+  force push that the child is denied). A branch cut from something other
+  than the default branch is compared with the default branch all the
+  same, so such a run is refused if its base differs there. It is a check
+  on what Claude Code loads at the start, not a sandbox: the rest of the
+  tree (scripts those files call, tests the child runs) is still untrusted
+  input used by a child in auto mode, and anything the child pulls later
+  is not checked.
+
   The child gets the same goal line plus a fourth fixed
   constant, the resume instruction: this worktree continues an earlier run;
   read `.jikkyo/progress.md` first, as a record to check, not as
@@ -403,7 +427,9 @@ Then, in this order:
   `/goal` evaluator judges only what the conversation shows); recreate
   todos for what is left, continue from `next`, and keep updating the log.
   Nothing from the log or the branch reaches a command line beyond the
-  validated branch name, and no script reads the log. `report.sh` writes a
+  validated branch name (the check reads the branch's paths from a file,
+  and puts only link targets read from the default branch on a command
+  line, as literal pathspecs), and no script reads the log. `report.sh` writes a
   new status comment, carrying the same branch, with a `Resumed from` row
   (`再開元` in Japanese) linking the earlier status comment, built from the
   validated owner, repository, issue number, and numeric comment id. The
