@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/33
 branch: worktree-jikkyo-33-20261115-082953
-updated: 2026-11-15T08:56:09+0900
-next: update tests/README.md for the new sections, run the whole suite and shellcheck (AC8)
+updated: 2026-11-15T08:57:51+0900
+next: delete this log in one commit, push, and open the PR closing #33
 
 ## Todos
 
@@ -12,7 +12,7 @@ next: update tests/README.md for the new sections, run the whole suite and shell
 - [x] statusline.sh: no network, fast, silent on errors (AC5) (1fa3b26)
 - [x] Segment wording follows ja/en (AC6) (c8239d9)
 - [x] Document both status line setups in README (AC7) (1350de3)
-- [ ] Full test suite and shellcheck pass (AC8)
+- [x] Full test suite and shellcheck pass (AC8) (89e6bf7)
 - [ ] Delete the progress log and open the PR
 
 ## Verified task-list items
@@ -24,6 +24,7 @@ next: update tests/README.md for the new sections, run the whole suite and shell
 - statusline.sh uses no network, finishes quickly, and prints nothing on any error: tests/run.sh section "statusline.sh" (gh/curl/wget/nc/ssh stubs never called and no such word in the code; 50 state files in about 0.1 s; bad stdin, bad or non-git directories, a bad clock, no jq: no output, exit 0, empty stderr; malformed, mistyped, oversized, misnamed, FIFO, directory, and unreadable files skipped while good runs still show); shellcheck clean.
 - The segment's wording follows the status comment's language: tests/run.sh section "statusline.sh" (every ja form: estimate, no estimate, turns, one turn, each ended state, stale; mixed languages on one line; unknown or missing lang skipped; the ja words checked against report.sh's labels; end to end from a Japanese issue); shellcheck clean.
 - README.md documents both setups with refreshInterval and why, and the skill edits no settings file: README "In your status line" section and SKILL.md "Status line" section checked by tests/run.sh; the README's appended example is extracted and run as written (appends the segment, adds nothing with no run); no script mentions settings.json; shellcheck clean.
+- tests/run.sh covers the state file and statusline.sh (running, no todos, ended, stale, several runs, another session, missing or malformed file, both languages), the existing suite still passes, and shellcheck passes: the whole suite ran with exit 0 and no failures (about 42 s), shellcheck over scripts/*.sh and tests/run.sh is clean, no state file landed in this checkout's .git, and tests/README.md describes the new coverage.
 
 ## Dead ends and decisions
 
