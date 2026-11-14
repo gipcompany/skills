@@ -877,9 +877,10 @@ EOF
   assert_eq "resume: the git calls" "$(printf '%s\n' \
       "-C $rroot remote -v" \
       "-C $rroot worktree list --porcelain" \
-      "-C $rroot fetch --quiet origin +refs/heads/$BR:refs/remotes/origin/$BR" \
+      "-C $rroot fetch --quiet origin +refs/heads/$BR:refs/remotes/origin/$BR +HEAD:refs/jikkyo/resume-base" \
       "-C $rroot show-ref --verify --quiet refs/heads/$BR" \
-      "-C $rroot diff --quiet HEAD...refs/remotes/origin/$BR -- .claude .mcp.json :(glob)**/CLAUDE.md :(glob)**/CLAUDE.local.md" \
+      "-C $rroot diff --quiet refs/jikkyo/resume-base refs/remotes/origin/$BR -- :(glob,icase)**/.claude/** :(glob,icase)**/.mcp.json :(glob,icase)**/CLAUDE.md :(glob,icase)**/CLAUDE.local.md" \
+      "-C $rroot update-ref -d refs/jikkyo/resume-base" \
       "-C $rroot worktree add --quiet --track -B $BR $wpath refs/remotes/origin/$BR")" \
     "$(grep -v -e '^rev-parse' "$rs/git.log")"
   b="$(last_body)"
@@ -920,12 +921,18 @@ EOF
   else bad "resume: refuses a branch that is not on the remote (rc=$rc)"; fi
   assert_lacks "...before printing worktree lines" "jikkyo: worktree" "$out"
 
+  assert_eq "resume: the default branch's ref is not left behind" "" \
+    "$(git_t -C "$rs/repo" for-each-ref refs/jikkyo/)"
+
   # A branch that changes what Claude Code loads from the tree (project
-  # settings with hooks, MCP servers, CLAUDE.md) is refused before a worktree.
+  # settings with hooks, MCP servers, CLAUDE.md, skills) is refused before a
+  # worktree: at any depth, and in any case, since macOS checks out .Claude/
+  # as .claude/.
   n=0
-  for cfg in .claude/settings.json .mcp.json CLAUDE.md sub/dir/CLAUDE.md; do
+  for cfg in .claude/settings.json .mcp.json CLAUDE.md CLAUDE.local.md sub/dir/CLAUDE.md \
+      sub/.claude/skills/x/SKILL.md .Claude/settings.json .mcp.JSON pkg/claude.md; do
     n=$((n + 1))
-    cbr="worktree-jikkyo-12-20261114-20000$n"
+    cbr="worktree-jikkyo-12-20261114-2000$(printf '%02d' "$n")"
     git_t -C "$rs/seed" checkout -q -b "$cbr" main
     mkdir -p "$rs/seed/$(dirname "$cfg")"
     echo '{}' > "$rs/seed/$cfg"
@@ -936,8 +943,9 @@ EOF
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
       ok "resume: refuses a branch that changes $cfg"
     else bad "resume: refuses a branch that changes $cfg (rc=$rc)"; fi
-    assert_has "...and says so" "the child would load them" "$out"
+    assert_has "...and says so" "the child would load those files" "$out"
   done
+  assert_eq "resume: ...and leaves no ref behind" "" "$(git_t -C "$rs/repo" for-each-ref refs/jikkyo/)"
 
   # A fresh branch for the cases below, so none of the ones above is in the way.
   push_branch() {  # <branch>: an ordinary pushed branch off main
@@ -973,6 +981,40 @@ EOF
   assert_lacks "...before printing worktree lines" "jikkyo: worktree" "$out"
   rm -f "$rs/repo/.claude/worktrees"
   mv "$rs/worktrees.saved" "$rs/repo/.claude/worktrees"
+
+  # The comparison is with the remote's default branch, tip to tip.
+  # A stale checkout: main gained a CLAUDE.md after this checkout last pulled,
+  # and the branch was cut from that main without touching it. Resumed.
+  git_t -C "$rs/seed" checkout -q main
+  echo 'shared' > "$rs/seed/CLAUDE.md"
+  git_t -C "$rs/seed" add CLAUDE.md
+  git_t -C "$rs/seed" commit -q -m "main: CLAUDE.md"
+  git_t -C "$rs/seed" push -q origin main 2>/dev/null
+  BR7="worktree-jikkyo-12-20261114-300003"
+  push_branch "$BR7"
+  launch_resume --resume "$BR7" 4242 "$URL"
+  assert_eq "resume: a stale checkout does not refuse a branch that kept main's CLAUDE.md" "0" "$rc"
+  wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
+  git_t -C "$rs/repo" worktree remove "$wpath"
+
+  # A hook main removed later is still on an old branch: refused, although the
+  # branch itself never touched it.
+  git_t -C "$rs/seed" checkout -q main
+  mkdir -p "$rs/seed/.claude"
+  echo '{"hooks":{}}' > "$rs/seed/.claude/settings.json"
+  git_t -C "$rs/seed" add .claude/settings.json
+  git_t -C "$rs/seed" commit -q -m "main: a hook"
+  git_t -C "$rs/seed" push -q origin main 2>/dev/null
+  BR8="worktree-jikkyo-12-20261114-300004"
+  push_branch "$BR8"
+  git_t -C "$rs/seed" checkout -q main
+  git_t -C "$rs/seed" rm -q .claude/settings.json
+  git_t -C "$rs/seed" commit -q -m "main: drop the hook"
+  git_t -C "$rs/seed" push -q origin main 2>/dev/null
+  launch_resume --resume "$BR8" 4242 "$URL"
+  if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: refuses a branch still carrying a hook main removed"
+  else bad "resume: refuses a branch still carrying a hook main removed (rc=$rc)"; fi
+  assert_has "...and says how to clear it" "rebase it on the default branch" "$out"
 }
 
 # ===========================================================================

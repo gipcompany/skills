@@ -119,16 +119,23 @@ timing and signal tests waiting on a real scheduler.
   same flags and deny list and the resume instruction last, after the log
   instruction. A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and
   backticks never reaches the child's or any git command line and is never
-  run; the git command lines are exactly the expected six, with the
-  worktree list read before the fetch. The status
+  run; the git command lines are exactly the expected seven, with the
+  worktree list read before the fetch and the default branch fetched with
+  the resumed one. The status
   comment is a new one with the same branch and a `Resumed from` row. It
   refuses, before printing the worktree lines, a branch checked out in
   another worktree, a local branch with a commit the remote lacks (left
-  where it was), a branch not on the remote, a branch that changes
-  `.claude/settings.json`, `.mcp.json`, `CLAUDE.md`, or a nested
-  `CLAUDE.md`, and a failed `git worktree add`; with two remotes pointing at
-  the issue's repository it fetches from and tracks the first one listed; a local branch behind the
-  remote is brought up to the pushed tip.
+  where it was), a branch not on the remote, a branch whose configuration
+  differs from the remote's default branch (`.claude/settings.json`,
+  `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md`, a nested `CLAUDE.md`, a
+  nested `.claude/skills/`, and `.Claude/settings.json`, `.mcp.JSON`,
+  `pkg/claude.md` in another case), a branch still carrying a hook the
+  default branch has since removed, and a failed `git worktree add`, and
+  leaves no `refs/jikkyo/` ref behind. It resumes a branch that kept the
+  default branch's `CLAUDE.md` even from a stale checkout, and with two
+  remotes pointing at the issue's repository it fetches from and tracks
+  the first one listed. A local branch behind the remote is brought up to
+  the pushed tip.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and

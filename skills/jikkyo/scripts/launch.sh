@@ -27,9 +27,10 @@
 # inside it. The worktree lines above name the resumed branch. It exits 2,
 # before printing them, if the branch cannot be fetched, is checked out in
 # another worktree, or exists locally with commits the remote branch lacks: it
-# never moves or drops someone's commits. It also exits 2 if the branch changed
-# .claude/, .mcp.json, or a CLAUDE.md since it left this checkout's HEAD, since
-# the child would load those from the branch. The child gets the resume
+# never moves or drops someone's commits. It also exits 2 if the branch's
+# .claude/, .mcp.json, CLAUDE.md, or CLAUDE.local.md files (at any depth, in
+# any case) differ from those on the remote's default branch, since the child
+# would load them from the branch. The child gets the resume
 # instruction after the other three, and report.sh gets the comment id, for a
 # `Resumed from` row. Only the validated branch name and the numeric id reach
 # a command line; nothing here reads the branch's files.
@@ -180,27 +181,41 @@ if [ "$resuming" = true ]; then
     echo "launch.sh: ${resume_branch} is checked out in another worktree; remove that worktree first" >&2
     exit 2
   fi
-  if ! git -C "$root" fetch --quiet "$remote" "+refs/heads/${resume_branch}:${tracking}" >&2; then
-    echo "launch.sh: could not fetch ${resume_branch} from ${remote}" >&2
+  # The remote's default branch comes along in the same fetch: it is the
+  # trusted tree the configuration check below compares against.
+  base="refs/jikkyo/resume-base"
+  if ! git -C "$root" fetch --quiet "$remote" "+refs/heads/${resume_branch}:${tracking}" "+HEAD:${base}" >&2; then
+    echo "launch.sh: could not fetch ${resume_branch} and the default branch from ${remote}" >&2
     exit 2
   fi
   if git -C "$root" show-ref --verify --quiet "refs/heads/${resume_branch}" \
      && ! git -C "$root" merge-base --is-ancestor "refs/heads/${resume_branch}" "$tracking"; then
     echo "launch.sh: the local ${resume_branch} has commits that ${remote} lacks; push or remove them first" >&2
+    git -C "$root" update-ref -d "$base" >&2
     exit 2
   fi
-  # A fresh run's tree is this checkout's own HEAD; a resumed one is whatever
-  # was pushed to the branch, by the earlier child or by anyone who can push.
-  # Claude Code reads its project settings (hooks run shell commands outside
-  # the deny list), MCP servers, and CLAUDE.md files from that tree, so a
-  # branch that changed any of them since it left this HEAD is refused.
-  git -C "$root" diff --quiet "HEAD...${tracking}" -- \
-    .claude .mcp.json ':(glob)**/CLAUDE.md' ':(glob)**/CLAUDE.local.md' >&2
-  case "$?" in
+  # A fresh run's tree is this checkout's own; a resumed one is whatever was
+  # pushed to the branch, by the earlier child or by anyone who can push.
+  # Claude Code loads project settings (hooks run shell commands outside the
+  # deny list), MCP servers, CLAUDE.md files, and skills from that tree, so
+  # every such file on the branch must be exactly as on the remote's default
+  # branch: compared tip to tip (not from the merge base, which would miss a
+  # hook the default branch removed later, and not against this checkout's
+  # HEAD, which may be stale on another machine). The patterns match at any
+  # depth, since nested .claude/ and CLAUDE.md files are loaded too, and
+  # ignore case, since a case-insensitive file system (macOS) checks out
+  # .Claude/ as .claude/. A branch that differs is refused; rebasing it on the
+  # default branch clears a difference the branch did not make.
+  git -C "$root" diff --quiet "$base" "$tracking" -- \
+    ':(glob,icase)**/.claude/**' ':(glob,icase)**/.mcp.json' \
+    ':(glob,icase)**/CLAUDE.md' ':(glob,icase)**/CLAUDE.local.md' >&2
+  diff_rc=$?
+  git -C "$root" update-ref -d "$base" >&2
+  case "$diff_rc" in
     0) ;;
-    1) echo "launch.sh: ${resume_branch} changes .claude/, .mcp.json, or a CLAUDE.md; the child would load them, so it is not resumed. Review the branch, or start a fresh run" >&2
+    1) echo "launch.sh: ${resume_branch} differs from ${remote}'s default branch in .claude/, .mcp.json, CLAUDE.md, or CLAUDE.local.md; the child would load those files, so it is not resumed. If the branch did not change them, rebase it on the default branch; if it did, review the changes and finish the work by hand, or land them on the default branch first" >&2
        exit 2 ;;
-    *) echo "launch.sh: could not compare ${resume_branch} with this checkout's HEAD" >&2
+    *) echo "launch.sh: could not compare ${resume_branch} with ${remote}'s default branch" >&2
        exit 2 ;;
   esac
   if ! git -C "$root" worktree add --quiet --track -B "$resume_branch" "$path" "$tracking" >&2; then
