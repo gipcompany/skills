@@ -240,7 +240,37 @@ Then, in this order:
    The exit-time `git` steps may ask for permission: the `allowed-tools` grant
    lasted only for the turn that invoked `/jikkyo`.
 
-2. **Post the closing summary** as a **new** comment (a new comment notifies
+2. **Check the run's branch on the remote**, so the summary can say whether
+   the run is resumable and what is left on the remote. Take the branch from
+   the `jikkyo: worktree branch` line and use it only if it matches
+   `^worktree-jikkyo-<N>-[0-9]{8}-[0-9]{6}$` for this issue's `<N>`; if the
+   line is missing or does not match, skip this step and treat the branch
+   as not on the remote. `launch.sh` passes that same branch to `report.sh`,
+   so when the line is there the status comment's marker carries
+   `branch=<branch>`. Run these two, one at a time:
+
+   ```
+   gh api 'repos/<owner>/<repo>/branches/<branch>' --jq .name
+   gh pr list --repo '<owner>/<repo>' --head '<branch>' --state all --json url --jq '.[].url'
+   ```
+
+   - The branch is **on the remote** when the first prints the branch name.
+     A 404 means it is not; any other error means it is unknown, which
+     counts as not on the remote for the resume line. This is the same
+     condition `launch.sh --resume` needs. Do not judge it from the
+     `cleanup.sh` reason: `remove` also covers a branch with no commits
+     beyond its base, which was never pushed.
+   - The run **opened a PR** when the second prints a URL. Do not judge it
+     from the final message, which is the child's text. If the listing
+     fails, say in the summary that whether a PR exists is unknown, and
+     still name the branch if it is on the remote.
+
+   The run is **resumable** when its state is `interrupted` or `failed`
+   and the branch is on the remote. Never delete, rename, or push to the
+   remote branch, whatever these show: a person decides what to do with it.
+   Like the `git` steps, these two may ask for permission.
+
+3. **Post the closing summary** as a **new** comment (a new comment notifies
    subscribers; the edited status comment does not):
 
    ```
@@ -263,8 +293,23 @@ Then, in this order:
      `/goal` evaluator may have ruled the goal impossible, or the no-progress
      guard may have stopped the loop. Say which, if the final message says. If
      there is no final message, say the run ended without one and that whether
-     the goal was met is unknown.
+     the goal was met is unknown. **Do not classify why a run stopped**
+     (usage limit, crash, error): mention a cause only when the final
+     message names it, quoted in at most one sentence.
    - Any PR or branch the final message names, as a link.
+   - **When the run is resumable** (step 2), say so and give the exact
+     command, with the URL single-quoted as on every command line here:
+     `/jikkyo --resume '<URL>'`. For `en`: `Resumable: /jikkyo --resume '<URL>'`
+     (in a code span). For `ja`: `再開できます: /jikkyo --resume '<URL>'` (the
+     same code span). Do not offer it for a `finished` run or when the
+     branch is not on the remote.
+   - **When the run opened no PR** (step 2) and its branch is on the remote,
+     name the branch as a link, `https://github.com/<owner>/<repo>/tree/<branch>`,
+     and say it is left on the remote for a person to delete once it is no
+     longer needed (for a resumable run, that is after it is resumed or
+     abandoned). For `en`: `No PR was opened. Branch <link> is left on the
+     remote; jikkyo does not delete it, so delete it once it is no longer
+     needed.` For `ja`: `PR は作られていません。ブランチ <link> はリモートに残っています。jikkyo は削除しないので、不要になったら削除してください。`
    - The worktree: removed, or kept at `<path>` (branch `<branch>`) with the
      reason `cleanup.sh` gave, and any git step that refused.
 
@@ -274,7 +319,8 @@ Then, in this order:
    or environment values. Make sure no line of the summary is exactly
    `JIKKYO_EOF`.
 
-3. **Tell the user** the outcome in one or two lines, with the summary link.
+4. **Tell the user** the outcome in one or two lines, with the summary link,
+   and the resume command when the run is resumable.
 
 ## How the pieces fit
 
