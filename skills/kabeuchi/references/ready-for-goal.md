@@ -262,3 +262,26 @@ target read back after it. If the user objects to the diff, roll it back like
 any other, and say in the closing summary that the open gaps were not recorded
 in the target.
 
+## Across sessions on the same target
+
+A target can carry a "Known gaps" section from an earlier session. It is not
+left until the end-of-session check finds the same gaps again:
+
+- **At session start** (Phase 1), when you read the target, note each entry of
+  an existing "Known gaps" section. In Phase 2 they are **on the frontier from
+  the start**: each is asked about like any other open point, one question per
+  turn, voted, and written back with a diff. Pick the order by the usual
+  rule — most upstream first — not because they are listed in the target. The
+  user can still choose to leave one open.
+- **When an entry is settled in Phase 2**, its write-back puts the answer where
+  it belongs in the body and drops that entry from "Known gaps" in the same
+  diff, and drops the heading too if it was the last entry. The target never
+  lists as a gap something it now answers.
+- **At the end, when the check runs**, the section is **replaced wholesale** by
+  the gaps left open in this session — whatever it said before — and
+  **removed** when no gap is left. It is never appended to: an old entry the
+  checker no longer reports is gone, and one it still reports is written
+  afresh in the current wording.
+- **When the user declines the check**, there is no new list to replace it
+  with, so the section stays as the Phase 2 write-backs left it.
+

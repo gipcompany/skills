@@ -269,6 +269,11 @@ gh api "repos/OWNER/REPO/issues/N" --jq .locked             # is it locked? (tru
 
 **Local file target** — if the file exists, read it. If it does not, ask whether to create it (a from-scratch spec is a legitimate use). Reject anything that is not text markdown.
 
+**Then** look for a **"Known gaps"** section in the target — the gaps an
+earlier session's "ready for `/goal`" check left open (Phase 3). Note each of
+its entries: they go on the Phase 2 frontier from the start
+(`references/ready-for-goal.md`, *Across sessions on the same target*).
+
 **Then** establish the sync baseline: normalize the body through `scripts/normalize.sh` and keep the normalized *text* as `last_synced` (it is the merge base for conflict resolution, so keep the text, not only a hash).
 
 **Then** refresh the session marker with the resolved target, so the status line
@@ -314,6 +319,9 @@ frontier as a numbered round; kabeuchi does not. This rule wins over
   answer may make some of them moot.
 - Fact-finding still runs in parallel: dispatching sub-agents or reading code is
   not asking, so it does not wait on the one-question rule.
+- Entries of an existing **"Known gaps"** section (noted in Phase 1) are on
+  the frontier from the first turn, not left for the end-of-session check to
+  find again. Settling one drops it from that section in the same write-back.
 
 Why: every settled point is written back into the target before the next
 question (below). One question per turn keeps that to one settled point and one
@@ -383,7 +391,8 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   gap, whether to close it (back into Phase 2) or leave it. After any gap is
   closed, the check runs again. Gaps left open are listed in the closing
   summary and written into the target as a **"Known gaps"** section, since the
-  `/goal` run reads only the target.
+  `/goal` run reads only the target. That section is **replaced wholesale** by
+  this session's open gaps — never appended to — and removed when none is left.
 - **Summarize what was written back** to the target at the end, and list any
   gaps the check found that were left open.
 - **Do not wander** into adjacent work on your own initiative.
