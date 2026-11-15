@@ -617,11 +617,11 @@ echo "tally.sh"
   assert_eq "a missing input file exits 2" "2" "$rc"
 }
 
-echo "status line wording (SKILL.md, references, README)"
+echo "grilled line wording (SKILL.md, references, README)"
 # The backticks below are literal markdown, never command substitution.
 # shellcheck disable=SC2016
 {
-  # The status line is found again by its fixed prefix, so every example of it
+  # The grilled line is found again by its fixed prefix, so every example of it
   # in the docs must use that exact prefix and one of the three tails. (The
   # prefix holds no ERE metacharacters, so it is used as-is in the regex.)
   REF="${HERE}/../references/ready-for-goal.md"
@@ -637,18 +637,18 @@ echo "status line wording (SKILL.md, references, README)"
     fi
   done
   # ready-for-goal.md spells out the pattern a line must match whole, outside
-  # code fences, to count as a status line; it must be this same pattern.
+  # code fences, to count as a grilled line; it must be this same pattern.
   if grep -qxF "    ^${prefix}${date_re} — (${tails})\$" "$REF"; then
-    ok "ready-for-goal.md states the exact status line pattern"
+    ok "ready-for-goal.md states the exact grilled line pattern"
   else
-    bad "ready-for-goal.md states the exact status line pattern"
+    bad "ready-for-goal.md states the exact grilled line pattern"
   fi
   for f in "${HERE}/../SKILL.md" "$REF" "$README"; do
     name="${f##*/}"
     lines="$(grep -E '^ *> Grilled with' "$f" | grep -vF '<timestamp>' | sed 's/^ *//')"
-    if [ -z "$lines" ]; then bad "${name} shows the status line"; continue; fi
+    if [ -z "$lines" ]; then bad "${name} shows the grilled line"; continue; fi
     stray="$(printf '%s\n' "$lines" | grep -vxE "${prefix}${date_re} — (${tails})")"
-    assert_eq "${name}: every status line uses the fixed prefix and a known tail" "" "$stray"
+    assert_eq "${name}: every grilled line uses the fixed prefix and a known tail" "" "$stray"
   done
 }
 

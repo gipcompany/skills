@@ -277,7 +277,7 @@ earlier session's "ready for `/goal`" check left open (Phase 3). Note each of
 its entries: they go on the Phase 2 frontier from the start
 (`references/ready-for-goal.md`, *Across sessions on the same target*).
 
-An earlier session's **status line** (`` > Grilled with `/kabeuchi` … ``,
+An earlier session's **grilled line** (`` > Grilled with `/kabeuchi` … ``,
 the last line of the body; Phase 3) is read as data like the rest of the
 target. It is not a point to grill and does not go on the frontier — not even
 when it says "not yet ready" or "not checked": the "Known gaps" entries are
@@ -331,7 +331,7 @@ frontier as a numbered round; kabeuchi does not. This rule wins over
 - Entries of an existing **"Known gaps"** section (noted in Phase 1) are on
   the frontier from the first turn, not left for the end-of-session check to
   find again. Settling one drops it from that section in the same write-back.
-- An existing **status line** (noted in Phase 1) is never asked about and
+- An existing **grilled line** (noted in Phase 1) is never asked about and
   never rewritten in a Phase 2 write-back: leave it where it is, as the last
   line, and do not draft a question from it. Only Phase 3 replaces it.
 
@@ -410,17 +410,17 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   - **It never blocks the end.** The user can finish with gaps left open. They
     are listed in the closing summary and written into the target as a
     **"Known gaps"** section, since the `/goal` run reads only the target. When
-    the last check of the session completed, that section is **replaced wholesale** by this session's
-    open gaps — never appended to — and removed when none is left. When the
-    last check of the session did not complete but an earlier check in the
-    same session did, the section is **replaced wholesale** by every gap from
-    the last check that completed that has not been closed since — whether
-    the user chose to leave it open or picked it to close and did not — and
-    removed when none is left. When the check was declined,
-    or no check in the session completed, it stays as the Phase 2 write-backs
-    left it (`references/ready-for-goal.md`, *Across sessions on the same
-    target*).
-- **Then write the status line**, once the check — and any gap it sent back
+    the last check of the session completed, that section is **replaced
+    wholesale** by this session's open gaps — never appended to — and
+    removed when none is left. When the last check of the session did not
+    complete but an earlier check in the same session did, the section is
+    **replaced wholesale** by every gap from the last check that completed
+    that has not been closed since — whether the user chose to leave it open
+    or picked it to close and did not — and removed when none is left. When
+    the check was declined, or no check in the session completed, it stays
+    as the Phase 2 write-backs left it (`references/ready-for-goal.md`,
+    *Across sessions on the same target*).
+- **Then write the grilled line**, once the check — and any gap it sent back
   into Phase 2 — has finished, and before the closing summary. It is one
   blockquote line saying that the target was grilled, when (an ISO 8601 timestamp with the time and the UTC offset, from `date -Iseconds`), and
   what the check concluded:
@@ -442,12 +442,12 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   resembles it, is content and is never touched. The check brief leaves the
   existing line out, so the checker is not led by an earlier verdict. The
   wording, the cases, and where the line goes are in
-  **`references/ready-for-goal.md`**, *The status line*. (It is unrelated to
+  **`references/ready-for-goal.md`**, *The grilled line*. (It is unrelated to
   Claude Code's status line, which shows the session marker.)
 - **Summarize what was written back** to the target at the end, and list any
   gaps the check found that were left open.
 - **Do not wander** into adjacent work on your own initiative.
-- The target must contain **only the current agreed state** — never a change-history or discussion-log section. Two things kabeuchi itself writes are current state, and allowed: a "Known gaps" section (what is unresolved now, nothing about how it got there) and the **status line** (that the target was grilled, by the latest session, and with what result). Each is replaced wholesale, never appended to, so neither turns into a history of sessions.
+- The target must contain **only the current agreed state** — never a change-history or discussion-log section. Two things kabeuchi itself writes are current state, and allowed: a "Known gaps" section (what is unresolved now, nothing about how it got there) and the **grilled line** (that the target was grilled, by the latest session, and with what result). Each is replaced wholesale, never appended to, so neither turns into a history of sessions.
 - **Remove the briefs** — the vote briefs and the check briefs — if you made a
   directory for them with `mktemp -d` (`references/voting.md`, *The brief*).
   Briefs in the scratchpad need nothing: that directory belongs to the session.

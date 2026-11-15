@@ -159,7 +159,7 @@ The check costs one more subagent run when you answer "yes", one more after each
 
 The checklist lives in [`references/ready-for-goal.md`](skills/kabeuchi/references/ready-for-goal.md). kabeuchi refuses an installed `kabeuchi-voter` copied before the checker role existed, so re-copy it when you update the skill.
 
-### A status line in the target
+### A grilled line in the target
 
 Every session that gets past startup ends by writing one line as the last line of the target — after any "Known gaps" section, in an issue body and a local file alike — so anyone who reads the target (you, `/goal`, or `/jikkyo`'s run) can tell that it was grilled, when (an ISO 8601 timestamp with the time and your UTC offset), and what the check concluded:
 
