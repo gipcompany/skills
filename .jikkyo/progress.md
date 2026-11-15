@@ -1,12 +1,12 @@
 issue: https://github.com/gipcompany/skills/issues/45
 branch: worktree-jikkyo-45-20261115-171418
-updated: 2026-11-15T17:20:00+09:00
-next: AC3: write the ready-for-/goal checklist under references/
+updated: 2026-11-15T17:28:00+09:00
+next: AC2: add the checker role to kabeuchi-voter, plus description and preflight check
 
 ## Todos
 
-- [x] Start the progress log (pending hash: this commit)
-- [ ] AC3: Write the ready-for-/goal checklist under references/
+- [x] Start the progress log (0339140)
+- [x] AC3: Write the ready-for-/goal checklist under references/ (2a93ea5)
 - [ ] AC2: Add the checker role to kabeuchi-voter, plus description and preflight check
 - [ ] AC1: Run the ready-for-/goal check in Phase 3 before the closing summary
 - [ ] AC4: Define the result format (each gap with its part of the target; ready when none)
@@ -20,8 +20,9 @@ next: AC3: write the ready-for-/goal checklist under references/
 
 ## Verified task-list items
 
-(none yet)
+- The checklist is written down in the skill: references/ready-for-goal.md holds all six items from the issue (Goal, Done criteria, Scope, No open decisions, Self-contained, Constraints), checked by reading the file against the issue body.
 
 ## Dead ends and decisions
 
 - The checklist goes in a new references/ready-for-goal.md (the issue allows SKILL.md or references/); SKILL.md Phase 3 points to it, the same way Phase 2 points to voting.md.
+- Worktree-isolated session: git runs as `git -C <worktree>` one command per call, since compound shell commands and `cd` are refused.
