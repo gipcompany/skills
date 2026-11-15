@@ -2042,10 +2042,13 @@ echo "SKILL.md"
     assert_has "README.md: ticks after the push (#41)" "that todo's commits are pushed (one todo per task-list item; the order is complete, push, tick" "$readme"
     assert_lacks "README.md: no tick right after completing the todo (#41)" "right after completing that item's todo" "$readme"
     assert_has "README.md: resume redoes a box ticked without its work (#41)" "a box that is ticked with no work behind it on the branch is done again and stays ticked" "$readme"
-    assert_has "README.md: the status line section" "### In your status line" "$readme"
+    # The README has an "### In your status line" under "## kabeuchi" too, so
+    # the status line checks look inside the "## jikkyo" section only.
+    readme_jikkyo="$(awk '/^## /{ f = ($0 == "## jikkyo") } f' "$README_MD")"
+    assert_has "README.md: the status line section, under ## jikkyo" "### In your status line" "$readme_jikkyo"
     assert_has "README.md: the standalone setup, with refreshInterval" \
       '{"statusLine": {"type": "command", "command": "/absolute/path/to/jikkyo/scripts/statusline.sh", "refreshInterval": 10}}' "$readme"
-    assert_has "README.md: the appended setup" "**Appended to the status line you already have**" "$readme"
+    assert_has "README.md: the appended setup, under ## jikkyo" "**Appended to the status line you already have**" "$readme_jikkyo"
     # shellcheck disable=SC2016  # literal backticks
     assert_has "README.md: ...keeps refreshInterval too" 'keep (or add) `"refreshInterval": 10` on your `statusLine` entry' "$readme"
     assert_has "README.md: why refreshInterval" "the session that launched it is idle" "$readme"
@@ -2057,7 +2060,7 @@ echo "SKILL.md"
     # The appended example works as written, with its two paths filled in.
     printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
     chmod +x "$TMP/my-statusline.sh"
-    sed -n '/^  #!\/usr\/bin\/env bash$/,/^  printf/p' "$README_MD" | sed -e 's/^  //' \
+    printf '%s\n' "$readme_jikkyo" | sed -n '/^  #!\/usr\/bin\/env bash$/,/^  printf/p' | sed -e 's/^  //' \
       -e "s|~/.claude/my-statusline.sh|$TMP/my-statusline.sh|" \
       -e "s|/absolute/path/to/jikkyo/scripts/statusline.sh|$STATUSLINE|" > "$TMP/wrapper.sh"
     sl_reset; put 27

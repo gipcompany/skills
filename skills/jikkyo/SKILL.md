@@ -393,7 +393,8 @@ of **the session that launched or resumed the run** only: it matches the
 status comment, which is the record: the status line is a convenience, and
 anything that can write to `.git` can write a state file.
 This skill never edits a settings file: if the user asks about the status line,
-point them at the README's *In your status line*, which shows both setups (the
+point them at *In your status line* in the README's `## jikkyo` section (the
+kabeuchi section has one of its own), which shows both setups (the
 whole status line, or appended to their own), each with `refreshInterval`,
 needed because this session is idle while the run goes.
 
