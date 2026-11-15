@@ -2056,7 +2056,7 @@ echo "SKILL.md"
   fi
   assert_has "SKILL.md: a Status line section" "## Status line" "$skill"
   assert_has "SKILL.md: the skill never edits settings" "This skill never edits a settings file" "$skill"
-  assert_has "SKILL.md: refreshInterval and why" "with \`refreshInterval\`, needed because this session is idle while the run" "$skill"
+  assert_has "SKILL.md: refreshInterval and why" "\`refreshInterval\`, needed because this session is idle while the run goes." "$skill"
   # No script writes Claude Code settings.
   for s in launch report precheck cleanup statusline; do
     assert_lacks "$s.sh does not touch settings.json" "settings.json" "$(grep -v '^ *#' "$SCRIPTS/$s.sh")"
