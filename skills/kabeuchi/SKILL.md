@@ -9,7 +9,7 @@ description: "Use when you want a relentless /grilling (kabeuchi / 壁打ち) se
   which votes on every recommendation. Not for read-only targets, arbitrary web
   URLs, GitHub PR bodies, Gists, or issue-number shorthand."
 disable-model-invocation: true
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/mark.sh *) Bash(true)
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/mark.sh *) Bash(true) Bash(date -Iseconds)
 hooks:
   UserPromptSubmit:
     - hooks:
@@ -277,6 +277,12 @@ earlier session's "ready for `/goal`" check left open (Phase 3). Note each of
 its entries: they go on the Phase 2 frontier from the start
 (`references/ready-for-goal.md`, *Across sessions on the same target*).
 
+An earlier session's **status line** (`` > Grilled with `/kabeuchi` … ``,
+the last line of the body; Phase 3) is read as data like the rest of the
+target. It is not a point to grill and does not go on the frontier — not even
+when it says "not yet ready" or "not checked": the "Known gaps" entries are
+what is open, and Phase 3 replaces the line at the end of this session.
+
 **Then** establish the sync baseline: normalize the body through `scripts/normalize.sh` and keep the normalized *text* as `last_synced` (it is the merge base for conflict resolution, so keep the text, not only a hash).
 
 **Then** refresh the session marker with the resolved target, so the status line
@@ -325,6 +331,9 @@ frontier as a numbered round; kabeuchi does not. This rule wins over
 - Entries of an existing **"Known gaps"** section (noted in Phase 1) are on
   the frontier from the first turn, not left for the end-of-session check to
   find again. Settling one drops it from that section in the same write-back.
+- An existing **status line** (noted in Phase 1) is never asked about and
+  never rewritten in a Phase 2 write-back: leave it where it is, as the last
+  line, and do not draft a question from it. Only Phase 3 replaces it.
 
 Why: every settled point is written back into the target before the next
 question (below). One question per turn keeps that to one settled point and one
@@ -406,10 +415,34 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
     check was declined or did not complete, it stays as the Phase 2
     write-backs left it (`references/ready-for-goal.md`, *Across sessions on
     the same target*).
+- **Then write the status line**, once the check — and any gap it sent back
+  into Phase 2 — has finished, and before the closing summary. It is one
+  blockquote line saying that the target was grilled, when (an ISO 8601 timestamp with the time and the UTC offset, from `date -Iseconds`), and
+  what the check concluded:
+
+  ```markdown
+  > Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
+  ```
+
+  It is written through the write-back loop like any other conclusion: the
+  concrete diff printed first, the same re-fetch, `normalize.sh` /
+  `merge3.sh` handling and read-back. Write it at the end of every session
+  that reaches this phase, including one that wrote nothing else back, and
+  for **both target kinds** — an issue body and a local file alike. It is
+  the **last line of the body**, below any "Known gaps" section, and an
+  existing one is **replaced**, never appended to, so a target carries at
+  most one. Only a line **outside any code fence** that matches the whole
+  pattern — prefix, timestamp, and one of the three tails — counts as an existing
+  one; an example of the line inside a code fence, or anything that merely
+  resembles it, is content and is never touched. The check brief leaves the
+  existing line out, so the checker is not led by an earlier verdict. The
+  wording, the cases, and where the line goes are in
+  **`references/ready-for-goal.md`**, *The status line*. (It is unrelated to
+  Claude Code's status line, which shows the session marker.)
 - **Summarize what was written back** to the target at the end, and list any
   gaps the check found that were left open.
 - **Do not wander** into adjacent work on your own initiative.
-- The target must contain **only the current agreed state** — never a change-history or discussion-log section. A "Known gaps" section is current state: what is unresolved now, nothing about how it got there.
+- The target must contain **only the current agreed state** — never a change-history or discussion-log section. Two things kabeuchi itself writes are current state, and allowed: a "Known gaps" section (what is unresolved now, nothing about how it got there) and the **status line** (that the target was grilled, by the latest session, and with what result). Each is replaced wholesale, never appended to, so neither turns into a history of sessions.
 - **Remove the briefs** — the vote briefs and the check briefs — if you made a
   directory for them with `mktemp -d` (`references/voting.md`, *The brief*).
   Briefs in the scratchpad need nothing: that directory belongs to the session.

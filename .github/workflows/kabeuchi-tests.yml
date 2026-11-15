@@ -5,9 +5,9 @@ name: kabeuchi tests
 # unless it is run with -x, so wiring it up is a separate change.
 on:
   push:
-    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+    paths: ['skills/kabeuchi/**', 'README.md', '.github/workflows/kabeuchi-tests.yml']
   pull_request:
-    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+    paths: ['skills/kabeuchi/**', 'README.md', '.github/workflows/kabeuchi-tests.yml']
 
 permissions:
   contents: read

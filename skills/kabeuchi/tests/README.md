@@ -86,6 +86,13 @@ Exit status is non-zero if any assertion fails; the last line reports
   an option ID outside `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, a
   control character in a perspective, an unknown option, a missing file — exits
   2 with **nothing on stdout**, so half a tally can never be mistaken for one.
+- **status line wording** — the line kabeuchi writes at the end of Phase 3 is
+  found again by its fixed prefix, so every example of it in `SKILL.md`,
+  `references/ready-for-goal.md` and the repository README must use exactly
+  `` > Grilled with `/kabeuchi` at <timestamp> — `` and one of the three
+  tails, and `ready-for-goal.md` must show all three and state, as the exact
+  pattern a line must match to count as a status line, the same pattern the
+  test uses.
 - **`agents/kabeuchi-voter.md`'s description** — the preflight in `SKILL.md`
   stops every session whose installed voter's description lacks a phrase it
   requires, so the shipped `description:` line must contain each of them. The
@@ -100,7 +107,8 @@ Exit status is non-zero if any assertion fails; the last line reports
 ## CI
 
 `.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
-request that touches `skills/kabeuchi/**` or the workflow itself. `shellcheck`
+request that touches `skills/kabeuchi/**`, the repository README (its kabeuchi
+section is checked by the status line wording test), or the workflow itself. `shellcheck`
 ships preinstalled on the `ubuntu-latest` runner, and all five scripts plus this
 test file are clean at its default severity.
 
@@ -108,9 +116,9 @@ test file are clean at its default severity.
 name: kabeuchi tests
 on:
   push:
-    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+    paths: ['skills/kabeuchi/**', 'README.md', '.github/workflows/kabeuchi-tests.yml']
   pull_request:
-    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+    paths: ['skills/kabeuchi/**', 'README.md', '.github/workflows/kabeuchi-tests.yml']
 
 permissions:
   contents: read

@@ -617,6 +617,41 @@ echo "tally.sh"
   assert_eq "a missing input file exits 2" "2" "$rc"
 }
 
+echo "status line wording (SKILL.md, references, README)"
+# The backticks below are literal markdown, never command substitution.
+# shellcheck disable=SC2016
+{
+  # The status line is found again by its fixed prefix, so every example of it
+  # in the docs must use that exact prefix and one of the three tails. (The
+  # prefix holds no ERE metacharacters, so it is used as-is in the regex.)
+  REF="${HERE}/../references/ready-for-goal.md"
+  README="${HERE}/../../../README.md"
+  prefix='> Grilled with `/kabeuchi` at '
+  date_re='[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}'
+  tails='ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not checked for `/goal`\.'
+  for tail in 'ready for `/goal`.' 'not yet ready for `/goal`; see Known gaps.' 'not checked for `/goal`.'; do
+    if grep -qxF "${prefix}2026-11-15T17:41:59+09:00 — ${tail}" "$REF"; then
+      ok "ready-for-goal.md shows the line ending \"${tail}\""
+    else
+      bad "ready-for-goal.md shows the line ending \"${tail}\""
+    fi
+  done
+  # ready-for-goal.md spells out the pattern a line must match whole, outside
+  # code fences, to count as a status line; it must be this same pattern.
+  if grep -qxF "    ^${prefix}${date_re} — (${tails})\$" "$REF"; then
+    ok "ready-for-goal.md states the exact status line pattern"
+  else
+    bad "ready-for-goal.md states the exact status line pattern"
+  fi
+  for f in "${HERE}/../SKILL.md" "$REF" "$README"; do
+    name="${f##*/}"
+    lines="$(grep -E '^ *> Grilled with' "$f" | grep -vF '<timestamp>' | sed 's/^ *//')"
+    if [ -z "$lines" ]; then bad "${name} shows the status line"; continue; fi
+    stray="$(printf '%s\n' "$lines" | grep -vxE "${prefix}${date_re} — (${tails})")"
+    assert_eq "${name}: every status line uses the fixed prefix and a known tail" "" "$stray"
+  done
+}
+
 echo "agents/kabeuchi-voter.md"
 {
   # The preflight stops every session whose installed kabeuchi-voter lacks one
