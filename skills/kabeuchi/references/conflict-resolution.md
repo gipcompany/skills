@@ -1,7 +1,8 @@
 # Conflict resolution and the write-back loop
 
-Read this when you are in Phase 2 and about to reflect a settled point back into
-the target. It expands the "optimistic detect, conservative resolve, no locks"
+Read this before your first write-back. Every write to the target goes through
+the loop below: each settled point in Phase 2, and the "Known gaps" section and
+the grilled line at the end of Phase 3. It expands the "optimistic detect, conservative resolve, no locks"
 rule and shows exactly how to drive `scripts/normalize.sh` and
 `scripts/merge3.sh`.
 
@@ -48,7 +49,7 @@ flowchart TD
     AM --> N
     O -- overlaps / may conflict --> H[Show base / theirs / mine<br/>and ask the user to resolve]
     H --> N
-    N -- equal --> K([Say "no change", skip the write and read-back,<br/>set last_synced to the re-fetched body])
+    N -- equal --> K(["Say #quot;no change#quot;, skip the write and read-back,<br/>set last_synced to the re-fetched body"])
     N -- differs --> P[Present the concrete diff]
     P --> W[Write the target<br/>gh issue edit --body-file / write file]
     W --> V[Read-back: re-read what was written -> normalize.sh]
