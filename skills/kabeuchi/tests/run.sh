@@ -14,6 +14,7 @@ NORMALIZE="${SCRIPTS}/normalize.sh"
 MERGE3="${SCRIPTS}/merge3.sh"
 MARK="${SCRIPTS}/mark.sh"
 PROMPT_HOOK="${SCRIPTS}/prompt-hook.sh"
+STATUSLINE="${SCRIPTS}/statusline.sh"
 TALLY="${SCRIPTS}/tally.sh"
 GRILLED="${SCRIPTS}/grilled-line.sh"
 
@@ -479,6 +480,111 @@ echo "prompt-hook.sh"
   assert_eq "another session's marker does not leak in" "" "$out"
 
   unset KABEUCHI_DIR
+  rm -rf "$d"
+}
+
+echo "statusline.sh"
+{
+  d="$(mktemp -d)"
+  export KABEUCHI_DIR="$d/marks"
+  mkdir -p "$KABEUCHI_DIR" "$d/home"
+  SID="3186bc75-4165-4b4d-bc2c-a4b5d697a9f6"
+  E=$'\e'
+  A=$'\a'
+  GH="https://github.com"
+  # sl <session_id>: the status line's stdout and stderr for that session.
+  sl() { printf '{"session_id":"%s","model":{"display_name":"Opus"}}' "$1" | HOME="$d/home" bash "$STATUSLINE" 2>&1; }
+  # marker <first line>: write the marker by hand, bypassing mark.sh's
+  # sanitizing, so the script's own hardening is what is tested.
+  marker() { printf '%s\npid=1\n' "$1" > "$KABEUCHI_DIR/$SID"; }
+  # link <owner/repo#n text> <url>: the line for a linked issue target.
+  link() { printf 'kabeuchi in progress · %s]8;;%s%s%s%s]8;;%s' "$E" "$2" "$A" "$1" "$E" "$A"; }
+
+  assert_eq "silent when the session has no marker" "" "$(sl "$SID")"
+
+  marker "$GH/gipcompany/skills/issues/52"
+  assert_eq "an issue URL is OWNER/REPO#N in an OSC 8 link ending in BEL" \
+    "$(link "gipcompany/skills#52" "$GH/gipcompany/skills/issues/52")" "$(sl "$SID")"
+
+  marker "$GH/o/r/issues/9#issuecomment-123"
+  assert_eq "a fragment is dropped from the link" "$(link "o/r#9" "$GH/o/r/issues/9")" "$(sl "$SID")"
+  marker "$GH/o/r/issues/9/?q=1"
+  assert_eq "a trailing /... or ?... is dropped from the link" "$(link "o/r#9" "$GH/o/r/issues/9")" "$(sl "$SID")"
+
+  marker "$GH/o/r/issues/007"
+  assert_eq "leading zeros are dropped" "$(link "o/r#7" "$GH/o/r/issues/7")" "$(sl "$SID")"
+
+  # Anything the regex does not accept is the target as plain text, with no
+  # escape sequence at all.
+  for t in "$GH/o/issues/9" "$GH/../r/issues/9" "$GH/o/../issues/9" "$GH/o/./issues/9" \
+           "$GH/o/r/x/issues/9" "$GH/o/r/issues/0" "$GH/o/r/issues/9x" "$GH/-o/r/issues/9" \
+           "http://github.com/o/r/issues/9" "https://github.com.evil/o/r/issues/9" "$GH/o/r/pull/9"; do
+    marker "$t"
+    assert_eq "plain text: $t" "kabeuchi in progress · $t" "$(sl "$SID")"
+  done
+
+  # Control bytes are stripped even though mark.sh strips them too, so an
+  # embedded OSC 8 cannot open a link of its own: what is left is plain text.
+  marker "$GH/o/r/issues/9${E}]8;;https://evil.example${A}click${E}]8;;${A}"
+  out="$(sl "$SID")"
+  assert_eq "an embedded OSC 8 is defused to plain text" \
+    "kabeuchi in progress · $GH/o/r/issues/9]8;;https://evil.exampleclick]8;;" "$out"
+  case "$out" in *"$E"* | *"$A"*) bad "no ESC or BEL survives from the marker" ;; *) ok "no ESC or BEL survives from the marker" ;; esac
+  marker "notes/${E}[31mred$(printf '\001\177')spec.md"
+  assert_eq "control bytes are stripped from a path" "kabeuchi in progress · notes/[31mredspec.md" "$(sl "$SID")"
+
+  marker "$d/home/specs/plan.md"
+  assert_eq "a path under \$HOME is shown with ~" "kabeuchi in progress · ~/specs/plan.md" "$(sl "$SID")"
+  marker "$d/home"
+  assert_eq "\$HOME itself is shown as ~" "kabeuchi in progress · ~" "$(sl "$SID")"
+  marker "$d/homework/plan.md"
+  assert_eq "a sibling sharing \$HOME's prefix is left alone" "kabeuchi in progress · $d/homework/plan.md" "$(sl "$SID")"
+  marker "docs/plan.md"
+  assert_eq "a relative path is shown as it is" "kabeuchi in progress · docs/plan.md" "$(sl "$SID")"
+
+  # printf %s, never %b: a backslash sequence is printed as it is, and a \c
+  # does not cut the line short.
+  marker 'docs/\e[31mred\c-tail.md'
+  assert_eq "backslash sequences are printed literally, line not cut short" \
+    'kabeuchi in progress · docs/\e[31mred\c-tail.md' "$(sl "$SID")"
+
+  # The placeholder mark.sh seeds before the target is resolved, with the pid
+  # line mark.sh writes below it: shown as plain text, the pid line ignored.
+  rm -f "$KABEUCHI_DIR/$SID"
+  CLAUDE_PID=$$ bash "$MARK" set "$SID" "" </dev/null >/dev/null 2>&1
+  assert_eq "mark.sh wrote the pid line under the placeholder" "pid=$$" "$(sed -n 2p "$KABEUCHI_DIR/$SID")"
+  assert_eq "the placeholder is plain text and the pid line is ignored" \
+    "kabeuchi in progress · (resolving target)" "$(sl "$SID")"
+
+  # Another session's marker must not leak into this one.
+  assert_eq "another session's marker does not leak in" "" "$(sl "aaaaaaaa-0000-0000-0000-000000000000")"
+
+  # An invalid session id prints nothing and exits 0 — even one that would
+  # name an existing file outside the marker directory.
+  printf 'https://github.com/o/r/issues/1\n' > "$d/outside"
+  mkdir -p "$KABEUCHI_DIR/sub"
+  printf 'https://github.com/o/r/issues/1\n' > "$KABEUCHI_DIR/sub/x"
+  for sid in "" "." ".." "../outside" "sub/x" "a b"; do
+    rc=0; out="$(sl "$sid")" || rc=$?
+    assert_eq "invalid session_id [${sid}] prints nothing" "" "$out"
+    assert_eq "invalid session_id [${sid}] exits 0" "0" "$rc"
+  done
+
+  # The status line must never break: every payload exits 0, quietly.
+  for payload in "{}" "not json at all" "" '{"session_id":'; do
+    rc=0; out="$(printf '%s' "$payload" | bash "$STATUSLINE" 2>&1)" || rc=$?
+    assert_eq "exits 0 and prints nothing for payload: ${payload:-(empty)}" "0:" "$rc:$out"
+  done
+  # A marker that is a directory, or empty, prints nothing.
+  rm -f "$KABEUCHI_DIR/$SID"; mkdir "$KABEUCHI_DIR/$SID"
+  rc=0; out="$(sl "$SID")" || rc=$?
+  assert_eq "a directory where the marker should be prints nothing, exits 0" "0:" "$rc:$out"
+  rmdir "$KABEUCHI_DIR/$SID"; : > "$KABEUCHI_DIR/$SID"
+  rc=0; out="$(sl "$SID")" || rc=$?
+  assert_eq "an empty marker prints nothing, exits 0" "0:" "$rc:$out"
+
+  unset KABEUCHI_DIR
+  unset -f sl marker link
   rm -rf "$d"
 }
 
