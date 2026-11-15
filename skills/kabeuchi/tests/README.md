@@ -1,7 +1,8 @@
 # kabeuchi tests
 
 Regression tests for the deterministic helper scripts — `normalize.sh`,
-`merge3.sh`, `mark.sh`, `prompt-hook.sh`, `tally.sh` and `grilled-line.sh`.
+`merge3.sh`, `mark.sh`, `prompt-hook.sh`, `statusline.sh`, `tally.sh` and
+`grilled-line.sh`.
 Zero dependencies beyond `git` and `bash`: each test writes small text blobs to a temp dir, runs one script, and
 asserts on its stdout and exit code. The interview itself is delegated to
 `/grilling`, and the voting is done by subagents; both are prompt-driven, so
@@ -75,6 +76,22 @@ Exit status is non-zero if any assertion fails; the last line reports
   the one reminder line naming the target verbatim; another session's marker
   never leaks in; and it exits 0 on every payload, since a `UserPromptSubmit`
   hook that exits non-zero swallows the user's prompt.
+- **`statusline.sh`** — silent when the session has no marker; a GitHub issue
+  URL becomes `OWNER/REPO#N` in an OSC 8 link ending in BEL, and the **link is
+  rebuilt from the regex captures**, so a fragment, a trailing `/...` or `?...`
+  and leading zeros in the number never reach it; anything the regex does not
+  accept (no repository segment, a `.` or `..` owner or repository, an extra
+  path segment, issue `0`, a pull request, another host) **falls back to plain
+  text**; **control bytes are stripped** from the target even though `mark.sh`
+  already strips them, so an embedded OSC 8 comes out as plain text with no ESC
+  or BEL left; a path under `$HOME` is shown with `~` (a sibling sharing the
+  prefix is not); **backslashes are printed literally**, so `\e[31m` stays text
+  and a `\c` does not cut the line short; the `(resolving target)` placeholder
+  is plain text and the `pid=` line is ignored; another session's marker never
+  leaks in; an **invalid `session_id`** — empty, `.`, `..`, or one containing
+  `/` — **prints nothing**, even when it would name an existing file. Above
+  all, it **exits 0 on every input** — no payload, not JSON, a directory or an
+  empty file where the marker should be — so it cannot break the status line.
 - **`tally.sh`** — three valid votes for one option are unanimous; an invalid
   vote stays in the `N/M` denominator while an abstained or failed one leaves it,
   and all three are named differently; a 2-of-3 majority names the dissent; an
@@ -131,7 +148,7 @@ Exit status is non-zero if any assertion fails; the last line reports
 `.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
 request that touches `skills/kabeuchi/**`, the repository README (its kabeuchi
 section is checked by the grilled line wording test), or the workflow itself. `shellcheck`
-ships preinstalled on the `ubuntu-latest` runner, and all six scripts plus this
+ships preinstalled on the `ubuntu-latest` runner, and all seven scripts plus this
 test file are clean at its default severity.
 
 ```yaml
