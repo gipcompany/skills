@@ -400,7 +400,8 @@ the check in this session:
 |---|---|
 | The checker's last run reported `READY` | ``ready for `/goal`.`` |
 | The user left gaps open (they are in "Known gaps") | ``not yet ready for `/goal`; see Known gaps.`` |
-| The user said the target is not meant for `/goal`, so the check was skipped; or the check failed twice and the target was treated as not checked | ``not checked for `/goal`.`` |
+| The last check failed twice, but an earlier check in the same session completed and the user left some of its gaps open (they are in "Known gaps") | ``not yet ready for `/goal`; see Known gaps.`` |
+| The user said the target is not meant for `/goal`, so the check was skipped; or the check failed twice and the target was treated as not checked, in a session in which no check completed or no gap is left open | ``not checked for `/goal`.`` |
 
 So the three possible lines are:
 
@@ -426,6 +427,9 @@ So the three possible lines are:
   objected to the "Known gaps" diff, the tail is still the "not yet ready"
   one — the target is not ready, and saying "not checked" would be untrue —
   and the closing summary says the open gaps were not recorded in the target.
+  Likewise, when the re-check failed after an earlier check completed and
+  gaps are left open, the gaps are known and recorded, so the tail is the
+  "not yet ready" one, not "not checked".
 
 ### Where it goes, and replacing it
 
