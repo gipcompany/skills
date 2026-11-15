@@ -109,7 +109,9 @@ Exit status is non-zero if any assertion fails; the last line reports
   writes, and each of those must match the pattern, so the docs and the script
   cannot drift apart. Lines are collected loosely (`^ *> *Grilled`), so a
   malformed example such as `>Grilled with …` or `>  Grilled with …` is caught,
-  and the test shows that it is.
+  and the test shows that it is. In an installed copy of the skill, where the
+  repository README is not there, the README part prints a `skip` line and the
+  rest still runs; `total:` counts it as skipped, not failed.
 - **`agents/kabeuchi-voter.md`'s description** — the preflight in `SKILL.md`
   stops every session whose installed voter's description lacks a phrase it
   requires, so the shipped `description:` line must contain each of them. The

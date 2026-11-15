@@ -19,8 +19,10 @@ GRILLED="${SCRIPTS}/grilled-line.sh"
 
 pass=0
 fail=0
-ok()  { printf '  ok   %s\n' "$1"; pass=$((pass + 1)); }
-bad() { printf '  FAIL %s\n' "$1"; fail=$((fail + 1)); }
+skipped=0
+ok()   { printf '  ok   %s\n' "$1"; pass=$((pass + 1)); }
+bad()  { printf '  FAIL %s\n' "$1"; fail=$((fail + 1)); }
+skip() { printf '  skip %s\n' "$1"; skipped=$((skipped + 1)); }
 
 # assert_eq <label> <expected> <actual>
 assert_eq() {
@@ -773,7 +775,13 @@ echo "grilled line wording (SKILL.md, references, README)"
   # stray_lines <file>: the collected lines that are not exact grilled lines.
   stray_lines() { grilled_lines "$1" | grep -vxE "${prefix}${date_re} — (${tails})"; }
 
-  for f in "${HERE}/../SKILL.md" "$REF" "$README"; do
+  # The repository README is not shipped with the skill: in an installed copy
+  # (say ~/.claude/skills/kabeuchi) it is not there, which says nothing about
+  # the skill, so its part of the check is skipped, visibly, instead of failing.
+  docs=("${HERE}/../SKILL.md" "$REF")
+  if [ -f "$README" ]; then docs+=("$README")
+  else skip "README.md: no repository README next to this copy of the skill"; fi
+  for f in "${docs[@]}"; do
     name="${f##*/}"
     if [ -z "$(grilled_lines "$f")" ]; then bad "${name} shows the grilled line"; continue; fi
     assert_eq "${name}: every grilled line uses the fixed prefix and a known tail" "" "$(stray_lines "$f")"
@@ -843,5 +851,5 @@ echo "agents/kabeuchi-voter.md"
 }
 
 echo
-printf 'total: %d passed, %d failed\n' "$pass" "$fail"
+printf 'total: %d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skipped"
 [ "$fail" -eq 0 ]
