@@ -339,7 +339,7 @@ this check concluded. So every session that reaches Phase 3 ends by writing
 one line into the target:
 
 ```markdown
-> Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
+> Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
 ```
 
 The line is the same kind of thing as a "Known gaps" section: it states the
@@ -376,7 +376,7 @@ The line is the fixed prefix, the date, and a tail that reflects the result of
 the check in this session:
 
 ```
-> Grilled with `/kabeuchi` on <YYYY-MM-DD> — <tail>
+> Grilled with `/kabeuchi` at <timestamp> — <tail>
 ```
 
 | Check result in this session | Tail |
@@ -388,13 +388,17 @@ the check in this session:
 So the three possible lines are:
 
 ```markdown
-> Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
-> Grilled with `/kabeuchi` on 2026-11-15 — not yet ready for `/goal`; see Known gaps.
-> Grilled with `/kabeuchi` on 2026-11-15 — not checked for `/goal`.
+> Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
+> Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — not yet ready for `/goal`; see Known gaps.
+> Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — not checked for `/goal`.
 ```
 
-- **The date** is the session's local date, `YYYY-MM-DD`, on the day the line
-  is written.
+- **The timestamp** is the moment the line is written, in ISO 8601 with
+  seconds and the local UTC offset — `YYYY-MM-DDThh:mm:ss±hh:mm`, for example
+  `2026-11-15T17:41:59+09:00` — so a reader can tell the time and the time
+  zone, not only the day. Take it from the clock, never from memory: run
+  `date -Iseconds` (GNU and BSD `date` both print exactly this shape; UTC is
+  `+00:00`, never `Z`) right before drafting the line, and copy what it prints.
 - **The line is always in English**, whatever the target's language: the
   prefix has to stay the same to be found again (below), and a reader — a
   person, `/goal`, or `/jikkyo`'s child — can rely on its wording.
@@ -416,12 +420,12 @@ So the three possible lines are:
     or more `` ` `` or `~`, closed by a matching fence; a fence left open runs
     to the end of the body), and
   - it **matches the whole line exactly**: it starts at the first column with
-    the fixed prefix `` > Grilled with `/kabeuchi` on ``, then a
-    `YYYY-MM-DD` date, then `` — `` and one of the three tails above, with
+    the fixed prefix `` > Grilled with `/kabeuchi` at ``, then a timestamp
+    of the shape above, then `` — `` and one of the three tails above, with
     nothing after it:
 
     ```
-    ^> Grilled with `/kabeuchi` on [0-9]{4}-[0-9]{2}-[0-9]{2} — (ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not checked for `/goal`\.)$
+    ^> Grilled with `/kabeuchi` at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2} — (ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not checked for `/goal`\.)$
     ```
 
   Anything else is the target's own content and is left exactly as it is: an

@@ -159,10 +159,10 @@ The checklist lives in [`references/ready-for-goal.md`](skills/kabeuchi/referenc
 
 ### A status line in the target
 
-Every session that gets past startup ends by writing one line as the last line of the target — after any "Known gaps" section, in an issue body and a local file alike — so anyone who reads the target (you, `/goal`, or `/jikkyo`'s run) can tell that it was grilled, when, and what the check concluded:
+Every session that gets past startup ends by writing one line as the last line of the target — after any "Known gaps" section, in an issue body and a local file alike — so anyone who reads the target (you, `/goal`, or `/jikkyo`'s run) can tell that it was grilled, when (an ISO 8601 timestamp with the time and your UTC offset), and what the check concluded:
 
 ```markdown
-> Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
+> Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
 ```
 
 The tail is `` ready for `/goal`. `` when the checker reported the target ready, `` not yet ready for `/goal`; see Known gaps. `` when you left gaps open, and `` not checked for `/goal`. `` when you said the target is not meant for `/goal` or the check could not be run. The line is always in English, written through the same diff-first write-back as everything else, and found by its exact wording outside any code fence — an example of it inside a code block, like the one above, is content and is left alone: a later session **replaces** it rather than adding another, so a target carries at most one — the latest session's — and never a history. Like "Known gaps", it states the target's current status, which is why it is allowed in a target that otherwise holds only the current agreed state. A later session reads it as data and does not grill it. (It has nothing to do with Claude Code's status line, described below.)

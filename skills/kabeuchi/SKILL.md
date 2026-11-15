@@ -9,7 +9,7 @@ description: "Use when you want a relentless /grilling (kabeuchi / 壁打ち) se
   which votes on every recommendation. Not for read-only targets, arbitrary web
   URLs, GitHub PR bodies, Gists, or issue-number shorthand."
 disable-model-invocation: true
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/mark.sh *) Bash(true)
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/mark.sh *) Bash(true) Bash(date -Iseconds)
 hooks:
   UserPromptSubmit:
     - hooks:
@@ -412,11 +412,11 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
     appended to — and removed when none is left.
 - **Then write the status line**, once the check — and any gap it sent back
   into Phase 2 — has finished, and before the closing summary. It is one
-  blockquote line saying that the target was grilled, on which date, and
+  blockquote line saying that the target was grilled, when (an ISO 8601 timestamp with the time and the UTC offset, from `date -Iseconds`), and
   what the check concluded:
 
   ```markdown
-  > Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
+  > Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
   ```
 
   It is written through the write-back loop like any other conclusion: the
@@ -427,7 +427,7 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   the **last line of the body**, below any "Known gaps" section, and an
   existing one is **replaced**, never appended to, so a target carries at
   most one. Only a line **outside any code fence** that matches the whole
-  pattern — prefix, date, and one of the three tails — counts as an existing
+  pattern — prefix, timestamp, and one of the three tails — counts as an existing
   one; an example of the line inside a code fence, or anything that merely
   resembles it, is content and is never touched. The check brief leaves the
   existing line out, so the checker is not led by an earlier verdict. The
