@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/49
 branch: worktree-jikkyo-49-20261115-174159
-updated: 2026-11-15T17:47:08+0900
-next: mention the status line in README's kabeuchi section and add README to the wording test
+updated: 2026-11-15T17:48:13+0900
+next: delete this log in its own commit, push, and open the PR
 
 ## Todos
 
@@ -11,7 +11,7 @@ next: mention the status line in README's kabeuchi section and add README to the
 - [x] Write the line for both target kinds (ac3864b)
 - [x] Name the status line in the current-state rule (57bd43f)
 - [x] Phase 1/2 treat an existing status line as data (53257a8)
-- [ ] Mention the status line in README's kabeuchi section
+- [x] Mention the status line in README's kabeuchi section (8fcdf26)
 - [ ] Remove the progress log and open the PR
 
 ## Verified task-list items
@@ -22,6 +22,7 @@ next: mention the status line in README's kabeuchi section and add README to the
 - The line is written for both target kinds: ready-for-goal.md "When it is written" names the issue body (gh issue edit --body-file) and the local file; SKILL.md Phase 3 says both kinds; tests pass
 - The "only the current agreed state" rule names the status line: SKILL.md Phase 3 rule bullet now lists Known gaps and the status line as allowed current state; tests pass
 - Phase 1/2 treat an existing status line as data and do not grill it: SKILL.md Phase 1 paragraph after Known gaps, Phase 2 frontier bullet, and ready-for-goal.md "Across sessions" bullet; tests pass
+- README's kabeuchi section mentions the status line: new "A status line in the target" subsection; tests/run.sh now checks README's line wording (116 passed), shellcheck clean
 
 ## Dead ends and decisions
 
@@ -32,4 +33,5 @@ next: mention the status line in README's kabeuchi section and add README to the
 - Added a wording test to tests/run.sh so the fixed prefix cannot drift between docs; SC2016 is disabled for that block because the backticks are literal markdown.
 - Replacing removes every line with the prefix anywhere in the body (a moved line is not left behind), then adds the new one at the end.
 - The checker brief is left unchanged: an old status line reaches the checker as part of the target, but the checker judges the six items only, and changing its brief is outside this issue.
+- kabeuchi-tests.yml now also triggers on README.md, since the wording test reads it.
 - Worktree-isolated session refuses compound shell commands: run git commands one at a time and write the log with the Write tool.
