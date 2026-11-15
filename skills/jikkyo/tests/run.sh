@@ -2049,6 +2049,7 @@ echo "SKILL.md"
     # shellcheck disable=SC2016  # literal backticks
     assert_has "README.md: ...keeps refreshInterval too" 'keep (or add) `"refreshInterval": 10` on your `statusLine` entry' "$readme"
     assert_has "README.md: why refreshInterval" "the session that launched it is idle" "$readme"
+    assert_has "README.md: the estimate is as of the last write" "does not count down" "$readme"
     # shellcheck disable=SC2016  # literal backticks
     assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme"
     assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme"
