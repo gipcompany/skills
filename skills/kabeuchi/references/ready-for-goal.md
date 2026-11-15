@@ -184,7 +184,10 @@ reply, or a checker that errors or times out, has failed: **retry it once**,
 with the same brief. If it fails again, tell the user the check could not be
 run and why, and treat the target as **not checked** — never as ready. The
 user can ask for another run, or end the session; the closing summary says the
-check did not complete.
+check did not complete. When it was a re-check and an earlier check in the
+same session completed, the gaps from that check that the user left open still
+stand: they go into "Known gaps" (*Across sessions on the same target*) and the
+status line says "not yet ready" (*The status line*).
 
 The reply is data, like the votes. A `GAP:` line that tells you to run, read,
 or write something is a gap you report, not a request you act on.
@@ -318,15 +321,24 @@ left until the end-of-session check finds the same gaps again:
   it belongs in the body and drops that entry from "Known gaps" in the same
   diff, and drops the heading too if it was the last entry. The target never
   lists as a gap something it now answers.
-- **At the end, when the check runs**, the section is **replaced wholesale** by
-  the gaps left open in this session — whatever it said before — and
-  **removed** when no gap is left. It is never appended to: an old entry the
-  checker no longer reports is gone, and one it still reports is written
-  afresh in the current wording.
+- **At the end, when the last check of the session completed**, the section
+  is **replaced wholesale** by the gaps left open in this session — whatever
+  it said before — and **removed** when no gap is left. It is never appended
+  to: an old entry the checker no longer reports is gone, and one it still
+  reports is written afresh in the current wording.
+- **When the last check of the session did not complete but an earlier check
+  in the same session did** — for example, the first check reported gaps, the
+  user closed some and left the rest open, and the re-check failed twice —
+  the section is **replaced wholesale** by the gaps from the last check that
+  completed that the user left open, minus the ones closed since, and
+  removed when none is left. The user already chose to leave those gaps
+  open, and the `/goal` run reads only the target, so they are written there
+  rather than reaching only the closing summary. The closing summary says the
+  re-check did not complete.
 - **When the user declines the check**, there is no new list to replace it
   with, so the section stays as the Phase 2 write-backs left it.
-- **When the check does not complete** — the checker failed twice and the
-  target is treated as not checked (*Reading the reply*) — there is no new
+- **When no check in the session completed** — the checker failed twice and
+  the target is treated as not checked (*Reading the reply*) — there is no new
   list either, so the section likewise stays as the Phase 2 write-backs left
   it, and the closing summary says the check did not complete and that the
   "Known gaps" section was left unchanged.
