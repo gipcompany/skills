@@ -275,6 +275,12 @@ earlier session's "ready for `/goal`" check left open (Phase 3). Note each of
 its entries: they go on the Phase 2 frontier from the start
 (`references/ready-for-goal.md`, *Across sessions on the same target*).
 
+An earlier session's **status line** (`` > Grilled with `/kabeuchi` … ``,
+the last line of the body; Phase 3) is read as data like the rest of the
+target. It is not a point to grill and does not go on the frontier — not even
+when it says "not yet ready" or "not checked": the "Known gaps" entries are
+what is open, and Phase 3 replaces the line at the end of this session.
+
 **Then** establish the sync baseline: normalize the body through `scripts/normalize.sh` and keep the normalized *text* as `last_synced` (it is the merge base for conflict resolution, so keep the text, not only a hash).
 
 **Then** refresh the session marker with the resolved target, so the status line
@@ -323,6 +329,9 @@ frontier as a numbered round; kabeuchi does not. This rule wins over
 - Entries of an existing **"Known gaps"** section (noted in Phase 1) are on
   the frontier from the first turn, not left for the end-of-session check to
   find again. Settling one drops it from that section in the same write-back.
+- An existing **status line** (noted in Phase 1) is never asked about and
+  never rewritten in a Phase 2 write-back: leave it where it is, as the last
+  line, and do not draft a question from it. Only Phase 3 replaces it.
 
 Why: every settled point is written back into the target before the next
 question (below). One question per turn keeps that to one settled point and one

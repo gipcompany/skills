@@ -317,6 +317,10 @@ left until the end-of-session check finds the same gaps again:
   afresh in the current wording.
 - **When the user declines the check**, there is no new list to replace it
   with, so the section stays as the Phase 2 write-backs left it.
+- **An earlier session's status line** is data, read with the rest of the
+  target at session start. It is not a point to grill and is not put on the
+  frontier, whatever its tail says; Phase 2 write-backs leave it as the last
+  line, and only the end of this session replaces it (*The status line*).
 
 ## The status line
 
