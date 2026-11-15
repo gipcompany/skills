@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/54
 branch: worktree-jikkyo-54-20261115-211754
-updated: 2026-11-15T21:26:39+09:00
-next: AC8, rewrap the over-long SKILL.md line
+updated: 2026-11-15T21:27:19+09:00
+next: AC9, skip the README test outside the repo
 
 ## Todos
 
@@ -13,7 +13,7 @@ next: AC8, rewrap the over-long SKILL.md line
 - [x] AC5: add scripts/grilled-line.sh with tests (c90e17e)
 - [x] AC6: skip no-op writes; write Known gaps and the line together (99162a3)
 - [x] AC7: looser wording-test pattern (780356b)
-- [ ] AC8: rewrap SKILL.md:420
+- [x] AC8: rewrap SKILL.md:420 (dd02eb1)
 - [ ] AC9: skip README test outside the repo
 - [ ] AC10: live /kabeuchi run on both target kinds
 - [ ] Delete the log and open the PR
@@ -27,6 +27,7 @@ next: AC8, rewrap the over-long SKILL.md line
 - AC5 (replacement script): scripts/grilled-line.sh added; tests/run.sh covers no line, line at end, moved up, inside backtick and tilde fences, unclosed fence, Known gaps present, running twice, bad keys and timestamps; 164 tests pass, shellcheck clean; a wording drift in a copy of the script fails the docs agreement test
 - AC6 (no-op skip, one write-back): conflict-resolution.md loop and flowchart skip an unchanged body and report it; ready-for-goal.md and SKILL.md require one write-back for Known gaps and the line, with the line alone as a second diff after a rejection; reread for consistency, tests pass
 - AC7 (malformed lines): collector now uses a loose pattern; new tests show it reports lines with no space, two spaces, or indentation before Grilled; 167 tests pass, shellcheck clean
+- AC8 (rewrap): the grilled line bullet in SKILL.md is rewrapped to 78 characters like the bullets around it; tests pass
 
 ## Dead ends and decisions
 
