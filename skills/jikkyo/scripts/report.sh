@@ -4,7 +4,13 @@
 # and keep one status comment on the GitHub issue up to date while it runs.
 #
 #   claude -p ... --output-format stream-json --verbose \
-#     | report.sh '<issue URL>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]
+#     | report.sh [--session <session id>] '<issue URL>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]
+#
+# --session gives the id of the session that launched (or resumed) the run
+# (launch.sh passes it). It must have the exact shape of a Claude Code session
+# id, a UUID, or report.sh exits 2 before it writes anything. It goes into the
+# state file only (see below), so the status line shows the run in that
+# session alone.
 #
 # The optional second argument is the run's branch (launch.sh passes it). It
 # must be `worktree-jikkyo-<N>-<8 digits>-<6 digits>`, with <N> the issue's
@@ -47,6 +53,26 @@
 # once and printed as `jikkyo: language <ja|en>`. The hidden marker, the state
 # values in it, and the number and duration formats are the same in both.
 #
+# State file: every time it writes the status comment, and at exit, it also
+# writes <git common dir>/jikkyo/<N>.json (the common dir of the checkout it
+# runs in, shared by all its worktrees, never committed) for the status line
+# (scripts/statusline.sh). It is written to a temp file in the same directory
+# and renamed into place, so a reader never sees half of one. It holds only
+# numbers, the state, the language, the session id, and URLs built from
+# validated parts:
+#
+#   {"v":1,"issue":"<issue URL>","number":<N>,"state":"running","done":3,
+#    "total":5,"turns":12,"started":<epoch>,"updated":<epoch>,"eta_secs":720,
+#    "lang":"en","session":"<session id>","comment":"<status comment URL>"}
+#
+# eta_secs is the remaining-time estimate in seconds, null when there is
+# none; session and comment are null when unknown. Nothing deletes the file;
+# the next run of the issue overwrites it. Outside a git repository, when
+# the directory cannot be written or is a symlink, or when <N>.json is a
+# directory, there is no state file and the run goes on. The file is a convenience for the status line, not a
+# record: the status comment is the record, and anything that can write to
+# the git common dir (the child included) can write this file too.
+#
 # Tuning, for tests: JIKKYO_TODO_INTERVAL (30), JIKKYO_HEARTBEAT_INTERVAL (300),
 # JIKKYO_TICK (1, seconds between scheduler passes), JIKKYO_MIN_GAP (1, seconds
 # between two writes), JIKKYO_CLOCK_FILE (read "now" in epoch seconds from this
@@ -60,9 +86,20 @@ TICK="${JIKKYO_TICK:-1}"
 MIN_GAP="${JIKKYO_MIN_GAP:-1}"
 
 usage() {
-  echo "usage: ... | report.sh '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
+  echo "usage: ... | report.sh [--session <session id>] '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
   exit 2
 }
+session=""
+if [ "$#" -ge 1 ] && [ "$1" = --session ]; then
+  [ "$#" -ge 2 ] || usage
+  session="$2"
+  sid_re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  if ! [[ "$session" =~ $sid_re ]]; then
+    echo "report.sh: not a session id: $session" >&2
+    usage
+  fi
+  shift 2
+fi
 if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then usage; fi
 re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)$'
 [[ "$1" =~ $re ]] || usage
@@ -202,12 +239,82 @@ state_file="$work/state.json"
 printf '%s\n' '{"done":0,"total":0,"turns":0,"result":null}' > "$state_file"
 
 start_ts="$(now)"
+
+state_out=""
+if common_dir="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" \
+   && [ -n "$common_dir" ]; then
+  state_out="${common_dir}/jikkyo/${num}.json"
+fi
 comment_id=""
 comment_url=""
 last_write=""        # clock time of the last write
 last_write_real=""   # $SECONDS at the last write, for the 1-second gap
 last_key=""          # progress shown by the last write
 final_done=""
+
+# eta_secs <state> <done> <total> <elapsed secs>: the estimated seconds left,
+# or nothing. The run-wide rate so far, applied to the todos left. Only while
+# running, and only with at least one completed todo; with no rate to go on
+# there is no estimate rather than a made-up time.
+eta_secs() {
+  local st="$1" completed="$2" total="$3" secs="$4"
+  if [ "$st" = running ] && [ "$total" -gt 0 ] && [ "$completed" -gt 0 ]; then
+    [ "$secs" -lt 0 ] && secs=0
+    echo $((secs * (total - completed) / completed))
+  fi
+}
+
+# place <temp> <dest>: rename the temp file onto <dest> without following
+# <dest>. mv into a directory, or a symlink to one, moves the file inside it;
+# rename(2) instead replaces a symlink itself and fails on a directory. perl
+# calls rename(2) directly. Without perl, mv runs after a directory check,
+# which a swap in between can still beat.
+place() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -e 'rename($ARGV[0], $ARGV[1]) or exit 1' -- "$1" "$2"
+  else
+    ! [ -d "$2" ] && mv -f "$1" "$2"
+  fi
+}
+
+# publish <state> <state.json contents> <end ts or empty>: write the state
+# file (see the top of this file). Any failure leaves the old file and is
+# otherwise ignored: the status line is a convenience, the comment is the record.
+publish() {
+  [ -n "$state_out" ] || return 0
+  local st="$1" json="$2" end_ts="$3" t dir tmp eta comment="" completed total
+  t="${end_ts:-$(now)}"
+  dir="${state_out%/*}"
+  read -r completed total < <(jq -r '"\(.done) \(.total)"' <<<"$json") || return 0
+  eta="$(eta_secs "$st" "$completed" "$total" $((t - start_ts)))"
+  [[ "$comment_id" =~ ^[1-9][0-9]*$ ]] \
+    && comment="https://github.com/${owner}/${repo}/issues/${num}#issuecomment-${comment_id}"
+  mkdir -p "$dir" 2>/dev/null || return 0
+  # Only into a real directory. The child can write to the common dir, and a
+  # jikkyo/ swapped for a symlink would have this script write wherever it
+  # points, a place the child itself might not have been allowed to write.
+  # This is a check, not a lock: a swap between it and mktemp still wins,
+  # and puts one temp file (mode 0600, fixed-shape JSON) where the link
+  # points.
+  if [ ! -d "$dir" ] || [ -L "$dir" ]; then return 0; fi
+  # A temp file is left behind only when this script is killed between
+  # mktemp and mv; the next write of the issue takes such leftovers out.
+  find "$dir" -maxdepth 1 -type f -name ".${num}.json.*" -mmin +1 -delete 2>/dev/null
+  tmp="$(mktemp "${dir}/.${num}.json.XXXXXX" 2>/dev/null)" || return 0
+  if jq -c -n --argjson s "$json" --arg st "$st" --arg lang "$LANG_CODE" --arg session "$session" \
+       --arg issue "https://github.com/${owner}/${repo}/issues/${num}" --arg comment "$comment" \
+       --argjson number "$num" --argjson started "$start_ts" --argjson updated "$t" \
+       --arg eta "$eta" \
+       '{v: 1, issue: $issue, number: $number, state: $st, done: $s.done, total: $s.total,
+         turns: $s.turns, started: $started, updated: $updated,
+         eta_secs: (if $eta == "" then null else ($eta | tonumber) end), lang: $lang,
+         session: (if $session == "" then null else $session end),
+         comment: (if $comment == "" then null else $comment end)}' > "$tmp" 2>/dev/null \
+     && place "$tmp" "$state_out" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$tmp"
+}
 
 # body <state> <state.json contents> <end ts or empty>
 body() {
@@ -231,12 +338,9 @@ body() {
   if [ -n "$end_ts" ]; then ended="$(fmt_time "$end_ts")"; t="$end_ts"; fi
   secs=$((t - start_ts))
   elapsed="$(fmt_duration "$secs")"
-  # Estimated time remaining: the run-wide rate so far, applied to the todos
-  # left. Only while running, and only with at least one completed todo; with
-  # no rate to go on the cell stays empty rather than showing a made-up time.
-  if [ "$st" = running ] && [ "$total" -gt 0 ] && [ "$completed" -gt 0 ]; then
-    [ "$secs" -lt 0 ] && secs=0
-    eta="$(fmt_duration $((secs * (total - completed) / completed)))"
+  eta="$(eta_secs "$st" "$completed" "$total" "$secs")"
+  if [ -n "$eta" ]; then
+    eta="$(fmt_duration "$eta")"
     eta_cell="~${eta}${L_ESTIMATE}"
     eta_suffix="${L_LEFT_PRE}${eta}${L_LEFT_POST}"
   fi
@@ -296,6 +400,7 @@ _write() {
       --input - >/dev/null 2>&1 \
       || echo "jikkyo: could not update the status comment ${comment_id}" >&2
   fi
+  publish "$st" "$json" "$end_ts"
   last_write="$(now)"
   last_write_real="$SECONDS"
   last_key="$(jq -c '[.done, .total]' <<<"$json")"

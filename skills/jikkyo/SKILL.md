@@ -186,14 +186,26 @@ The arguments are: $ARGUMENTS
 4. **Launch** with the Bash tool's `run_in_background: true`:
 
    ```
-   ${CLAUDE_SKILL_DIR}/scripts/launch.sh '<URL>'
+   ${CLAUDE_SKILL_DIR}/scripts/launch.sh '${CLAUDE_SESSION_ID}' '<URL>'
    ```
 
-   On resume, pass the branch and the comment id from step 3r before the URL:
+   On resume, pass the branch and the comment id from step 3r before the
+   session id:
 
    ```
-   ${CLAUDE_SKILL_DIR}/scripts/launch.sh --resume '<branch>' '<comment id>' '<URL>'
+   ${CLAUDE_SKILL_DIR}/scripts/launch.sh --resume '<branch>' '<comment id>' '${CLAUDE_SESSION_ID}' '<URL>'
    ```
+
+   The session id is this session's own, filled in already: copy it as it
+   stands. It goes into the state file the status line reads, so the run
+   shows in this session's status line only (see *Status line* below).
+   Before launching, look at the value you are about to pass: if it is not
+   a UUID (8-4-4-4-12 hex digits), for example the variable's own name,
+   still starting with `$`, from a Claude Code that does not fill it in,
+   launch anyway and say in step 5 that this run will not show in the
+   status line, only in the status comment. You will not see `launch.sh`'s
+   own `jikkyo: status line off: …` warning in time, since you do not watch
+   the background output; it is there for the record.
 
    Do not wrap it, pipe it, or add an environment assignment: `launch.sh`
    builds the child pipeline itself (todo tools on, `--worktree` for a fresh
@@ -212,14 +224,17 @@ The arguments are: $ARGUMENTS
    that progress appears in a status comment on it (on resume, a new one,
    with a `Resumed from` row), that the child works in its own worktree so
    they can keep using their checkout, and that the run cannot be steered
-   from here. Then **end the turn**. Do not poll or watch
+   from here; and, only when step 4 found the session id not shaped like
+   one, that this run will not show in the status line. Then **end the
+   turn**. Do not poll or watch
    the output: you are notified when the background command exits, and
    `report.sh` keeps the issue current without you.
 
 ## Phase 2: While it runs
 
 Nothing to do. If the user asks how it is going, read the background command's
-output so far, or point them at the status comment. Do not post anything.
+output so far, or point them at the status comment (or their status line, if
+they set it up; see *Status line*). Do not post anything.
 
 ## Phase 3: When the background command exits
 
@@ -364,6 +379,24 @@ Then, in this order:
 4. **Tell the user** the outcome in one or two lines, with the summary link,
    and the resume command when the run is resumable (with the same caveat
    when step 1 left the worktree or the local branch in place).
+
+## Status line
+
+`report.sh` also keeps a state file, `<git common dir>/jikkyo/<N>.json`
+(numbers, the state, the language, the session id, validated URLs), at every
+status-comment write and at exit. `scripts/statusline.sh` reads it and shows
+`jikkyo #<N> · 60% · ~12m left` (or the turn count, then the ended state for
+5 minutes, or `stale` for a `running` file 15 minutes old) in the status line
+of **the session that launched or resumed the run** only: it matches the
+`${CLAUDE_SESSION_ID}` passed to `launch.sh` against the status line's
+`session_id`. After `/clear` the run is no longer shown; point the user at the
+status comment, which is the record: the status line is a convenience, and
+anything that can write to `.git` can write a state file.
+This skill never edits a settings file: if the user asks about the status
+line, point them at the README's *In your status line*, which shows both
+setups (the whole status line, or appended to their own), each
+with `refreshInterval`, needed because this session is idle while the run
+goes.
 
 ## How the pieces fit
 
@@ -609,4 +642,5 @@ gipcompany/skills#12.
 - Token usage: no source in the stream is both live and accurate.
 - Steering the run while it is in progress.
 - Writing the issue body from the reporters (the child ticks verified boxes).
+- Editing the user's settings, the status line included.
 - Targets other than a GitHub issue URL.

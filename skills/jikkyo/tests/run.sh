@@ -21,9 +21,11 @@ REPORT="${SCRIPTS}/report.sh"
 LAUNCH="${SCRIPTS}/launch.sh"
 PRECHECK="${SCRIPTS}/precheck.sh"
 CLEANUP="${SCRIPTS}/cleanup.sh"
+STATUSLINE="${SCRIPTS}/statusline.sh"
 SKILL_MD="${HERE}/../SKILL.md"
 README_MD="${HERE}/../../../README.md"
 URL="https://github.com/o/r/issues/12"
+SID="0f6c2a3e-5b7d-4c1e-9a8f-2d3b4c5e6f70"
 
 pass=0
 fail=0
@@ -45,6 +47,13 @@ assert_lacks() {
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/jikkyo-tests.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
+
+# report.sh writes a state file into the git common dir of the directory it
+# runs in, so everything runs from a scratch repository, never this checkout.
+CWD_REPO="$TMP/cwd"
+git init -q "$CWD_REPO"
+cd "$CWD_REPO" || exit 1
+STATE="$(cd "$CWD_REPO" && pwd -P)/.git/jikkyo/12.json"
 
 # --- stubs -----------------------------------------------------------------
 # gh: every call is logged as $GH_LOG/<n>.args and $GH_LOG/<n>.body (stdin).
@@ -656,6 +665,135 @@ echo "report.sh: a signal after the result line"
   rm -f "$fifo"
 }
 
+# ===========================================================================
+echo "report.sh: the state file"
+{
+  rm -f "$STATE"
+  f="$TMP/state-stream.jsonl"
+  { create t1 1; create t2 2; update u1 1 completed; result_ok; } > "$f"
+  new_log
+  bash "$REPORT" --session "$SID" "$URL" < "$f" > "$TMP/out" 2>&1
+  if [ -f "$STATE" ]; then ok "the state file is <git common dir>/jikkyo/<N>.json"
+  else bad "the state file is <git common dir>/jikkyo/<N>.json (no $STATE)"; fi
+  assert_eq "it has exactly the documented keys" \
+    '["comment","done","eta_secs","issue","lang","number","session","started","state","total","turns","updated","v"]' \
+    "$(jq -c 'keys' "$STATE" 2>/dev/null)"
+  assert_eq "...with the final state, counts, language, session, and URLs" \
+    "$(jq -cn --arg sid "$SID" '{v: 1, issue: "https://github.com/o/r/issues/12", number: 12, state: "finished",
+       done: 1, total: 2, eta_secs: null, lang: "en", session: $sid,
+       comment: "https://github.com/o/r/issues/12#issuecomment-777"}')" \
+    "$(jq -c '{v, issue, number, state, done, total, eta_secs, lang, session, comment}' "$STATE" 2>/dev/null)"
+  assert_eq "...and epoch numbers for started and updated" "true" \
+    "$(jq '(.started | type) == "number" and (.updated | type) == "number" and .updated >= .started' "$STATE" 2>/dev/null)"
+  assert_eq "it is one line of JSON" "1" "$(wc -l < "$STATE" | tr -d ' ')"
+  assert_eq "no temp file is left beside it" "12.json" "$(ls -A "${STATE%/*}")"
+
+  # Text from the issue, the result line, or gh's answer never reaches the file.
+  mkdir -p "$TMP/stubs-odd"
+  cat > "$TMP/stubs-odd/gh" <<'EOF2'
+#!/usr/bin/env bash
+case "$*" in
+  "api repos/o/r/issues/12") echo '{"title":"\u001b[31mred pwned","body":"x"}' ;;
+  *"-X POST"*) cat > /dev/null; printf '9x9\thttps://evil.example/pwned\n' ;;
+  *) cat > /dev/null ;;
+esac
+EOF2
+  chmod +x "$TMP/stubs-odd/gh"
+  { assistant_text; jq -cn '{type: "result", subtype: "success", is_error: false, result: "\u001b[2J pwned"}'; } > "$f"
+  rm -f "$STATE"
+  PATH="$TMP/stubs-odd:$PATH" bash "$REPORT" "$URL" < "$f" > /dev/null 2>&1
+  assert_eq "without --session, session is null; a comment id that is not a number gives no URL" \
+    '{"session":null,"comment":null,"turns":1,"state":"finished"}' \
+    "$(jq -c '{session, comment, turns, state}' "$STATE" 2>/dev/null)"
+  assert_lacks "...and nothing from the issue, the result, or gh's answer is in it" "pwned" "$(cat "$STATE")"
+  assert_lacks "...no escape character either" "$(printf '\033')" "$(cat "$STATE")"
+
+  # It is written with every comment write, not only at the end.
+  new_log; rm -f "$STATE"
+  clock="$TMP/clock"; echo 1000 > "$clock"
+  fifo="$TMP/fifo-state"; rm -f "$fifo"; mkfifo "$fifo"
+  JIKKYO_CLOCK_FILE="$clock" JIKKYO_TODO_INTERVAL=0 bash "$REPORT" --session "$SID" "$URL" < "$fifo" > "$TMP/out" 2>&1 &
+  rpid=$!
+  exec 4> "$fifo"
+  sleep 0.6
+  assert_eq "the first comment write writes a running state file" '{"state":"running","done":0,"total":0,"eta_secs":null,"updated":1000}' \
+    "$(jq -c '{state, done, total, eta_secs, updated}' "$STATE" 2>/dev/null)"
+  echo 1100 > "$clock"; { create t1 1; create t2 2; update u1 1 completed; } >&4; sleep 0.6
+  assert_eq "a todo write updates it, with the remaining-time estimate in seconds" \
+    '{"state":"running","done":1,"total":2,"eta_secs":100,"updated":1100,"started":1000}' \
+    "$(jq -c '{state, done, total, eta_secs, updated, started}' "$STATE" 2>/dev/null)"
+  assert_has "...the same estimate the comment shows" "~1m 40s left" "$(heading "$(last_body)")"
+  echo 1500 > "$clock"; sleep 0.6
+  assert_eq "a heartbeat write refreshes updated" "1500" "$(jq -r '.updated' "$STATE" 2>/dev/null)"
+  echo 1510 > "$clock"
+  kill -s TERM "$rpid"; wait "$rpid" 2>/dev/null
+  exec 4>&-
+  assert_eq "a signal writes the interrupted state" '{"state":"interrupted","updated":1510,"eta_secs":null}' \
+    "$(jq -c '{state, updated, eta_secs}' "$STATE" 2>/dev/null)"
+  rm -f "$fifo"
+
+  # A Japanese issue records ja.
+  printf '%s\n' '{"title":"日本語の issue","body":"本文"}' > "$TMP/issue-ja-state.json"
+  new_log; rm -f "$STATE"
+  printf '%s\n' "$(result_ok)" | GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" "$URL" > /dev/null 2>&1
+  assert_eq "the language goes into the state file" "ja" "$(jq -r '.lang' "$STATE" 2>/dev/null)"
+
+  # From a linked worktree the file goes to the shared common dir.
+  git -C "$CWD_REPO" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+  git -C "$CWD_REPO" worktree add -q "$TMP/cwd-wt" 2>/dev/null
+  new_log; rm -f "$STATE"
+  printf '%s\n' "$(result_ok)" | (cd "$TMP/cwd-wt" && bash "$REPORT" "$URL") > /dev/null 2>&1
+  if [ -f "$STATE" ] && [ ! -e "$TMP/cwd-wt/.git/jikkyo" ]; then ok "from a linked worktree it is written to the common dir"
+  else bad "from a linked worktree it is written to the common dir"; fi
+  git -C "$CWD_REPO" worktree remove --force "$TMP/cwd-wt"
+
+  # Outside a git repository, or when the directory cannot be written, the run goes on.
+  mkdir -p "$TMP/nogit"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | (cd "$TMP/nogit" && bash "$REPORT" "$URL") > "$TMP/out" 2>&1 || rc=$?
+  assert_eq "outside a git repository the run still reports and exits 0" "0:2" "$rc:$(calls)"
+  rm -f "$STATE"; chmod 500 "${STATE%/*}"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+  chmod 700 "${STATE%/*}"
+  assert_eq "an unwritable state directory does not stop the run" "0:2" "$rc:$(calls)"
+  assert_eq "...and leaves no file" "" "$(ls -A "${STATE%/*}")"
+
+  # A jikkyo/ swapped for a symlink is not written through.
+  sdir="${STATE%/*}"
+  mv "$sdir" "$sdir.real"; mkdir -p "$TMP/elsewhere"; ln -s "$TMP/elsewhere" "$sdir"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+  assert_eq "a symlinked state directory does not stop the run" "0:2" "$rc:$(calls)"
+  assert_eq "...and nothing is written where it points" "" "$(ls -A "$TMP/elsewhere")"
+  rm -f "$sdir"; mv "$sdir.real" "$sdir"
+
+  # A <N>.json that is a directory, or a symlink to one, is not written into.
+  rm -f "$STATE"; mkdir -p "$TMP/elsewhere2"; ln -s "$TMP/elsewhere2" "$STATE"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+  assert_eq "a state file that is a symlink to a directory does not stop the run" "0:2" "$rc:$(calls)"
+  assert_eq "...and nothing is moved into where it points" "" "$(ls -A "$TMP/elsewhere2")"
+  assert_eq "...nor is a temp file left beside it" "" "$(find "$sdir" -name '.12.json.*')"
+  rm -f "$STATE"
+  # ...nor into a real directory there: nothing is written, the run goes on.
+  mkdir -p "$STATE"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+  assert_eq "a state file that is a directory does not stop the run" "0:2" "$rc:$(calls)"
+  assert_eq "...and nothing is written into it or left beside it" ":" \
+    "$(ls -A "$STATE"):$(find "$sdir" -name '.12.json.*')"
+  rmdir "$STATE"
+
+  # A temp file left by a killed write is taken out by the next write.
+  touch -t 202001010000 "$sdir/.12.json.Ab12Cd" "$sdir/.13.json.Ab12Cd"
+  new_log
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > /dev/null 2>&1
+  assert_eq "an old temp file of the issue is removed, another issue's is left" ".13.json.Ab12Cd 12.json" \
+    "$(find "$sdir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
+  rm -f "$sdir/.13.json.Ab12Cd"
+}
+
 echo "launch.sh"
 {
   repo="$TMP/repo"
@@ -670,24 +808,24 @@ echo "launch.sh"
       "https://github.com/o/r/issues/12'\"\$(id)" "https://gitlab.com/o/r/issues/12" \
       "https://github.com/o/r/issues/0"; do
     rm -f "$CLAUDE_ARGS"; new_log
-    rc=0; (cd "$repo" && bash "$LAUNCH" "$bad_url") >/dev/null 2>&1 || rc=$?
+    rc=0; (cd "$repo" && bash "$LAUNCH" "$SID" "$bad_url") >/dev/null 2>&1 || rc=$?
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then
       ok "rejects [$bad_url] without starting the child"
     else bad "rejects [$bad_url] without starting the child (rc=$rc)"; fi
   done
 
   rm -f "$CLAUDE_ARGS"
-  rc=0; (cd "$repo" && bash "$LAUNCH" "https://github.com/someone/else/issues/12") >/dev/null 2>&1 || rc=$?
+  rc=0; (cd "$repo" && bash "$LAUNCH" "$SID" "https://github.com/someone/else/issues/12") >/dev/null 2>&1 || rc=$?
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "rejects an issue whose repository is not a remote here"
   else bad "rejects an issue whose repository is not a remote here (rc=$rc)"; fi
 
   rm -f "$CLAUDE_ARGS"
-  rc=0; (cd "$TMP" && bash "$LAUNCH" "$URL") >/dev/null 2>&1 || rc=$?
+  rc=0; (cd "$TMP" && bash "$LAUNCH" "$SID" "$URL") >/dev/null 2>&1 || rc=$?
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "rejects a run outside a git repository"
   else bad "rejects a run outside a git repository (rc=$rc)"; fi
 
   new_log
-  out="$(cd "$repo/" && echo "caller's stdin" | bash "$LAUNCH" "$URL" 2>&1)"
+  out="$(cd "$repo/" && echo "caller's stdin" | bash "$LAUNCH" "$SID" "$URL" 2>&1)"
   args="$(cat "$CLAUDE_ARGS" 2>/dev/null)"
   assert_eq "the child's stdin is /dev/null, not the caller's" "" "$(cat "$CLAUDE_ARGS.stdin" 2>/dev/null)"
   assert_eq "the child gets CLAUDE_CODE_ENABLE_TODO_TOOLS=1" "1" "$(cat "$CLAUDE_ARGS.env" 2>/dev/null)"
@@ -766,21 +904,24 @@ echo "launch.sh"
     "<!-- jikkyo:status v=1 state=finished branch=worktree-$name -->" "$(last_body | head -n 1)"
   assert_has "...and into the Branch row" "| Branch | \`worktree-$name\` |" "$(last_body)"
   assert_has "the final message reaches the output" "All done. Opened PR #99." "$out"
+  assert_eq "the run's state file is in the repository's common dir, with the session id" \
+    "$(jq -cn --arg sid "$SID" '{state: "finished", session: $sid, number: 12}')" \
+    "$(jq -c '{state, session, number}' "$root/.git/jikkyo/12.json" 2>/dev/null)"
 
   # From a subdirectory the worktree path is still under the repository root.
   mkdir -p "$repo/sub/dir"
-  out="$(cd "$repo/sub/dir" && bash "$LAUNCH" "$URL" 2>&1 < /dev/null)"
+  out="$(cd "$repo/sub/dir" && bash "$LAUNCH" "$SID" "$URL" 2>&1 < /dev/null)"
   assert_has "from a subdirectory the path is under the repository root" "jikkyo: worktree path $root/.claude/worktrees/jikkyo-12-" "$out"
 
   # A host that merely ends in github.com does not count.
   git -C "$repo" remote set-url origin https://notgithub.com/o/r.git
-  rm -f "$CLAUDE_ARGS"; rc=0; (cd "$repo" && bash "$LAUNCH" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
+  rm -f "$CLAUDE_ARGS"; rc=0; (cd "$repo" && bash "$LAUNCH" "$SID" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "a remote on notgithub.com does not match"
   else bad "a remote on notgithub.com does not match (rc=$rc)"; fi
 
   # An SSH remote counts too.
   git -C "$repo" remote set-url origin git@github.com:O/R.git
-  rm -f "$CLAUDE_ARGS"; out="$(cd "$repo" && bash "$LAUNCH" "$URL" 2>&1 < /dev/null)"
+  rm -f "$CLAUDE_ARGS"; out="$(cd "$repo" && bash "$LAUNCH" "$SID" "$URL" 2>&1 < /dev/null)"
   if [ -e "$CLAUDE_ARGS" ]; then ok "an SSH remote (any case) matches the issue's repository"
   else bad "an SSH remote (any case) matches the issue's repository ($out)"; fi
   assert_lacks "a fresh run gets no resume instruction" "Resuming:" "$(sed -n '2p' "$CLAUDE_ARGS")"
@@ -851,10 +992,11 @@ EOF
   }
 
   # shellcheck disable=SC2016  # literal $(id), never expanded
-  for bad_args in "--resume|$BR|1" "--resume|$BR|$URL" "--resume|worktree-jikkyo-13-20261114-132452|1|$URL" \
-      "--resume|main|1|$URL" "--resume|$BR -->|1|$URL" "--resume|$BR\$(id)|1|$URL" "--resume|$BR|0|$URL" \
-      "--resume|$BR|1a|$URL" "--resume|$BR|1 2|$URL" "--resume|$BR|1|$URL|extra" "$URL|--resume|$BR|1" \
-      "--resume|$BR|1|https://github.com/o/r/issues/13" "--resume|||$URL" "--resume||4242|$URL" "--resume|$BR||$URL"; do
+  for bad_args in "--resume|$BR|1|$SID" "--resume|$BR|$SID|$URL" "--resume|worktree-jikkyo-13-20261114-132452|1|$SID|$URL" \
+      "--resume|main|1|$SID|$URL" "--resume|$BR -->|1|$SID|$URL" "--resume|$BR\$(id)|1|$SID|$URL" "--resume|$BR|0|$SID|$URL" \
+      "--resume|$BR|1a|$SID|$URL" "--resume|$BR|1 2|$SID|$URL" "--resume|$BR|1|$SID|$URL|extra" "$SID|$URL|--resume|$BR|1" \
+      "--resume|$BR|1|$SID|https://github.com/o/r/issues/13" "--resume||||$URL" "--resume||4242|$SID|$URL" "--resume|$BR||$SID|$URL" \
+      "--resume|$BR|1|$URL"; do
     IFS='|' read -r -a a <<<"$bad_args"
     launch_resume "${a[@]}"
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
@@ -862,7 +1004,7 @@ EOF
     else bad "rejects [$bad_args] without a worktree or the child (rc=$rc)"; fi
   done
 
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   assert_eq "resume: exits 0" "0" "$rc"
   name="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree name //p')"
   if [[ "$name" =~ ^jikkyo-12-[0-9]{8}-[0-9]{6}$ ]]; then ok "resume: a new worktree name jikkyo-<N>-<timestamp> ($name)"
@@ -927,7 +1069,7 @@ EOF
   assert_eq "resume: a new status comment is posted" "api -X POST repos/o/r/issues/12/comments --input - --jq [.id, .html_url] | @tsv" "$(cat "$GH_LOG/1.args")"
 
   # The branch is now checked out in that worktree: a second resume refuses.
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: refuses a branch checked out in another worktree"
   else bad "resume: refuses a branch checked out in another worktree (rc=$rc)"; fi
   assert_has "...and says so" "checked out in another worktree" "$out"
@@ -936,7 +1078,7 @@ EOF
   # Local branch behind the remote (the worktree is gone): fast-forwarded.
   git_t -C "$rs/repo" worktree remove "$wpath"
   git_t -C "$rs/repo" branch -q -f "$BR" "$tip~1"
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
   assert_eq "resume: a local branch behind the remote is brought up to the pushed tip" "0:$tip" \
     "$rc:$(git_t -C "$wpath" rev-parse HEAD 2>/dev/null)"
@@ -946,13 +1088,13 @@ EOF
   git_t -C "$rs/repo" branch -q -f "$BR" "$tip"
   git_t -C "$rs/repo" commit-tree -m local "$tip^{tree}" -p "$tip" > "$rs/local-commit"
   git_t -C "$rs/repo" branch -q -f "$BR" "$(cat "$rs/local-commit")"
-  launch_resume --resume "$BR" 4242 "$URL"
+  launch_resume --resume "$BR" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "resume: refuses a local branch with commits the remote lacks"
   else bad "resume: refuses a local branch with commits the remote lacks (rc=$rc)"; fi
   assert_eq "...and leaves that branch where it was" "$(cat "$rs/local-commit")" "$(git_t -C "$rs/repo" rev-parse "$BR")"
 
   # A branch that is not on the remote.
-  launch_resume --resume "worktree-jikkyo-12-20990101-000000" 4242 "$URL"
+  launch_resume --resume "worktree-jikkyo-12-20990101-000000" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: refuses a branch that is not on the remote"
   else bad "resume: refuses a branch that is not on the remote (rc=$rc)"; fi
   assert_lacks "...before printing worktree lines" "jikkyo: worktree" "$out"
@@ -968,7 +1110,7 @@ EOF
   BR5="worktree-jikkyo-12-20261114-300001"
   push_branch "$BR5"
   git_t -C "$rs/repo" remote add aaa https://github.com/o/r.git
-  launch_resume --resume "$BR5" 4242 "$URL"
+  launch_resume --resume "$BR5" 4242 "$SID" "$URL"
   assert_eq "resume: with two matching remotes, exits 0" "0" "$rc"
   assert_has "resume: ...and fetches from the first one listed" \
     "fetch --quiet aaa +refs/heads/$BR5:refs/remotes/aaa/$BR5" "$(cat "$rs/git.log")"
@@ -984,7 +1126,7 @@ EOF
   push_branch "$BR6"
   mv "$rs/repo/.claude/worktrees" "$rs/worktrees.saved"
   : > "$rs/repo/.claude/worktrees"
-  launch_resume --resume "$BR6" 4242 "$URL"
+  launch_resume --resume "$BR6" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: a failed worktree add exits 2 without the child"
   else bad "resume: a failed worktree add exits 2 without the child (rc=$rc)"; fi
   assert_has "...and says so" "could not add a worktree for $BR6" "$out"
@@ -993,7 +1135,7 @@ EOF
   mv "$rs/worktrees.saved" "$rs/repo/.claude/worktrees"
 
   # The worktrees cannot be listed: exit 2 before the fetch.
-  T_FAIL_LIST=1 launch_resume --resume "$BR6" 4242 "$URL"
+  T_FAIL_LIST=1 launch_resume --resume "$BR6" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: a failed worktree list exits 2 without the child"
   else bad "resume: a failed worktree list exits 2 without the child (rc=$rc)"; fi
   assert_has "...and says so" "could not list the worktrees" "$out"
@@ -1001,7 +1143,7 @@ EOF
 
   # The new worktree cannot be entered: exit 2, no child, no worktree lines,
   # and launch.sh tries to take the worktree back out.
-  T_MOVE_ADDED=1 launch_resume --resume "$BR6" 4242 "$URL"
+  T_MOVE_ADDED=1 launch_resume --resume "$BR6" 4242 "$SID" "$URL"
   if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then ok "resume: a worktree that cannot be entered exits 2 without the child"
   else bad "resume: a worktree that cannot be entered exits 2 without the child (rc=$rc)"; fi
   assert_has "...and says so" "could not enter" "$out"
@@ -1037,7 +1179,7 @@ EOF
   git_t -C "$rs/seed" commit -q -m "hostile configuration"
   git_t -C "$rs/seed" push -q origin "$BR7" 2>/dev/null
   "$REAL_GIT" -C "$rs/repo" config core.hooksPath .githooks
-  launch_resume --resume "$BR7" 4242 "$URL"
+  launch_resume --resume "$BR7" 4242 "$SID" "$URL"
   assert_eq "resume: a branch with its own hooks, MCP servers, and links is resumed" "0" "$rc"
   assert_has "resume: ...with the user's settings only" "$(printf -- '--setting-sources\nuser')" "$(cat "$CLAUDE_ARGS" 2>/dev/null)"
   assert_eq "resume: ...and launch.sh ran nothing from it" "" "$(find "$rs" -name pwned -o -name hooked)"
@@ -1068,6 +1210,403 @@ EOF
   fi
   "$REAL_GIT" -C "$rs/repo" config --unset core.hooksPath
   rm -f "$rs/hooked"
+}
+
+# ===========================================================================
+echo "launch.sh and report.sh: the session id"
+{
+  # A copy of launch.sh next to a report.sh stub that records its arguments,
+  # to see what launch.sh hands over.
+  ho="$TMP/handoff"
+  mkdir -p "$ho"
+  cp "$LAUNCH" "$ho/launch.sh"
+  cat > "$ho/report.sh" <<'EOF2'
+#!/usr/bin/env bash
+cat > /dev/null
+printf '%s\n' "$@" > "$REPORT_ARGS"
+EOF2
+  chmod +x "$ho/launch.sh" "$ho/report.sh"
+  export REPORT_ARGS="$TMP/report-args"
+  git -C "$repo" remote set-url origin https://github.com/o/r.git
+
+  rm -f "$REPORT_ARGS"
+  (cd "$repo" && bash "$ho/launch.sh" "$SID" "$URL") >/dev/null 2>&1 < /dev/null
+  assert_eq "a fresh launch hands the session id to report.sh as --session" \
+    "$(printf -- '--session\n%s\n%s\nworktree-jikkyo-12-' "$SID" "$URL")" \
+    "$(sed -e '$s/[0-9]\{8\}-[0-9]\{6\}$//' "$REPORT_ARGS" 2>/dev/null)"
+
+  BR8="worktree-jikkyo-12-20261114-300004"
+  push_branch "$BR8"
+  # A resumed worktree is named by the second it starts in: wait one out, so
+  # this launch cannot pick the name of one an earlier test left behind.
+  sleep 1
+  rm -f "$REPORT_ARGS" "$CLAUDE_ARGS"; rc=0
+  out="$(cd "$rs/repo" && PATH="$rs/bin:$PATH" bash "$ho/launch.sh" --resume "$BR8" 4242 "$SID" "$URL" 2>&1 < /dev/null)" || rc=$?
+  assert_eq "a resumed launch hands the session id to report.sh as --session" \
+    "$(printf -- '--session\n%s\n%s\n%s\n4242' "$SID" "$URL" "$BR8")" "$(cat "$REPORT_ARGS" 2>/dev/null || printf 'rc=%s: %s' "$rc" "$out")"
+  wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
+  [ -n "$wpath" ] && git_t -C "$rs/repo" worktree remove --force "$wpath" 2>/dev/null
+
+  # A resumed launch with a bad session id starts too, without --session.
+  BR9="worktree-jikkyo-12-20261114-300005"
+  push_branch "$BR9"
+  sleep 1
+  rm -f "$REPORT_ARGS" "$CLAUDE_ARGS"; rc=0
+  out="$(cd "$rs/repo" && PATH="$rs/bin:$PATH" bash "$ho/launch.sh" --resume "$BR9" 4242 "not-a-session" "$URL" 2>&1 < /dev/null)" || rc=$?
+  assert_eq "a resumed launch with a bad session id starts without --session" \
+    "0:$(printf -- '%s\n%s\n4242' "$URL" "$BR9")" "$rc:$(cat "$REPORT_ARGS" 2>/dev/null || printf '%s' "$out")"
+  assert_has "...and warns that the status line is off" "jikkyo: status line off" "$out"
+  wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
+  [ -n "$wpath" ] && git_t -C "$rs/repo" worktree remove --force "$wpath" 2>/dev/null
+
+  # shellcheck disable=SC2016  # literal $(id), never expanded
+  for bad_sid in "" "not-a-session" "${SID}0" "${SID%?}" "${SID}\$(id)" "${SID} " \
+      "0f6c2a3e_5b7d_4c1e_9a8f_2d3b4c5e6f70" "0f6c2a3e-5b7d-4c1e-9a8f-2d3b4c5e6f7g" "../../etc/passwd"; do
+    # The session id is for the status line alone: a bad one is dropped
+    # with a warning, and the run still starts, without --session.
+    rm -f "$REPORT_ARGS"; rc=0
+    err="$(cd "$repo" && bash "$ho/launch.sh" "$bad_sid" "$URL" 2>&1 >/dev/null < /dev/null)" || rc=$?
+    if [ "$rc" = 0 ] && [ "$(sed -e '$s/[0-9]\{8\}-[0-9]\{6\}$//' "$REPORT_ARGS" 2>/dev/null)" = "$(printf '%s\nworktree-jikkyo-12-' "$URL")" ]; then
+      ok "launch.sh drops the session id [$bad_sid] and starts the run without --session"
+    else bad "launch.sh drops the session id [$bad_sid] and starts the run without --session (rc=$rc)"; fi
+    assert_has "launch.sh warns that the status line is off for [$bad_sid]" "jikkyo: status line off" "$err"
+    if [ -z "$bad_sid" ] || [[ "$err" != *"$bad_sid"* ]]; then ok "launch.sh does not echo the bad session id [$bad_sid]"
+    else bad "launch.sh does not echo the bad session id [$bad_sid]"; fi
+    new_log; rc=0; bash "$REPORT" --session "$bad_sid" "$URL" < /dev/null >/dev/null 2>&1 || rc=$?
+    if [ "$rc" = 2 ] && [ "$(calls)" = 0 ]; then ok "report.sh rejects --session [$bad_sid] before any write"
+    else bad "report.sh rejects --session [$bad_sid] before any write (rc=$rc)"; fi
+  done
+  rm -f "$CLAUDE_ARGS"; rc=0
+  (cd "$repo" && bash "$LAUNCH" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
+  if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ]; then ok "launch.sh without a session id is refused"
+  else bad "launch.sh without a session id is refused (rc=$rc)"; fi
+  new_log; rc=0; bash "$REPORT" --session < /dev/null >/dev/null 2>&1 || rc=$?
+  assert_eq "report.sh --session with no value exits 2" "2" "$rc"
+  # An upper-case session id has the same shape.
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" --session "$(printf '%s' "$SID" | tr '[:lower:]' '[:upper:]')" "$URL" >/dev/null 2>&1 || rc=$?
+  assert_eq "report.sh accepts an upper-case session id" "0" "$rc"
+}
+
+# ===========================================================================
+echo "statusline.sh"
+{
+  # A checkout with state files under its common dir, a fake clock at 10000,
+  # and the status line's stdin for this session ($SID) in that checkout.
+  sl_repo="$TMP/sl"
+  git init -q "$sl_repo"
+  sl_repo="$(cd "$sl_repo" && pwd -P)"
+  sl_dir="$sl_repo/.git/jikkyo"
+  sl_clock="$TMP/sl-clock"; echo 10000 > "$sl_clock"
+  OTHER_SID="11111111-2222-4333-8444-555555555555"
+  put() {  # <number> [jq object merged over the defaults]
+    local o="${2:-}"
+    [ -n "$o" ] || o='{}'
+    mkdir -p "$sl_dir"
+    jq -cn --argjson n "$1" --arg sid "$SID" --argjson o "$o" \
+      '{v: 1, issue: "https://github.com/o/r/issues/\($n)", number: $n, state: "running",
+        done: 3, total: 5, turns: 12, started: 9000, updated: 9990, eta_secs: 720,
+        lang: "en", session: $sid, comment: null} + $o' > "$sl_dir/$1.json"
+  }
+  sl_input() {  # [session id] [project dir]
+    jq -cn --arg sid "${1:-$SID}" --arg d "${2:-$sl_repo}" \
+      '{session_id: $sid, workspace: {project_dir: $d, current_dir: $d}, cwd: $d}'
+  }
+  sl() {  # [stdin] -> the status line's output
+    local in="${1:-}"
+    [ -n "$in" ] || in="$(sl_input)"
+    printf '%s' "$in" | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE"
+  }
+  sl_reset() { rm -rf "$sl_dir"; }
+
+  sl_reset
+  assert_eq "no state directory: nothing" "" "$(sl)"
+  mkdir -p "$sl_dir"
+  assert_eq "an empty state directory: nothing" "" "$(sl)"
+
+  put 27
+  assert_eq "running with todos: percentage and remaining time" "jikkyo #27 · 60% · ~12m left" "$(sl)"
+  put 27 '{"done": 0, "eta_secs": null}'
+  assert_eq "running before the first completed todo: no estimate" "jikkyo #27 · 0%" "$(sl)"
+  put 27 '{"eta_secs": 45}'
+  assert_eq "an estimate under a minute in seconds" "jikkyo #27 · 60% · ~45s left" "$(sl)"
+  put 27 '{"eta_secs": 3900}'
+  assert_eq "an estimate over an hour in hours and minutes" "jikkyo #27 · 60% · ~1h 05m left" "$(sl)"
+  put 27 '{"done": 5, "eta_secs": 0}'
+  assert_eq "all todos done while still running" "jikkyo #27 · 100% · ~0s left" "$(sl)"
+  put 27 '{"done": 0, "total": 0, "eta_secs": null}'
+  assert_eq "running with no todos: the turn count" "jikkyo #27 · 12 turns" "$(sl)"
+  put 27 '{"done": 0, "total": 0, "turns": 1, "eta_secs": null}'
+  assert_eq "...one turn" "jikkyo #27 · 1 turn" "$(sl)"
+  printf '%s' "$(sl)" > "$TMP/sl-out"
+  assert_eq "the output is a single line" "0" "$(tr -cd '\n' < "$TMP/sl-out" | wc -c | tr -d ' ')"
+  assert_eq "...ending in a newline" "1" "$(sl | wc -l | tr -d ' ')"
+
+  for st in finished failed interrupted; do
+    put 27 "{\"state\": \"$st\", \"updated\": 9701, \"eta_secs\": null}"
+    assert_eq "$st: shown for 5 minutes after updated (4 m 59 s)" "jikkyo #27 · $st" "$(sl)"
+    put 27 "{\"state\": \"$st\", \"updated\": 9700, \"eta_secs\": null}"
+    assert_eq "$st: gone at 5 minutes" "" "$(sl)"
+  done
+  sl_reset
+
+  # Stale: a running file 15 minutes without a write.
+  put 27 '{"updated": 9101}'
+  assert_eq "running, 14 m 59 s since updated: still running" "jikkyo #27 · 60% · ~12m left" "$(sl)"
+  put 27 '{"updated": 9100}'
+  assert_eq "running, 15 minutes since updated: stale, not running" "jikkyo #27 · stale" "$(sl)"
+  put 27 '{"updated": 1}'
+  assert_eq "...and stays stale however old (no 5-minute window)" "jikkyo #27 · stale" "$(sl)"
+  put 27 '{"done": 0, "total": 0, "eta_secs": null, "updated": 9100}'
+  assert_eq "...also with no todos" "jikkyo #27 · stale" "$(sl)"
+  put 27 '{"updated": 9100}'
+  echo 9105 > "$sl_clock"; put 27 '{"updated": 9105}'
+  assert_eq "the next write (a heartbeat or the next run) clears stale" "jikkyo #27 · 60% · ~12m left" "$(sl)"
+  echo 10000 > "$sl_clock"
+  sl_reset
+  put 12 '{"updated": 1}'
+  assert_eq "issue 12 left stale" "jikkyo #12 · stale" "$(sl)"
+  { create t1 1; result_ok; } > "$TMP/sl-stale.jsonl"
+  new_log
+  (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stale.jsonl" > /dev/null 2>&1)
+  assert_eq "...until the next run of issue 12 overwrites its file" \
+    "jikkyo #12 · finished" "$(sl_input | bash "$STATUSLINE")"
+  sl_reset
+
+  put 31 '{"state": "finished", "updated": 9950}'
+  put 27
+  put 5 '{"done": 0, "total": 0, "turns": 3, "eta_secs": null}'
+  assert_eq "several runs: one line, by issue number, joined with ' | '" \
+    "jikkyo #5 · 3 turns | jikkyo #27 · 60% · ~12m left | jikkyo #31 · finished" "$(sl)"
+  put 40 '{"state": "finished", "updated": 1000}'
+  assert_eq "...an ended run past its 5 minutes drops out" \
+    "jikkyo #5 · 3 turns | jikkyo #27 · 60% · ~12m left | jikkyo #31 · finished" "$(sl)"
+
+  sl_reset
+  put 27 "{\"session\": \"$OTHER_SID\"}"
+  assert_eq "another session's run is not shown" "" "$(sl)"
+  put 31
+  assert_eq "...only this session's runs are" "jikkyo #31 · 60% · ~12m left" "$(sl)"
+  assert_eq "...and the other session sees only its own" "jikkyo #27 · 60% · ~12m left" "$(sl "$(sl_input "$OTHER_SID")")"
+  put 31 '{"session": null}'
+  assert_eq "a run with no session is shown nowhere" "" "$(sl)"
+
+  # From a linked worktree of the checkout, with only current_dir known.
+  sl_reset; put 27
+  git -C "$sl_repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
+  git -C "$sl_repo" worktree add -q "$TMP/sl-wt" 2>/dev/null
+  mkdir -p "$TMP/sl-wt/sub"
+  assert_eq "from a linked worktree's subdirectory (current_dir only) the run is found" "jikkyo #27 · 60% · ~12m left" \
+    "$(sl "$(jq -cn --arg sid "$SID" --arg d "$TMP/sl-wt/sub" '{session_id: $sid, workspace: {current_dir: $d}}')")"
+  assert_eq "...and from cwd alone" "jikkyo #27 · 60% · ~12m left" \
+    "$(sl "$(jq -cn --arg sid "$SID" --arg d "$TMP/sl-wt" '{session_id: $sid, cwd: $d}')")"
+  git -C "$sl_repo" worktree remove --force "$TMP/sl-wt"
+
+  # Language: each segment follows its run's lang.
+  sl_reset
+  put 27 '{"lang": "ja"}'
+  assert_eq "ja, running: 残り ~<eta>, as in the comment's heading" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
+  put 27 '{"lang": "ja", "done": 0, "eta_secs": null}'
+  assert_eq "ja, running before the first completed todo" "jikkyo #27 · 0%" "$(sl)"
+  put 27 '{"lang": "ja", "done": 0, "total": 0, "eta_secs": null}'
+  assert_eq "ja, no todos: <turns> ターン" "jikkyo #27 · 12 ターン" "$(sl)"
+  put 27 '{"lang": "ja", "done": 0, "total": 0, "turns": 1, "eta_secs": null}'
+  assert_eq "ja, one turn: 1 ターン" "jikkyo #27 · 1 ターン" "$(sl)"
+  for pair in finished:完了 failed:失敗 interrupted:中断; do
+    put 27 "{\"lang\": \"ja\", \"state\": \"${pair%%:*}\", \"updated\": 9900}"
+    assert_eq "ja, ${pair%%:*}: ${pair#*:}" "jikkyo #27 · ${pair#*:}" "$(sl)"
+  done
+  put 27 '{"lang": "ja", "updated": 9100}'
+  assert_eq "ja, stale: 応答なし" "jikkyo #27 · 応答なし" "$(sl)"
+  put 27 '{"lang": "ja"}'
+  put 31 '{"state": "finished", "updated": 9900}'
+  assert_eq "runs in both languages on one line, each in its own" "jikkyo #27 · 60% · 残り ~12m | jikkyo #31 · finished" "$(sl)"
+  put 31 '{"lang": "fr"}'
+  assert_eq "an unknown lang is skipped" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
+  put 31 '{"lang": null}'
+  assert_eq "...as is a missing one" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
+  # The Japanese words are the status comment's own, state by state: what
+  # statusline.sh shows for each ended state is what report.sh's state_word
+  # gives for it.
+  report_src="$(cat "$REPORT")"
+  for w in 'L_LEFT_PRE=" · 残り ~"' 'L_TURN_MANY=" ターン"'; do
+    assert_has "report.sh's comment uses [$w] too" "$w" "$report_src"
+  done
+  eval "$(sed -n '/^state_word() {/,/^}/p' "$REPORT")"
+  for st in finished failed interrupted; do
+    put 27 "{\"state\": \"$st\", \"updated\": 9900, \"lang\": \"ja\"}"
+    assert_eq "ja, $st: the status line's word is the comment's" "jikkyo #27 · $(LANG_CODE=ja state_word "$st")" "$(sl)"
+  done
+  put 27 '{"lang": "ja"}'
+  # End to end in Japanese.
+  sl_reset
+  new_log
+  { create t1 1; result_ok; } > "$TMP/sl-ja-stream.jsonl"
+  (cd "$sl_repo" && GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-ja-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a Japanese issue's run shows in Japanese" "jikkyo #12 · 完了" "$(sl_input | bash "$STATUSLINE")"
+  sl_reset; put 27
+
+  # Quiet and local: any bad input prints nothing, exits 0, and says nothing
+  # on stderr; a bad state file is skipped and the good ones still show.
+  sl_reset; put 27
+  sl_quiet() {  # <label> <stdin> [expected stdout]
+    local o e rc=0
+    o="$(printf '%s' "$2" | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE" 2> "$TMP/sl-err")" || rc=$?
+    e="$(cat "$TMP/sl-err")"
+    if [ "$rc" = 0 ] && [ -z "$e" ] && [ "$o" = "${3:-}" ]; then ok "$1"
+    else bad "$1 (rc=$rc, stdout [$o], stderr [$e])"; fi
+  }
+  sl_quiet "empty stdin: nothing" ""
+  sl_quiet "stdin that is not JSON: nothing" "not json {"
+  sl_quiet "a JSON array: nothing" "[1,2]"
+  sl_quiet "no session_id: nothing" "$(jq -cn --arg d "$sl_repo" '{workspace: {project_dir: $d}}')"
+  sl_quiet "a session_id that is not a session id: nothing" "$(sl_input "../$SID")"
+  sl_quiet "a numeric session_id: nothing" "$(jq -cn --arg d "$sl_repo" '{session_id: 1, workspace: {project_dir: $d}}')"
+  sl_quiet "no directory: nothing" "$(jq -cn --arg sid "$SID" '{session_id: $sid}')"
+  sl_quiet "a relative directory: nothing" "$(sl_input "$SID" "sl")"
+  sl_quiet "a directory that does not exist: nothing" "$(sl_input "$SID" "$TMP/nowhere")"
+  sl_quiet "a directory outside any git checkout: nothing" "$(sl_input "$SID" "$TMP/nogit")"
+  sl_quiet "a good run is shown quietly" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rm -f "$TMP/bad-clock"; echo "soon" > "$TMP/bad-clock"
+  rc=0; o="$(sl_input | JIKKYO_CLOCK_FILE="$TMP/bad-clock" bash "$STATUSLINE" 2>&1)" || rc=$?
+  assert_eq "a clock that is not a number: nothing, exit 0" "0:" "$rc:$o"
+
+  # Each of these files is skipped; #27 still shows.
+  bad_files=(
+    'not json'
+    '{"v":1'
+    '[]'
+    '"a string"'
+  )
+  for content in "${bad_files[@]}"; do
+    printf '%s\n' "$content" > "$sl_dir/31.json"
+    sl_quiet "a state file holding [$content] is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  done
+  for o in '{"v": 2}' '{"number": 32}' '{"number": "31"}' '{"number": 0}' '{"state": "running\u001b[2J"}' \
+      '{"state": "paused"}' '{"state": null}' '{"done": -1}' '{"done": 1.5}' '{"done": "3"}' '{"done": 6}' \
+      '{"total": null}' '{"turns": "x"}' '{"updated": "9990"}' '{"updated": null}' '{"eta_secs": -5}' \
+      '{"eta_secs": "720"}' '{"session": "x"}'; do
+    put 31 "$o"
+    sl_quiet "a state file with $o is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  done
+  rm -f "$sl_dir/31.json"
+  put 31; mv "$sl_dir/31.json" "$sl_dir/x31.json"
+  sl_quiet "a file whose name is not <N>.json is not read" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rm -f "$sl_dir/x31.json"
+  put 31; head -c 5000 /dev/zero | tr '\0' ' ' >> "$sl_dir/31.json"
+  sl_quiet "a state file over 4 KiB is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  put 31; printf '%s' "$(cat "$sl_dir/31.json")" > "$sl_dir/31.tmp"; mv "$sl_dir/31.tmp" "$sl_dir/31.json"
+  put 32; printf '%s' "$(cat "$sl_dir/32.json")" > "$sl_dir/32.tmp"; mv "$sl_dir/32.tmp" "$sl_dir/32.json"
+  sl_quiet "files without a trailing newline are each read whole" "$(sl_input)" \
+    "jikkyo #27 · 60% · ~12m left | jikkyo #31 · 60% · ~12m left | jikkyo #32 · 60% · ~12m left"
+  rm -f "$sl_dir/31.json" "$sl_dir/32.json"
+  mkfifo "$sl_dir/33.json"
+  sl_quiet "a FIFO named like a state file is skipped, not waited on" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rm -f "$sl_dir/33.json"
+  mkdir "$sl_dir/34.json"
+  sl_quiet "a directory named like a state file is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"
+  rmdir "$sl_dir/34.json"
+  put 35; chmod 000 "$sl_dir/35.json"
+  if [ -r "$sl_dir/35.json" ]; then ok "an unreadable state file is skipped (skipped: running as root)"
+  else sl_quiet "an unreadable state file is skipped" "$(sl_input)" "jikkyo #27 · 60% · ~12m left"; fi
+  rm -f "$sl_dir/35.json"
+
+  # Nothing from the file but checked numbers and fixed words is printed.
+  put 27 '{"issue": "\u001b]0;pwned\u0007", "comment": "pwned", "lang": "en", "extra": "\u001b[2J pwned"}'
+  o="$(sl)"
+  assert_eq "extra or odd fields never reach the output" "jikkyo #27 · 60% · ~12m left" "$o"
+  put 27
+
+  # No network: gh, curl, and wget are stubs that log, and none is called.
+  mkdir -p "$TMP/sl-net"
+  for tool in gh curl wget nc ssh; do
+    printf '#!/usr/bin/env bash\necho %s >> "%s/sl-net/called"\n' "$tool" "$TMP" > "$TMP/sl-net/$tool"
+    chmod +x "$TMP/sl-net/$tool"
+  done
+  rm -f "$TMP/sl-net/called"
+  o="$(sl_input | PATH="$TMP/sl-net:$PATH" JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE")"
+  assert_eq "no network tool is run" "absent" "$([ -e "$TMP/sl-net/called" ] && cat "$TMP/sl-net/called" || echo absent)"
+  sl_src="$(grep -v '^ *#' "$STATUSLINE")"
+  for word in "gh " "curl" "wget" "http"; do
+    assert_lacks "statusline.sh's code has no [$word]" "$word" "$sl_src"
+  done
+
+  # Without jq: nothing, exit 0. PATH keeps only what bash needs to start.
+  mkdir -p "$TMP/sl-nojq"
+  for tool in git head date cat; do ln -sf "$(command -v "$tool")" "$TMP/sl-nojq/$tool"; done
+  rc=0; o="$(sl_input | PATH="$TMP/sl-nojq" JIKKYO_CLOCK_FILE="$sl_clock" "$(command -v bash)" "$STATUSLINE" 2>&1)" || rc=$?
+  assert_eq "without jq: nothing, exit 0" "0:" "$rc:$o"
+
+  # Fast: 50 state files, 10 of them this session's, well under a second.
+  sl_reset
+  for n in $(seq 100 149); do
+    if [ $((n % 5)) = 0 ]; then put "$n"; else put "$n" "{\"session\": \"$OTHER_SID\"}"; fi
+  done
+  TIMEFORMAT=%R
+  secs="$( { time sl > "$TMP/sl-out"; } 2>&1 )"
+  unset TIMEFORMAT
+  assert_eq "...shows the 10 runs of this session" "10" "$(tr '|' '\n' < "$TMP/sl-out" | grep -c 'jikkyo #')"
+  if awk -v s="$secs" 'BEGIN { exit !(s < 1.0) }'; then ok "50 state files take under a second (${secs}s)"
+  else bad "50 state files take under a second (${secs}s)"; fi
+
+  # End to end: what report.sh writes, statusline.sh shows.
+  sl_reset
+  { create t1 1; create t2 2; update u1 1 completed; result_ok; } > "$TMP/sl-stream.jsonl"
+  new_log
+  (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a run report.sh just finished shows as finished" "jikkyo #12 · finished" \
+    "$(sl_input | bash "$STATUSLINE")"
+
+  # A file from the future (the clock was set back) is skipped, so an ended
+  # run cannot stay on the line; a few seconds ahead is fine.
+  sl_reset
+  put 27 '{"state": "finished", "updated": 100000}'
+  assert_eq "an ended run updated far in the future is not shown" "" "$(sl)"
+  put 27 '{"state": "finished", "updated": 10030}'
+  assert_eq "...one written seconds ahead still is" "jikkyo #27 · finished" "$(sl)"
+
+  # Claude Code started outside the repository, then moved into it: the
+  # first directory inside a git checkout is used.
+  sl_reset; put 27
+  assert_eq "project_dir outside git, current_dir in the checkout: shown" "jikkyo #27 · 60% · ~12m left" \
+    "$(jq -cn --arg sid "$SID" --arg o "$TMP/nogit" --arg d "$sl_repo" \
+         '{session_id: $sid, workspace: {project_dir: $o, current_dir: $d}, cwd: $o}' | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE")"
+  assert_eq "...and cwd when it is the only one inside" "jikkyo #27 · 60% · ~12m left" \
+    "$(jq -cn --arg sid "$SID" --arg o "$TMP/nogit" --arg d "$sl_repo" \
+         '{session_id: $sid, workspace: {project_dir: $o, current_dir: $o}, cwd: $d}' | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE")"
+
+  # Many files cost about as much as a few: one find, one awk, one jq.
+  sl_reset
+  for n in $(seq 100 599); do put "$n" "{\"session\": \"$OTHER_SID\"}"; done
+  put 600
+  TIMEFORMAT=%R
+  secs="$( { time sl > "$TMP/sl-out"; } 2>&1 )"
+  unset TIMEFORMAT
+  assert_eq "...with 501 state files, this session's one run is shown" "jikkyo #600 · 60% · ~12m left" "$(cat "$TMP/sl-out")"
+  if awk -v s="$secs" 'BEGIN { exit !(s < 0.5) }'; then ok "501 state files take under half a second (${secs}s)"
+  else bad "501 state files take under half a second (${secs}s)"; fi
+
+  # bash 3.2, what macOS ships as /bin/bash, when it is there.
+  if [ -x /bin/bash ] && /bin/bash -c '[ "${BASH_VERSINFO[0]}" -lt 4 ]'; then
+    sl_reset; put 27; put 31 '{"state": "finished", "updated": 9900, "lang": "ja"}'
+    assert_eq "under /bin/bash (3.2) too" "jikkyo #27 · 60% · ~12m left | jikkyo #31 · 完了" \
+      "$(sl_input | JIKKYO_CLOCK_FILE="$sl_clock" /bin/bash "$STATUSLINE")"
+  fi
+}
+
+# ===========================================================================
+echo "constants shared by the scripts"
+{
+  sl_stale="$(sed -n 's/^STALE_AFTER=\([0-9]*\).*/\1/p' "$STATUSLINE")"
+  pc_stale="$(sed -n 's/^STALE_AFTER=\([0-9]*\).*/\1/p' "${SCRIPTS}/precheck.sh")"
+  # shellcheck disable=SC2016  # a sed program, matching a literal ${...}
+  hb="$(sed -n 's/^HEARTBEAT_INTERVAL="${JIKKYO_HEARTBEAT_INTERVAL:-\([0-9]*\)}".*/\1/p' "$REPORT")"
+  assert_eq "statusline.sh and precheck.sh call a run stale at the same age" "$pc_stale" "$sl_stale"
+  if [ -n "$sl_stale" ] && [ -n "$hb" ] && [ "$sl_stale" -gt "$hb" ]; then ok "...longer than the heartbeat ($sl_stale > $hb)"
+  else bad "...longer than the heartbeat ([$sl_stale] > [$hb])"; fi
+  sid_res="$(grep -ho "\^\[0-9a-fA-F\]{8}-\[0-9a-fA-F\]{4}-\[0-9a-fA-F\]{4}-\[0-9a-fA-F\]{4}-\[0-9a-fA-F\]{12}\\$" "$LAUNCH" "$REPORT" "$STATUSLINE" | wc -l | tr -d ' ')"
+  sid_any="$(grep -c '0-9a-fA-F\]{8}' "$LAUNCH" "$REPORT" "$STATUSLINE" | awk -F: '{ s += $2 } END { print s }')"
+  assert_eq "launch.sh, report.sh, and statusline.sh check the session id with the same pattern" "3:3" "$sid_res:$sid_any"
 }
 
 # ===========================================================================
@@ -1446,8 +1985,9 @@ echo "cleanup.sh"
 echo "SKILL.md"
 {
   # SKILL.md runs each script by its path, not through `bash`, and the
-  # allowed-tools rules match that form, so every script must be executable.
-  for s in launch report precheck cleanup; do
+  # allowed-tools rules match that form, so every script must be executable;
+  # statusline.sh is run by path from the user's settings.
+  for s in launch report precheck cleanup statusline; do
     if [ -x "$SCRIPTS/$s.sh" ]; then ok "$s.sh is executable"; else bad "$s.sh is executable"; fi
   done
   fm="$(awk 'NR == 1 && /^---$/ { on = 1; next } on && /^---$/ { exit } on' "$SKILL_MD")"
@@ -1479,12 +2019,49 @@ echo "SKILL.md"
     assert_has "README.md: ticks after the push (#41)" "that todo's commits are pushed (one todo per task-list item; the order is complete, push, tick" "$readme"
     assert_lacks "README.md: no tick right after completing the todo (#41)" "right after completing that item's todo" "$readme"
     assert_has "README.md: resume redoes a box ticked without its work (#41)" "a box that is ticked with no work behind it on the branch is done again and stays ticked" "$readme"
+    assert_has "README.md: the status line section" "### In your status line" "$readme"
+    assert_has "README.md: the standalone setup, with refreshInterval" \
+      '{"statusLine": {"type": "command", "command": "/absolute/path/to/jikkyo/scripts/statusline.sh", "refreshInterval": 10}}' "$readme"
+    assert_has "README.md: the appended setup" "**Appended to the status line you already have**" "$readme"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: ...keeps refreshInterval too" 'keep (or add) `"refreshInterval": 10` on your `statusLine` entry' "$readme"
+    assert_has "README.md: why refreshInterval" "the session that launched it is idle" "$readme"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme"
+    assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme"
+    assert_has "README.md: after /clear, the status comment" "After \`/clear\` you are in a new session" "$readme"
+    # The appended example works as written, with its two paths filled in.
+    printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
+    chmod +x "$TMP/my-statusline.sh"
+    sed -n '/^  #!\/usr\/bin\/env bash$/,/^  printf/p' "$README_MD" | sed -e 's/^  //' \
+      -e "s|~/.claude/my-statusline.sh|$TMP/my-statusline.sh|" \
+      -e "s|/absolute/path/to/jikkyo/scripts/statusline.sh|$STATUSLINE|" > "$TMP/wrapper.sh"
+    sl_reset; put 27
+    assert_eq "README.md: the appended example appends the segment" "my line | jikkyo #27 · 60% · ~12m left" \
+      "$(sl_input | JIKKYO_CLOCK_FILE="$sl_clock" bash "$TMP/wrapper.sh")"
+    sl_reset
+    assert_eq "README.md: ...and adds nothing when there is no run" "my line" \
+      "$(sl_input | JIKKYO_CLOCK_FILE="$sl_clock" bash "$TMP/wrapper.sh")"
   fi
+  assert_has "SKILL.md: a Status line section" "## Status line" "$skill"
+  assert_has "SKILL.md: the skill never edits settings" "This skill never edits a settings file" "$skill"
+  assert_has "SKILL.md: refreshInterval and why" "with \`refreshInterval\`, needed because this session is idle while the run" "$skill"
+  # No script writes Claude Code settings.
+  for s in launch report precheck cleanup statusline; do
+    assert_lacks "$s.sh does not touch settings.json" "settings.json" "$(grep -v '^ *#' "$SCRIPTS/$s.sh")"
+  done
   assert_has "SKILL.md: ...and that it is asked, not enforced" "command line, and it is asked, not enforced: no script checks the log's" "$skill"
   assert_has "SKILL.md: usage has --resume" "/jikkyo [--force | --resume] <GitHub issue URL>" "$skill"
   assert_has "SKILL.md: resume asks precheck.sh with the issue number" "precheck.sh --author '<login>' --resume '<N>'" "$skill"
   assert_has "SKILL.md: no valid branch stops the resume" "Never pick a branch any other" "$skill"
-  assert_has "SKILL.md: resume launches with the validated branch and id" "launch.sh --resume '<branch>' '<comment id>' '<URL>'" "$skill"
+  # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
+  assert_has "SKILL.md: resume launches with the validated branch, id, and session id" "launch.sh --resume '<branch>' '<comment id>' '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
+  # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
+  assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
+  assert_has "SKILL.md: the parent checks the session id's shape itself before launching" "Before launching, look at the value you are about to pass" "$skill"
+  assert_has "...and tells the user the run will not show in the status line" "say in step 5 that this run will not show in the" "$skill"
+  assert_has "...which step 5 says too" "only when step 4 found the session id not shaped like" "$skill"
+  assert_lacks "...without spelling the variable, which Claude Code would fill in" "for example the literal" "$skill"
   assert_has "SKILL.md: documents resuming" "**Resuming a run.**" "$skill"
   assert_has "SKILL.md: resume lists the other authors first" "precheck.sh --author '<login>' --authors" "$skill"
   assert_has "SKILL.md: ...checks each one's permission" "gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission" "$skill"
