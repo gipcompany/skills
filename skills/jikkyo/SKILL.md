@@ -386,7 +386,8 @@ status-comment write and at exit. `scripts/statusline.sh` reads it and shows
 of **the session that launched or resumed the run** only: it matches the
 `${CLAUDE_SESSION_ID}` passed to `launch.sh` against the status line's
 `session_id`. After `/clear` the run is no longer shown; point the user at the
-status comment. This skill never edits a settings file: if the user asks
+status comment, which is the record: the status line is a convenience, and
+anything that can write to `.git` can write a state file. This skill never edits a settings file: if the user asks
 about the status line, point them at the README's *In your status line*,
 which shows both setups (the whole status line, or appended to their own)
 with `refreshInterval`, needed because this session is idle while the run
