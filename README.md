@@ -179,12 +179,7 @@ Multiple terminals — or a human editing the issue in a browser / the file in a
 
 A kabeuchi runs for dozens of turns, and over that distance it is easy to lose track of which window is grilling and against which target, or for the interview to drift off its rules. So the moment `/kabeuchi` is invoked — before Claude has read a word of the skill — it drops a marker file at `~/.claude/kabeuchi/<session-id>` naming the target, and registers a `UserPromptSubmit` hook that restates the target and the rules on every turn. Neither depends on Claude remembering to do anything.
 
-The marker is also there for your status line to read. Have `~/.claude/statusline.sh` print a second row when the file for the current session exists, and it shows up only while a grilling is running:
-
-```
-Opus · ⚡xhigh · ~/git/path · 5h: [███░░░░░░░] 28% ↻2h10m
-kabeuchi in progress · gipcompany/path#125
-```
+The marker is also what the status line row reads: the skill ships a script for it, set up as described in [*In your status line*](#in-your-status-line) below.
 
 Because the marker is keyed by session id it can never light up a different window's bar, and it records the owning process so a session that dies without clearing it is collected on the next run. Clearing it is the skill's own last step.
 
