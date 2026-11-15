@@ -2084,8 +2084,20 @@ echo "SKILL.md"
   assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   assert_has "SKILL.md: the parent checks the session id's shape itself before launching" "Before launching, look at the value you are about to pass" "$skill"
   assert_has "...and tells the user the run will not show in the status line" "say in step 5 that this run will not show in the" "$skill"
-  assert_has "...which step 5 says too" "only when step 4 found the session id not shaped like" "$skill"
-  assert_lacks "...without spelling the variable, which Claude Code would fill in" "for example the literal" "$skill"
+  # shellcheck disable=SC2016  # a literal backtick and $
+  assert_has "...naming a placeholder by its \$, not by the variable's name" \
+    'for example a placeholder left as written
+   (it starts with `$`)' "$skill"
+  assert_has "...which step 5 says too, in the same words" "only when step 4 found the session id not a UUID" "$skill"
+  # Claude Code fills in the variable everywhere in the skill text, so it is
+  # named on exactly these three lines (the two launch lines and the Status
+  # line section) and nowhere else, in any spelling.
+  # shellcheck disable=SC2016  # literal ${...}
+  assert_eq "SKILL.md: CLAUDE_SESSION_ID appears only on the launch lines and in Status line" \
+    "   \${CLAUDE_SKILL_DIR}/scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'
+   \${CLAUDE_SKILL_DIR}/scripts/launch.sh --resume '<branch>' '<comment id>' '\${CLAUDE_SESSION_ID}' '<URL>'
+\`\${CLAUDE_SESSION_ID}\` passed to \`launch.sh\` against the status line's" \
+    "$(grep 'CLAUDE_SESSION_ID' "$SKILL_MD")"
   assert_has "SKILL.md: documents resuming" "**Resuming a run.**" "$skill"
   assert_has "SKILL.md: resume lists the other authors first" "precheck.sh --author '<login>' --authors" "$skill"
   assert_has "SKILL.md: ...checks each one's permission" "gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission" "$skill"
