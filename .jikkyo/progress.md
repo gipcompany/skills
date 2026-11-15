@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/46
 branch: worktree-jikkyo-46-20261115-213256
-updated: 2026-11-15T21:43:46+09:00
-next: run shellcheck over the scripts and tests for the Checks item
+updated: 2026-11-15T21:43:58+09:00
+next: delete this log in its own commit, push, and open the PR
 
 ## Todos
 
@@ -11,7 +11,7 @@ next: run shellcheck over the scripts and tests for the Checks item
 - [x] SKILL.md step 4/5 wording and CLAUDE_SESSION_ID pin in run.sh (2f70a53)
 - [x] README: estimate does not count down + assert_has (7a37014)
 - [x] Check: run.sh passes (0 failed) (24e4371)
-- [ ] Check: shellcheck passes
+- [x] Check: shellcheck passes (24e4371)
 - [ ] Delete progress log and open the PR
 
 ## Verified task-list items
@@ -22,6 +22,7 @@ next: run shellcheck over the scripts and tests for the Checks item
 - SKILL.md step 4/5 wording after substitution: exact wording in steps 4 and 5, run.sh asserts both and pins the CLAUDE_SESSION_ID lines; 750 passed, 0 failed; an extra mention of the variable makes the pin fail
 - README: say the estimate does not count down: sentence added to the In your status line section, pinned by assert_has "does not count down"; run.sh 751 passed, 0 failed
 - bash skills/jikkyo/tests/run.sh passes locally: 751 passed, 0 failed at 24e4371
+- shellcheck skills/jikkyo/scripts/*.sh skills/jikkyo/tests/*.sh passes locally: shellcheck 0.11.0 via npx, exit 0, no findings at 24e4371
 
 ## Dead ends and decisions
 
