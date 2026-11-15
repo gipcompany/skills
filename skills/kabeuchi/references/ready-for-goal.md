@@ -340,7 +340,13 @@ and not a discussion log.
   Phase 2 and every re-run of the check — or after the user declined the check,
   and **before the closing summary**, so the summary can say it was written.
 - **At the end of every session that reaches Phase 3**, including one in which
-  no point was written back. A session that ends at the Phase 1 preflight never
+  no point was written back.
+- **For both target kinds**, the same line in the same place: a GitHub issue
+  body (`gh issue edit "$URL" --body-file <file>`) or a local markdown file
+  (the file is written; no git operations, as for every other write-back). It
+  is a line in the body rather than a GitHub label because a label exists only
+  on issues and is invisible to a run that reads only the body; a line in the
+  body works for both kinds and is read by everything that reads the target. A session that ends at the Phase 1 preflight never
   got to grill anything and writes no line.
 - **Through the write-back loop** (`conflict-resolution.md`), like every other
   write: re-fetch and normalize the target, compare with `last_synced` and

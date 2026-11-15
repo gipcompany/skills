@@ -413,7 +413,8 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   It is written through the write-back loop like any other conclusion: the
   concrete diff printed first, the same re-fetch, `normalize.sh` /
   `merge3.sh` handling and read-back. Write it at the end of every session
-  that reaches this phase, including one that wrote nothing else back. It is
+  that reaches this phase, including one that wrote nothing else back, and
+  for **both target kinds** — an issue body and a local file alike. It is
   the **last line of the body**, below any "Known gaps" section, and an
   existing one — found by its fixed prefix `` > Grilled with `/kabeuchi` `` —
   is **replaced**, never appended to, so a target carries at most one. The
