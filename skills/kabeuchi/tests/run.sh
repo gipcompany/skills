@@ -765,13 +765,30 @@ echo "grilled line wording (SKILL.md, references, README)"
   else
     bad "ready-for-goal.md states the exact grilled line pattern"
   fi
+  # grilled_lines <file>: every line that looks like an example of the grilled
+  # line, indentation removed. The pattern is loose on purpose (any spaces
+  # before and after ">"), so a malformed example is collected and then fails
+  # the exact match below instead of slipping past it.
+  grilled_lines() { grep -E '^ *> *Grilled' "$1" | grep -vF '<timestamp>' | sed 's/^ *//'; }
+  # stray_lines <file>: the collected lines that are not exact grilled lines.
+  stray_lines() { grilled_lines "$1" | grep -vxE "${prefix}${date_re} — (${tails})"; }
+
   for f in "${HERE}/../SKILL.md" "$REF" "$README"; do
     name="${f##*/}"
-    lines="$(grep -E '^ *> Grilled with' "$f" | grep -vF '<timestamp>' | sed 's/^ *//')"
-    if [ -z "$lines" ]; then bad "${name} shows the grilled line"; continue; fi
-    stray="$(printf '%s\n' "$lines" | grep -vxE "${prefix}${date_re} — (${tails})")"
-    assert_eq "${name}: every grilled line uses the fixed prefix and a known tail" "" "$stray"
+    if [ -z "$(grilled_lines "$f")" ]; then bad "${name} shows the grilled line"; continue; fi
+    assert_eq "${name}: every grilled line uses the fixed prefix and a known tail" "" "$(stray_lines "$f")"
   done
+
+  # The collector catches malformed examples: no space or two spaces after ">".
+  d="$(mktemp -d)"
+  for bad_line in '>Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.' \
+                  '>  Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.' \
+                  '  >Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.'; do
+    printf 'Doc\n\n%s\n' "$bad_line" > "$d/doc.md"
+    if [ -n "$(stray_lines "$d/doc.md")" ]; then ok "the wording test catches [${bad_line:0:16}…]"
+    else bad "the wording test catches [${bad_line:0:16}…]"; fi
+  done
+  rm -rf "$d"
 }
 
 echo "agents/kabeuchi-voter.md"

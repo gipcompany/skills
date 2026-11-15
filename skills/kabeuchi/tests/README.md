@@ -107,7 +107,9 @@ Exit status is non-zero if any assertion fails; the last line reports
   pattern a line must match to count as a grilled line, the same pattern the
   test uses. Its example lines must be exactly the four lines `grilled-line.sh`
   writes, and each of those must match the pattern, so the docs and the script
-  cannot drift apart.
+  cannot drift apart. Lines are collected loosely (`^ *> *Grilled`), so a
+  malformed example such as `>Grilled with …` or `>  Grilled with …` is caught,
+  and the test shows that it is.
 - **`agents/kabeuchi-voter.md`'s description** — the preflight in `SKILL.md`
   stops every session whose installed voter's description lacks a phrase it
   requires, so the shipped `description:` line must contain each of them. The
