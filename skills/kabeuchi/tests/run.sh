@@ -622,31 +622,40 @@ echo "agents/kabeuchi-voter.md"
   # The preflight stops every session whose installed kabeuchi-voter lacks one
   # of these phrases in its description, so the shipped description must
   # contain each of them, or rewording it makes every /kabeuchi stop at startup.
-  # The phrases are read from the gotchas table's "description lacks" rows, and
-  # SKILL.md's preflight must name each of them too.
+  # The phrases are read from both places that list them: the bold phrases in
+  # SKILL.md's preflight sentence (from "description lacks" to "it is an older
+  # copy"), which is what a session actually checks, and the gotchas table's
+  # "description lacks" rows. The two sets must be equal, so a phrase added to
+  # either one alone fails here instead of going unchecked.
   SKILL_MD="${HERE}/../SKILL.md"
   GOTCHAS="${HERE}/../references/gotchas.md"
   VOTER="${HERE}/../agents/kabeuchi-voter.md"
 
   # desc_has <agent file> <phrase>: exit 0 if the frontmatter's description:
-  # line contains the phrase as a fixed string.
+  # line contains the phrase as a fixed string. It reads that one line only, so
+  # the description must stay on a single line (no YAML folded or block style).
   desc_has() {
     awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { exit }
          /^description:/ { print }' "$1" | grep -qF -- "$2"
   }
 
-  phrases=()
-  while IFS= read -r p; do
-    phrases+=("$p")
-  done < <(grep -o 'description lacks "[^"]*"' "$GOTCHAS" | sed 's/^description lacks "//; s/"$//')
-  assert_eq "the gotchas table names the two preflight phrases" "2" "${#phrases[@]}"
+  # One phrase per line, sorted. Lines are joined first, so a phrase wrapped
+  # across two lines of SKILL.md is still read as one.
+  skill_phrases="$(awk '/description lacks/ { on = 1 } on { print } /it is an older copy/ { exit }' "$SKILL_MD" |
+    tr '\n' ' ' | grep -o '\*\*"[^"]*"\*\*' | sed 's/^\*\*"//; s/"\*\*$//' | sort)"
+  gotchas_phrases="$(grep -o 'description lacks "[^"]*"' "$GOTCHAS" |
+    sed 's/^description lacks "//; s/"$//' | sort)"
 
-  for p in "${phrases[@]}"; do
-    if grep -qF -- "**\"$p\"**" "$SKILL_MD"; then ok "the preflight in SKILL.md names \"$p\""
-    else bad "the preflight in SKILL.md does not name \"$p\""; fi
+  if [ -n "$skill_phrases" ]; then ok "the preflight in SKILL.md names at least one phrase"
+  else bad "no bold phrase found in SKILL.md's preflight sentence"; fi
+  assert_eq "SKILL.md's preflight and the gotchas table name the same phrases" \
+    "$skill_phrases" "$gotchas_phrases"
+
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
     if desc_has "$VOTER" "$p"; then ok "the voter's description contains \"$p\""
     else bad "the voter's description lacks \"$p\" (the preflight would stop every session)"; fi
-  done
+  done <<<"$skill_phrases"
 
   # The check fails on a description that lacks a phrase, including one where
   # the phrase appears only in the body, outside the description: line.

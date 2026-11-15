@@ -87,10 +87,11 @@ Exit status is non-zero if any assertion fails; the last line reports
 - **`agents/kabeuchi-voter.md`'s description** — the preflight in `SKILL.md`
   stops every session whose installed voter's description lacks a phrase it
   requires, so the shipped `description:` line must contain each of them. The
-  phrases are read from the `references/gotchas.md` rows that say "description
-  lacks", `SKILL.md`'s preflight must name each one, and the check is shown to
-  fail on a description without a phrase — even when the phrase appears in the
-  body below the frontmatter.
+  phrases are read from the bold phrases in `SKILL.md`'s preflight sentence and
+  from the `references/gotchas.md` rows that say "description lacks"; the two
+  sets must be equal, so a phrase added to only one of them fails. The check is
+  shown to fail on a description without a phrase — even when the phrase
+  appears in the body below the frontmatter.
 - **no temp litter** — running `merge3.sh` from a working directory leaves no
   extra files behind (it does all work under `mktemp -d` and cleans up on exit).
 
