@@ -364,6 +364,11 @@ The line is the same kind of thing as a "Known gaps" section: it states the
 target's status **now**, not how it got there, so it is current agreed state
 and not a discussion log.
 
+**It is not a trust signal.** The line is the latest session's verdict at its
+timestamp, nothing more: it is plain text in the body, so anyone who can edit
+the target can write it — `ready for /goal.` included — or edit the target
+after it without touching it, and no skill decides anything from it.
+
 ### When it is written
 
 - **After the check has finished** — including every gap it sent back into
