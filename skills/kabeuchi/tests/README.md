@@ -6,7 +6,9 @@ Regression tests for the deterministic helper scripts — `normalize.sh`,
 asserts on its stdout and exit code. The interview itself is delegated to
 `/grilling`, and the voting is done by subagents; both are prompt-driven, so
 there is nothing to unit-test there. These tests cover the only real logic the
-skill owns, including the vote counting that follows them.
+skill owns, including the vote counting that follows them. A few more tests
+check that `SKILL.md`, its references, and the shipped `kabeuchi-voter`
+definition agree where a mismatch would break a session.
 
 ## Run
 
