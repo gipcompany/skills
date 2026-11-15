@@ -157,6 +157,16 @@ A kabeuchi on an issue is often followed by `/jikkyo <issue URL>`, which runs `/
 
 The checklist lives in [`references/ready-for-goal.md`](skills/kabeuchi/references/ready-for-goal.md). kabeuchi refuses an installed `kabeuchi-voter` copied before the checker role existed, so re-copy it when you update the skill.
 
+### A status line in the target
+
+Every session that gets past startup ends by writing one line as the last line of the target — after any "Known gaps" section, in an issue body and a local file alike — so anyone who reads the target (you, `/goal`, or `/jikkyo`'s run) can tell that it was grilled, when, and what the check concluded:
+
+```markdown
+> Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
+```
+
+The tail is `` ready for `/goal`. `` when the checker reported the target ready, `` not yet ready for `/goal`; see Known gaps. `` when you left gaps open, and `` not checked for `/goal`. `` when you said the target is not meant for `/goal` or the check could not be run. The line is always in English, written through the same diff-first write-back as everything else, and found by its fixed prefix: a later session **replaces** it rather than adding another, so a target carries at most one — the latest session's — and never a history. Like "Known gaps", it states the target's current status, which is why it is allowed in a target that otherwise holds only the current agreed state. A later session reads it as data and does not grill it. (It has nothing to do with Claude Code's status line, described below.)
+
 ### How it stays safe
 
 Multiple terminals — or a human editing the issue in a browser / the file in an editor — can change the target mid-session. kabeuchi uses **optimistic detection, conservative resolution, and no locks**: before each write it re-fetches the target and compares a normalized SHA256 against the last synced state; disjoint external edits are auto-merged (3-way), overlapping ones are handed back to you to resolve, and every write is confirmed by reading it back. It always shows you the concrete diff before writing, and performs **no git operations** on local files — committing is left to you.
