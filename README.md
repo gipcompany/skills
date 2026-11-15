@@ -278,7 +278,7 @@ Each time `report.sh` writes the status comment, and at exit, it also writes a s
 
   and keep (or add) `"refreshInterval": 10` on your `statusLine` entry.
 
-**Set `refreshInterval` either way.** A status line otherwise runs only on session events, such as a new assistant message. While the child works, the session that launched it is idle (it only waits for the background command to exit), so without a refresh interval the line would stay at whatever it showed when the run started. With `refreshInterval: 10` it is re-read every 10 seconds; the file itself changes at most every 30 seconds, plus a heartbeat every 5 minutes.
+**Set `refreshInterval` either way.** A status line otherwise runs only on session events, such as a new assistant message. While the child works, the session that launched it is idle (it only waits for the background command to exit), so without a refresh interval the line would stay at whatever it showed when the run started. With `refreshInterval: 10` it is re-read every 10 seconds; the file itself changes at most every 30 seconds, plus a heartbeat every 5 minutes. The remaining-time estimate is the one as of the last write, the same figure as the status comment's `Remaining` row: it does not count down between writes (at most 5 minutes apart, the heartbeat).
 
 ### How it works
 
