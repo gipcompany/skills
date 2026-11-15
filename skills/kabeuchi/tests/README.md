@@ -91,7 +91,8 @@ Exit status is non-zero if any assertion fails; the last line reports
   leaks in; an **invalid `session_id`** — empty, `.`, `..`, or one containing
   `/` — **prints nothing**, even when it would name an existing file. Above
   all, it **exits 0 on every input** — no payload, not JSON, a directory or an
-  empty file where the marker should be — so it cannot break the status line.
+  empty file where the marker should be, neither `KABEUCHI_DIR` nor `HOME`
+  set — so it cannot break the status line.
 - **`tally.sh`** — three valid votes for one option are unanimous; an invalid
   vote stays in the `N/M` denominator while an abstained or failed one leaves it,
   and all three are named differently; a 2-of-3 majority names the dissent; an

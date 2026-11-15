@@ -582,6 +582,10 @@ echo "statusline.sh"
   rmdir "$KABEUCHI_DIR/$SID"; : > "$KABEUCHI_DIR/$SID"
   rc=0; out="$(sl "$SID")" || rc=$?
   assert_eq "an empty marker prints nothing, exits 0" "0:" "$rc:$out"
+  # With neither KABEUCHI_DIR nor HOME set there is no marker directory to
+  # look in: still nothing, and still exit 0 (set -u must not trip).
+  rc=0; out="$(printf '{"session_id":"%s"}' "$SID" | env -u KABEUCHI_DIR -u HOME bash "$STATUSLINE" 2>&1)" || rc=$?
+  assert_eq "no KABEUCHI_DIR and no HOME prints nothing, exits 0" "0:" "$rc:$out"
 
   unset KABEUCHI_DIR
   unset -f sl marker link

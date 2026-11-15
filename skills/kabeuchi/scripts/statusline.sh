@@ -78,14 +78,18 @@ fold_home() {
 }
 
 main() {
-  local session marker target shown
+  local session dir marker target shown
   [ -t 0 ] && return 0
   session="$(head -c 1048576 | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
   case "$session" in
     "" | . | .. | *[!A-Za-z0-9._-]* ) return 0 ;;
   esac
 
-  marker="${KABEUCHI_DIR:-$HOME/.claude/kabeuchi}/$session"
+  # With neither KABEUCHI_DIR nor HOME there is no marker directory: print
+  # nothing rather than let set -u end the script with exit 1.
+  dir="${KABEUCHI_DIR:-${HOME:+$HOME/.claude/kabeuchi}}"
+  [ -n "$dir" ] || return 0
+  marker="$dir/$session"
   [ -f "$marker" ] && [ -s "$marker" ] || return 0
   target="$(head -n 1 "$marker")"
   # mark.sh already strips control bytes, but anything that can write to the
