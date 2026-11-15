@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/46
 branch: worktree-jikkyo-46-20261115-213256
-updated: 2026-11-15T21:41:21+09:00
-next: README: say the estimate does not count down, pinned in run.sh
+updated: 2026-11-15T21:42:31+09:00
+next: run the whole run.sh suite for the Checks item
 
 ## Todos
 
@@ -9,7 +9,7 @@ next: README: say the estimate does not count down, pinned in run.sh
 - [x] Fix stale mktemp/mv comment in report.sh (1f44c76)
 - [x] Rewrap report.sh comment near line 72 and SKILL.md settings paragraph (d21b581)
 - [x] SKILL.md step 4/5 wording and CLAUDE_SESSION_ID pin in run.sh (2f70a53)
-- [ ] README: estimate does not count down + assert_has
+- [x] README: estimate does not count down + assert_has (7a37014)
 - [ ] Check: run.sh passes (0 failed)
 - [ ] Check: shellcheck passes
 - [ ] Delete progress log and open the PR
@@ -20,6 +20,7 @@ next: README: say the estimate does not count down, pinned in run.sh
 - A stale comment: report.sh publish() comment now says mktemp and place(); grep finds no other stale mention
 - Wrapping: the report.sh state-file comment block and the SKILL.md settings paragraph are greedily refilled to 80 columns (line lengths checked); run.sh 749 passed, 0 failed
 - SKILL.md step 4/5 wording after substitution: exact wording in steps 4 and 5, run.sh asserts both and pins the CLAUDE_SESSION_ID lines; 750 passed, 0 failed; an extra mention of the variable makes the pin fail
+- README: say the estimate does not count down: sentence added to the In your status line section, pinned by assert_has "does not count down"; run.sh 751 passed, 0 failed
 
 ## Dead ends and decisions
 
@@ -28,3 +29,4 @@ next: README: say the estimate does not count down, pinned in run.sh
 - Worktree-isolated sessions refuse compound git commands; git add, commit, and push run as separate calls.
 - The SKILL.md refreshInterval pin in run.sh relied on the old line break; it is split into two phrases that each sit on one line after the refill.
 - The pin compares the grep output of CLAUDE_SESSION_ID in SKILL.md with the exact three lines, which also catches the bare $CLAUDE_SESSION_ID spelling.
+- The README sentence goes at the end of the refreshInterval paragraph, which already says how often the file changes.
