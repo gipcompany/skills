@@ -304,7 +304,8 @@ It is written like any other conclusion: through the write-back loop
 (`conflict-resolution.md`), with the diff printed before the write and the
 target read back after it. If the user objects to the diff, roll it back like
 any other, and say in the closing summary that the open gaps were not recorded
-in the target.
+in the target; the grilled line then ends ``not yet ready for `/goal`.``,
+without "see Known gaps" (*The grilled line*).
 
 ## Across sessions on the same target
 
@@ -399,15 +400,17 @@ the check in this session:
 | Check result in this session | Tail |
 |---|---|
 | The checker's last run reported `READY` | ``ready for `/goal`.`` |
-| The user left gaps open (they are in "Known gaps") | ``not yet ready for `/goal`; see Known gaps.`` |
-| The last check failed twice, but an earlier check in the same session completed and some of its gaps have not been closed since (they are in "Known gaps") | ``not yet ready for `/goal`; see Known gaps.`` |
+| The user left gaps open, and they are in a "Known gaps" section of the target | ``not yet ready for `/goal`; see Known gaps.`` |
+| The last check failed twice, but an earlier check in the same session completed and some of its gaps have not been closed since, and they are in a "Known gaps" section of the target | ``not yet ready for `/goal`; see Known gaps.`` |
+| Gaps are left open — either of the two rows above — but no "Known gaps" section was written; for example, the user rejected its diff | ``not yet ready for `/goal`.`` |
 | The user said the target is not meant for `/goal`, so the check was skipped; or the check failed twice and the target was treated as not checked, in a session in which no check completed or no gap is left open | ``not checked for `/goal`.`` |
 
-So the three possible lines are:
+So the four possible lines are:
 
 ```markdown
 > Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
 > Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — not yet ready for `/goal`; see Known gaps.
+> Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — not yet ready for `/goal`.
 > Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — not checked for `/goal`.
 ```
 
@@ -422,14 +425,19 @@ So the three possible lines are:
   person, `/goal`, or `/jikkyo`'s child — can rely on its wording.
 - **Write exactly these words.** Nothing else goes on the line: no question
   count, no list of gaps, no note on who decided what. The gaps themselves are
-  in "Known gaps"; the line only points there.
-- **There are only these three tails.** If the user left gaps open but
-  objected to the "Known gaps" diff, the tail is still the "not yet ready"
-  one — the target is not ready, and saying "not checked" would be untrue —
-  and the closing summary says the open gaps were not recorded in the target.
+  in "Known gaps"; the line only points there, and only when the section is
+  there.
+- **There are only these four tails.** The line never points at a "Known
+  gaps" section the target does not have: when gaps are left open but no
+  such section was written — the user rejected its diff — the tail is
+  ``not yet ready for `/goal`.``, without "see Known gaps". It is still a "not
+  yet ready" tail — the target is not ready, and saying "not checked" would be
+  untrue — and the closing summary says the open gaps were not recorded in the
+  target. The line itself is still written, as in every session that reaches
+  Phase 3.
   Likewise, when the re-check failed after an earlier check completed and
-  gaps are left open, the gaps are known and recorded, so the tail is the
-  "not yet ready" one, not "not checked".
+  gaps are left open, the gaps are known, so the tail is a "not yet ready"
+  one, not "not checked".
 
 ### Where it goes, and replacing it
 
@@ -442,11 +450,11 @@ So the three possible lines are:
     to the end of the body), and
   - it **matches the whole line exactly**: it starts at the first column with
     the fixed prefix `` > Grilled with `/kabeuchi` at ``, then a timestamp
-    of the shape above, then `` — `` and one of the three tails above, with
+    of the shape above, then `` — `` and one of the four tails above, with
     nothing after it:
 
     ```
-    ^> Grilled with `/kabeuchi` at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2} — (ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not checked for `/goal`\.)$
+    ^> Grilled with `/kabeuchi` at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2} — (ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not yet ready for `/goal`\.|not checked for `/goal`\.)$
     ```
 
   Anything else is the target's own content and is left exactly as it is: an

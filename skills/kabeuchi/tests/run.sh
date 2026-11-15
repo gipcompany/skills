@@ -622,14 +622,14 @@ echo "grilled line wording (SKILL.md, references, README)"
 # shellcheck disable=SC2016
 {
   # The grilled line is found again by its fixed prefix, so every example of it
-  # in the docs must use that exact prefix and one of the three tails. (The
+  # in the docs must use that exact prefix and one of the four tails. (The
   # prefix holds no ERE metacharacters, so it is used as-is in the regex.)
   REF="${HERE}/../references/ready-for-goal.md"
   README="${HERE}/../../../README.md"
   prefix='> Grilled with `/kabeuchi` at '
   date_re='[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}'
-  tails='ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not checked for `/goal`\.'
-  for tail in 'ready for `/goal`.' 'not yet ready for `/goal`; see Known gaps.' 'not checked for `/goal`.'; do
+  tails='ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not yet ready for `/goal`\.|not checked for `/goal`\.'
+  for tail in 'ready for `/goal`.' 'not yet ready for `/goal`; see Known gaps.' 'not yet ready for `/goal`.' 'not checked for `/goal`.'; do
     if grep -qxF "${prefix}2026-11-15T17:41:59+09:00 — ${tail}" "$REF"; then
       ok "ready-for-goal.md shows the line ending \"${tail}\""
     else

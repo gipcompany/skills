@@ -437,7 +437,7 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   the **last line of the body**, below any "Known gaps" section, and an
   existing one is **replaced**, never appended to, so a target carries at
   most one. Only a line **outside any code fence** that matches the whole
-  pattern — prefix, timestamp, and one of the three tails — counts as an existing
+  pattern — prefix, timestamp, and one of the four tails — counts as an existing
   one; an example of the line inside a code fence, or anything that merely
   resembles it, is content and is never touched. The check brief leaves the
   existing line out, so the checker is not led by an earlier verdict. The

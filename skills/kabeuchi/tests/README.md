@@ -89,8 +89,8 @@ Exit status is non-zero if any assertion fails; the last line reports
 - **grilled line wording** — the line kabeuchi writes at the end of Phase 3 is
   found again by its fixed prefix, so every example of it in `SKILL.md`,
   `references/ready-for-goal.md` and the repository README must use exactly
-  `` > Grilled with `/kabeuchi` at <timestamp> — `` and one of the three
-  tails, and `ready-for-goal.md` must show all three and state, as the exact
+  `` > Grilled with `/kabeuchi` at <timestamp> — `` and one of the four
+  tails, and `ready-for-goal.md` must show all four and state, as the exact
   pattern a line must match to count as a grilled line, the same pattern the
   test uses.
 - **`agents/kabeuchi-voter.md`'s description** — the preflight in `SKILL.md`
