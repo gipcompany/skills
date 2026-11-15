@@ -1,13 +1,13 @@
 issue: https://github.com/gipcompany/skills/issues/45
 branch: worktree-jikkyo-45-20261115-171418
-updated: 2026-11-15T17:28:00+09:00
-next: AC2: add the checker role to kabeuchi-voter, plus description and preflight check
+updated: 2026-11-15T17:17:11+09:00
+next: AC1: run the ready-for-/goal check in SKILL.md Phase 3 before the closing summary
 
 ## Todos
 
 - [x] Start the progress log (0339140)
 - [x] AC3: Write the ready-for-/goal checklist under references/ (2a93ea5)
-- [ ] AC2: Add the checker role to kabeuchi-voter, plus description and preflight check
+- [x] AC2: Add the checker role to kabeuchi-voter, plus description and preflight check (70bd7ad)
 - [ ] AC1: Run the ready-for-/goal check in Phase 3 before the closing summary
 - [ ] AC4: Define the result format (each gap with its part of the target; ready when none)
 - [ ] AC5: Send gaps the user wants closed back into Phase 2
@@ -21,8 +21,10 @@ next: AC2: add the checker role to kabeuchi-voter, plus description and prefligh
 ## Verified task-list items
 
 - The checklist is written down in the skill: references/ready-for-goal.md holds all six items from the issue (Goal, Done criteria, Scope, No open decisions, Self-contained, Constraints), checked by reading the file against the issue body.
+- kabeuchi-voter gains the checker role: agents/kabeuchi-voter.md lists a third role (checker) and its description says it checks whether a target is ready to hand to /goal; SKILL.md preflight and gotchas.md now also require that phrase, checked with grep across the skill
 
 ## Dead ends and decisions
 
 - The checklist goes in a new references/ready-for-goal.md (the issue allows SKILL.md or references/); SKILL.md Phase 3 points to it, the same way Phase 2 points to voting.md.
 - Worktree-isolated session: git runs as `git -C <worktree>` one command per call, since compound shell commands and `cd` are refused.
+- Preflight version marker: the new description phrase 'ready to hand to /goal' is checked alongside 'Reads the per-question brief', so an installed copy without the checker role is refused, the same way the brief-file change was rolled out.
