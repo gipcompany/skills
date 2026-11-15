@@ -380,7 +380,7 @@ applies verbatim to every re-read the write-back loop does below.
 
 **Each time a point is settled**, reflect it into the target: **rewrite the target in place** into the current agreed spec — an `Edit`-style overwrite of the affected section — **not** appending, not keeping a changelog, not logging the Q&A. **Before every write, present the concrete diff**; if the user objects, roll it back. That holds while the next question's votes are out (above): print the diff as text in the same step, immediately before the `gh issue edit` or file write — never after it, and never saved up for when the question appears.
 
-Concurrency is handled the way `git` merges non-conflicting hunks — **optimistic detection, conservative resolution, no locks**. Immediately before each write, re-fetch and normalize the target and compare to `last_synced`; if it changed, run a 3-way merge; after writing, read the target back and verify it matches what you intended. The helper scripts do the deterministic work:
+Concurrency is handled the way `git` merges non-conflicting hunks — **optimistic detection, conservative resolution, no locks**. Immediately before each write, re-fetch and normalize the target and compare to `last_synced`; if it changed, run a 3-way merge; if the body to write then equals the re-fetched body, say "no change" and skip the write and the read-back; after writing, read the target back and verify it matches what you intended. The helper scripts do the deterministic work:
 
 - **`scripts/normalize.sh`** — canonicalize a body (LF, strip trailing whitespace/newlines) for every read, comparison, and read-back.
 - **`scripts/merge3.sh <base> <mine> <theirs>`** — 3-way text merge in a self-cleaning temp dir. Exit `0` = clean (auto-integrate, and call out the folded-in external change), `1` = conflict (markers on stdout → a human resolves it, never auto-write), `2` = usage error.
@@ -432,7 +432,11 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 
   It is written through the write-back loop like any other conclusion: the
   concrete diff printed first, the same re-fetch, `normalize.sh` /
-  `merge3.sh` handling and read-back. Write it at the end of every session
+  `merge3.sh` handling and read-back. When this session also writes,
+  replaces, or removes "Known gaps", the section and the line **must** go out
+  in one write-back with one diff; if the user objects to it, roll it back and
+  offer the line alone as a second diff (with gaps left open, key
+  `not-ready`). Write it at the end of every session
   that reaches this phase, including one that wrote nothing else back, and
   for **both target kinds** — an issue body and a local file alike. It is
   the **last line of the body**, below any "Known gaps" section, and an
@@ -449,8 +453,9 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   wording, the cases, and where the line goes are in
   **`references/ready-for-goal.md`**, *The grilled line*. (It is unrelated to
   Claude Code's status line, which shows the session marker.)
-- **Summarize what was written back** to the target at the end, and list any
-  gaps the check found that were left open.
+- **Summarize what was written back** to the target at the end, list any
+  write skipped as "no change", and list any gaps the check found that were
+  left open.
 - **Do not wander** into adjacent work on your own initiative.
 - The target must contain **only the current agreed state** — never a change-history or discussion-log section. Two things kabeuchi itself writes are current state, and allowed: a "Known gaps" section (what is unresolved now, nothing about how it got there) and the **grilled line** (that the target was grilled, by the latest session, and with what result). Each is replaced wholesale, never appended to, so neither turns into a history of sessions.
 - **Remove the briefs** — the vote briefs and the check briefs — if you made a

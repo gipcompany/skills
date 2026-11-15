@@ -302,10 +302,12 @@ target, above the grilled line if there is one (*The grilled line*):
 
 It is written like any other conclusion: through the write-back loop
 (`conflict-resolution.md`), with the diff printed before the write and the
-target read back after it. If the user objects to the diff, roll it back like
-any other, and say in the closing summary that the open gaps were not recorded
-in the target; the grilled line then ends ``not yet ready for `/goal`.``,
-without "see Known gaps" (*The grilled line*).
+target read back after it — and in the **same write-back as the grilled
+line**, one diff for both (*The grilled line*, *When it is written*). If the
+user objects to that diff, roll it back like any other, and say in the closing
+summary that the open gaps were not recorded in the target; the grilled line
+then goes out alone in a second diff and ends ``not yet ready for `/goal`.``,
+without "see Known gaps".
 
 ## Across sessions on the same target
 
@@ -387,12 +389,22 @@ after it without touching it, and no skill decides anything from it.
   write: re-fetch and normalize the target, compare with `last_synced` and
   merge with `merge3.sh` if it changed, **then run `scripts/grilled-line.sh`
   on that body** (*Where it goes, and replacing it*), **print the concrete diff
-  before the write**, write, read back. If the user objects to the diff, roll it back like
-  any other and say in the closing summary that the grilled line was not
-  written.
-- When this session also writes or removes a "Known gaps" section, the grilled
-  line may go out in the same write-back — one diff for both — since both are
-  written at the end and both depend on the check's result.
+  before the write**, write, read back. If the user objects to the diff, roll
+  it back like any other and say in the closing summary that the grilled line
+  was not written. This write is never a no-op (*Skip a write that changes
+  nothing* in `conflict-resolution.md`): its timestamp is to the second.
+- **One write-back with "Known gaps".** When this session also writes,
+  replaces, or removes a "Known gaps" section, the section and the grilled
+  line **must** go out in the same write-back — one diff for both, one
+  re-fetch, one write, one read-back — since both are written at the end and
+  both depend on the check's result. Apply the section's edit to the body
+  first, then run `grilled-line.sh` on the result.
+- **If the user objects to that combined diff**, roll it back, then offer the
+  grilled line alone as a second diff, through the loop again. With gaps left
+  open, its key is then `not-ready` (``not yet ready for `/goal`.``): no
+  "Known gaps" section was written, so the line does not point at one. If the
+  user objects to that one too, roll it back; the closing summary says that
+  neither the open gaps nor the grilled line were written.
 
 ### What it says
 
