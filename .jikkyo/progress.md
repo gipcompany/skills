@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/54
 branch: worktree-jikkyo-54-20261115-211754
-updated: 2026-11-15T21:28:03+09:00
-next: AC10, live /kabeuchi run (decide what can be verified here)
+updated: 2026-11-15T21:28:36+09:00
+next: delete the log and open the PR
 
 ## Todos
 
@@ -15,7 +15,7 @@ next: AC10, live /kabeuchi run (decide what can be verified here)
 - [x] AC7: looser wording-test pattern (780356b)
 - [x] AC8: rewrap SKILL.md:420 (dd02eb1)
 - [x] AC9: skip README test outside the repo (f1d79d4)
-- [ ] AC10: live /kabeuchi run on both target kinds
+- [x] AC10: pre-check the local-file write path; the live /kabeuchi runs are left for an interactive session (no commit)
 - [ ] Delete the log and open the PR
 
 ## Verified task-list items
@@ -35,3 +35,4 @@ next: AC10, live /kabeuchi run (decide what can be verified here)
 - Kept one short pointer to Claude Code's status line in SKILL.md and README; with distinct names it only helps the reader.
 - The case where the re-check fails twice after gaps were left open is left to #53, as the issue says.
 - Fence openers are recognised even when indented (conservative: more text counts as content). Wrapped status-line mention missed by AC1 fixed in b9316a3.
+- AC10 box left unticked: a live /kabeuchi run needs a person to answer each question and confirm the end, which this unattended run cannot do honestly; the local-file write path was pre-checked in a temp dir with a fenced example (untouched, one line at the end, read-back equal) for keys ready and not-checked. No throwaway issue was created.
