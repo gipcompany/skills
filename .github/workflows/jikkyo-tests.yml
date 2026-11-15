@@ -1,13 +1,14 @@
 name: jikkyo tests
 
-# Scoped to skills/jikkyo so unrelated pushes don't burn a runner. The tests
+# Scoped to skills/jikkyo so unrelated pushes don't burn a runner, plus the
+# repository README, whose jikkyo section the tests read and run. The tests
 # need bash, git, and jq (all preinstalled on ubuntu-latest); gh and claude are
 # stubbed, so nothing here calls GitHub or starts a model.
 on:
   push:
-    paths: ['skills/jikkyo/**', '.github/workflows/jikkyo-tests.yml']
+    paths: ['skills/jikkyo/**', 'README.md', '.github/workflows/jikkyo-tests.yml']
   pull_request:
-    paths: ['skills/jikkyo/**', '.github/workflows/jikkyo-tests.yml']
+    paths: ['skills/jikkyo/**', 'README.md', '.github/workflows/jikkyo-tests.yml']
 
 permissions:
   contents: read

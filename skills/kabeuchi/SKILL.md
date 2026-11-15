@@ -302,8 +302,8 @@ front of you here and can see what you are quoting, which is exactly why that
 call gets a placeholder and this one gets the real thing.
 
 Use the canonical form — the full issue URL, or the path as the user gave it.
-The status line shortens `https://github.com/OWNER/REPO/issues/N` to
-`OWNER/REPO#N` itself; do not pre-shorten it, since the hook quotes the target
+The status line (the bundled `scripts/statusline.sh`) shortens
+`https://github.com/OWNER/REPO/issues/N` to `OWNER/REPO#N` itself; do not pre-shorten it, since the hook quotes the target
 back to you verbatim. If the preflight **rejects** the target, clear the marker
 (see Phase 3) before you stop, so the bar does not claim a grilling that never
 started.
@@ -485,4 +485,7 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 
 - No comment I/O on issues, no PR/Gist/arbitrary-URL targets, no issue-number shorthand.
 - No git side effects on local files.
-- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the text helpers (`normalize.sh`, `merge3.sh`, `grilled-line.sh`), `mark.sh`, and the vote counter `tally.sh`; their tests live in `tests/` (`bash tests/run.sh`).
+- No edits to the user's settings, the status line included. If the user asks
+  about the status line, point them at *In your status line* in the README's
+  `## kabeuchi` section.
+- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the text helpers (`normalize.sh`, `merge3.sh`, `grilled-line.sh`), the marker scripts (`mark.sh`, `prompt-hook.sh`, and `statusline.sh`, the status line row), and the vote counter `tally.sh`; their tests live in `tests/` (`bash tests/run.sh`).
