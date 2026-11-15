@@ -98,9 +98,10 @@ timing and signal tests waiting on a real scheduler.
   `gh`'s answer (escape sequences included) reaches it. From a linked
   worktree it goes to the shared common dir; outside a git repository, or
   with an unwritable directory, there is no file and the run goes on. A
-  `jikkyo/` swapped for a symlink is not written through, nor is a `<N>.json`
-  that is a symlink to a directory (no temp file is moved into it or left
-  beside it), and an old temp
+  `jikkyo/` swapped for a symlink is not written through; a `<N>.json` that
+  is a symlink to a directory is replaced, never written into, and one that
+  is a real directory is left alone (no temp file is moved into either or
+  left beside it); and an old temp
   file of the issue left by a killed write is removed by the next write
   (another issue's is left).
 - **`launch.sh`** — anything that is not exactly a GitHub issue URL is rejected
@@ -208,7 +209,8 @@ timing and signal tests waiting on a real scheduler.
   - No network tool (`gh`, `curl`, `wget`, `nc`, `ssh`) is run. 50 state
     files take well under a second, and 501 under half a second (one `find`,
     one `awk`, one `jq` for all of them). Under `/bin/bash` when it is 3.2,
-    as on macOS, the main cases give the same line.
+    as on macOS, a line with two runs (English and Japanese) comes out the
+    same; the rest of the suite runs scripts with the `bash` on `PATH`.
   - End to end, what `report.sh` writes (English and Japanese) is what it
     shows.
 - **Constants shared by the scripts** — `statusline.sh` and `precheck.sh`
@@ -296,7 +298,8 @@ timing and signal tests waiting on a real scheduler.
   `launch.sh --resume` with the branch, comment id, and
   `${CLAUDE_SESSION_ID}`; a fresh launch passes `${CLAUDE_SESSION_ID}` too.
   Before launching, the parent checks that value's shape itself and, if it
-  is not a UUID, tells the user the run will not show in the status line.
+  is not a UUID, tells the user in step 5 the run will not show in the
+  status line; the example of a bad value does not spell the variable.
   It has a Status line section saying the skill edits no settings, and no
   script mentions `settings.json`. The repository README documents both
   status line setups with `refreshInterval` and why, and its appended

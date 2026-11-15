@@ -67,9 +67,9 @@
 #
 # eta_secs is the remaining-time estimate in seconds, null when there is
 # none; session and comment are null when unknown. Nothing deletes the file;
-# the next run of the issue overwrites it. Outside a git repository, or when
-# the directory cannot be written or is a symlink, there is no state file and
-# the run goes on. The file is a convenience for the status line, not a
+# the next run of the issue overwrites it. Outside a git repository, when
+# the directory cannot be written or is a symlink, or when <N>.json is a
+# directory, there is no state file and the run goes on. The file is a convenience for the status line, not a
 # record: the status comment is the record, and anything that can write to
 # the git common dir (the child included) can write this file too.
 #
@@ -264,6 +264,19 @@ eta_secs() {
   fi
 }
 
+# place <temp> <dest>: rename the temp file onto <dest> without following
+# <dest>. mv into a directory, or a symlink to one, moves the file inside it;
+# rename(2) instead replaces a symlink itself and fails on a directory. perl
+# calls rename(2) directly. Without perl, mv runs after a directory check,
+# which a swap in between can still beat.
+place() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -e 'rename($ARGV[0], $ARGV[1]) or exit 1' -- "$1" "$2"
+  else
+    ! [ -d "$2" ] && mv -f "$1" "$2"
+  fi
+}
+
 # publish <state> <state.json contents> <end ts or empty>: write the state
 # file (see the top of this file). Any failure leaves the old file and is
 # otherwise ignored: the status line is a convenience, the comment is the record.
@@ -280,10 +293,10 @@ publish() {
   # Only into a real directory. The child can write to the common dir, and a
   # jikkyo/ swapped for a symlink would have this script write wherever it
   # points, a place the child itself might not have been allowed to write.
+  # This is a check, not a lock: a swap between it and mktemp still wins,
+  # and puts one temp file (mode 0600, fixed-shape JSON) where the link
+  # points.
   if [ ! -d "$dir" ] || [ -L "$dir" ]; then return 0; fi
-  # Nor into <N>.json when that is a directory, or a symlink to one: mv
-  # would move the temp file inside it instead of replacing it (checked
-  # right before the mv below).
   # A temp file is left behind only when this script is killed between
   # mktemp and mv; the next write of the issue takes such leftovers out.
   find "$dir" -maxdepth 1 -type f -name ".${num}.json.*" -mmin +1 -delete 2>/dev/null
@@ -297,8 +310,7 @@ publish() {
          eta_secs: (if $eta == "" then null else ($eta | tonumber) end), lang: $lang,
          session: (if $session == "" then null else $session end),
          comment: (if $comment == "" then null else $comment end)}' > "$tmp" 2>/dev/null \
-     && ! [ -d "$state_out" ] \
-     && mv -f "$tmp" "$state_out" 2>/dev/null; then
+     && place "$tmp" "$state_out" 2>/dev/null; then
     return 0
   fi
   rm -f "$tmp"

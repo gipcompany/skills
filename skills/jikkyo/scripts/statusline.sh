@@ -43,15 +43,17 @@
 # file, so the status comment on the issue is where a run's state is settled.
 #
 # It is local and quiet: no network and no `gh`, only local tools (`git
-# rev-parse`, `find`, `awk`, `head`, `date`, and `jq`) on local files. It
-# prints nothing but numbers it has checked and the fixed words above, so no
-# text from an issue or a terminal escape sequence can reach the terminal. A
-# state file that is malformed, too large, not a regular file, unreadable,
-# not of this session, or written more than a minute in the future is
-# skipped; anything else that goes wrong (no jq, bad stdin, not a git
-# checkout) prints nothing. It always
-# exits 0 and writes nothing to stderr, so it never breaks the status line it
-# is part of.
+# rev-parse`, `find`, `awk`, `head`, `date`, `jq`, and `cat` for the test
+# clock) on local files. It prints nothing but numbers it has checked and the
+# fixed words above, so no text from an issue or a terminal escape sequence
+# can reach the terminal. A state file that is malformed, too large, not a
+# regular file, unreadable, not of this session, or written more than a
+# minute in the future is skipped; anything else that goes wrong (no jq, bad
+# stdin, not a git checkout) prints nothing. It always exits 0 and writes
+# nothing to stderr, so it never breaks the status line it is part of. These
+# checks are made when the files are listed: a file swapped afterwards for a
+# bigger one is read whole, and one swapped for a FIFO can hold the line up
+# until Claude Code gives up on the command.
 #
 # For tests: JIKKYO_CLOCK_FILE (read "now" in epoch seconds from this file).
 #
@@ -168,10 +170,9 @@ main() {
   [ -n "$common" ] && [ -d "$common/jikkyo" ] || return 0
   # One find for all the state files: regular files only (a FIFO would
   # block), at most 4 KiB each.
-  # Readable ones only: awk (mawk and BSD awk alike) stops at the first file
-  # it cannot open, which would take the others down with it. The 4 KiB cap
-  # holds at find time; a file swapped for a bigger one before awk reads it
-  # is read whole, which costs time but cannot reach the output.
+  # Readable ones only: mawk and BSD awk stop at the first file they cannot
+  # open, which would take the others down with it. The 4 KiB cap and the
+  # regular-file check hold at find time only (see the top of this file).
   while IFS= read -r -d '' f; do [ -r "$f" ] && files+=("$f"); done \
     < <(find "$common/jikkyo" -maxdepth 1 -type f -name '[1-9]*.json' -size -4097c -print0)
   [ "${#files[@]}" -gt 0 ] || return 0
