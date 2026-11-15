@@ -962,7 +962,7 @@ EOF
       "--resume|main|1|$SID|$URL" "--resume|$BR -->|1|$SID|$URL" "--resume|$BR\$(id)|1|$SID|$URL" "--resume|$BR|0|$SID|$URL" \
       "--resume|$BR|1a|$SID|$URL" "--resume|$BR|1 2|$SID|$URL" "--resume|$BR|1|$SID|$URL|extra" "$SID|$URL|--resume|$BR|1" \
       "--resume|$BR|1|$SID|https://github.com/o/r/issues/13" "--resume||||$URL" "--resume||4242|$SID|$URL" "--resume|$BR||$SID|$URL" \
-      "--resume|$BR|1|$URL" "--resume|$BR|1||$URL" "--resume|$BR|1|not-a-session|$URL" "--resume|$BR|1|$SID\$(id)|$URL"; do
+      "--resume|$BR|1|$URL"; do
     IFS='|' read -r -a a <<<"$bad_args"
     launch_resume "${a[@]}"
     if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ] && ! grep -q 'worktree add' "$rs/git.log"; then
@@ -1210,15 +1210,31 @@ EOF2
   wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
   [ -n "$wpath" ] && git_t -C "$rs/repo" worktree remove --force "$wpath" 2>/dev/null
 
+  # A resumed launch with a bad session id starts too, without --session.
+  BR9="worktree-jikkyo-12-20261114-300005"
+  push_branch "$BR9"
+  rm -f "$REPORT_ARGS" "$CLAUDE_ARGS"; rc=0
+  out="$(cd "$rs/repo" && PATH="$rs/bin:$PATH" bash "$ho/launch.sh" --resume "$BR9" 4242 "not-a-session" "$URL" 2>&1 < /dev/null)" || rc=$?
+  assert_eq "a resumed launch with a bad session id starts without --session" \
+    "0:$(printf -- '%s\n%s\n4242' "$URL" "$BR9")" "$rc:$(cat "$REPORT_ARGS" 2>/dev/null)"
+  assert_has "...and warns that the status line is off" "jikkyo: status line off" "$out"
+  wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
+  [ -n "$wpath" ] && git_t -C "$rs/repo" worktree remove --force "$wpath" 2>/dev/null
+
   # shellcheck disable=SC2016  # literal $(id), never expanded
   for bad_sid in "" "not-a-session" "${SID}0" "${SID%?}" "${SID}\$(id)" "${SID} " \
       "0f6c2a3e_5b7d_4c1e_9a8f_2d3b4c5e6f70" "0f6c2a3e-5b7d-4c1e-9a8f-2d3b4c5e6f7g" "../../etc/passwd"; do
-    rm -f "$CLAUDE_ARGS"; new_log
-    rc=0; (cd "$repo" && bash "$LAUNCH" "$bad_sid" "$URL") >/dev/null 2>&1 < /dev/null || rc=$?
-    if [ "$rc" = 2 ] && [ ! -e "$CLAUDE_ARGS" ] && [ "$(calls)" = 0 ]; then
-      ok "launch.sh rejects the session id [$bad_sid] without starting the child"
-    else bad "launch.sh rejects the session id [$bad_sid] without starting the child (rc=$rc)"; fi
-    rc=0; bash "$REPORT" --session "$bad_sid" "$URL" < /dev/null >/dev/null 2>&1 || rc=$?
+    # The session id is for the status line alone: a bad one is dropped
+    # with a warning, and the run still starts, without --session.
+    rm -f "$REPORT_ARGS"; rc=0
+    err="$(cd "$repo" && bash "$ho/launch.sh" "$bad_sid" "$URL" 2>&1 >/dev/null < /dev/null)" || rc=$?
+    if [ "$rc" = 0 ] && [ "$(sed -e '$s/[0-9]\{8\}-[0-9]\{6\}$//' "$REPORT_ARGS" 2>/dev/null)" = "$(printf '%s\nworktree-jikkyo-12-' "$URL")" ]; then
+      ok "launch.sh drops the session id [$bad_sid] and starts the run without --session"
+    else bad "launch.sh drops the session id [$bad_sid] and starts the run without --session (rc=$rc)"; fi
+    assert_has "launch.sh warns that the status line is off for [$bad_sid]" "jikkyo: status line off" "$err"
+    if [ -z "$bad_sid" ] || [[ "$err" != *"$bad_sid"* ]]; then ok "launch.sh does not echo the bad session id [$bad_sid]"
+    else bad "launch.sh does not echo the bad session id [$bad_sid]"; fi
+    new_log; rc=0; bash "$REPORT" --session "$bad_sid" "$URL" < /dev/null >/dev/null 2>&1 || rc=$?
     if [ "$rc" = 2 ] && [ "$(calls)" = 0 ]; then ok "report.sh rejects --session [$bad_sid] before any write"
     else bad "report.sh rejects --session [$bad_sid] before any write (rc=$rc)"; fi
   done
@@ -1945,6 +1961,7 @@ echo "SKILL.md"
   assert_has "SKILL.md: resume launches with the validated branch, id, and session id" "launch.sh --resume '<branch>' '<comment id>' '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
   assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
+  assert_has "SKILL.md: a dropped session id is told to the user" "printing \`jikkyo: status line off: …\`" "$skill"
   assert_has "SKILL.md: documents resuming" "**Resuming a run.**" "$skill"
   assert_has "SKILL.md: resume lists the other authors first" "precheck.sh --author '<login>' --authors" "$skill"
   assert_has "SKILL.md: ...checks each one's permission" "gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission" "$skill"

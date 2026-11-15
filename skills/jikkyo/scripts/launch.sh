@@ -7,9 +7,11 @@
 #   launch.sh --resume worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> <comment id> <session id> '<issue URL>'
 #
 # <session id> is the launching (or resuming) session's id, the skill's
-# ${CLAUDE_SESSION_ID}. It must have the exact shape of one (a UUID), and it
-# goes to report.sh, which records it in the state file the status line reads
-# (scripts/statusline.sh), so only that session shows the run.
+# ${CLAUDE_SESSION_ID}. When it has the exact shape of one (a UUID) it goes
+# to report.sh, which records it in the state file the status line reads
+# (scripts/statusline.sh), so only that session shows the run. Any other
+# value is dropped with a warning and the run starts anyway, shown in no
+# status line.
 #
 # Run it as a background command from the repository the issue belongs to.
 # Before the child starts it prints the worktree the child will use, so the
@@ -130,11 +132,17 @@ repo="${BASH_REMATCH[2]}"
 num="${BASH_REMATCH[3]}"
 
 # The session id ends up in a file the user's status line reads, so only the
-# exact shape of a Claude Code session id gets through.
+# exact shape of a Claude Code session id gets through. It is there for the
+# status line alone, so a value of any other shape (a Claude Code that left
+# ${CLAUDE_SESSION_ID} unsubstituted, a copying slip) does not stop the run:
+# it is dropped with a warning, and the run starts without --session, shown
+# in no status line. The value itself is not echoed back.
 sid_re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-if ! [[ "$session" =~ $sid_re ]]; then
-  echo "launch.sh: not a session id: $session" >&2
-  usage
+session_args=()
+if [[ "$session" =~ $sid_re ]]; then
+  session_args=(--session "$session")
+else
+  echo "jikkyo: status line off: the session id argument is not a session id, so this run is shown in no status line" >&2
 fi
 
 # On resume these two are the only values besides the URL that reach a
@@ -241,14 +249,14 @@ if [ "$resuming" = true ]; then
   # a `git -c` the child itself passes still wins over them.
   child_env+=(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath
     GIT_CONFIG_VALUE_0=/dev/null CLAUDE_CODE_DISABLE_AUTO_MEMORY=1)
-  report_args=(--session "$session" "$url" "$branch" "$resume_id")
+  report_args=(${session_args[@]+"${session_args[@]}"} "$url" "$branch" "$resume_id")
   dir="$path"
 else
   # Fresh: `claude --worktree` makes the worktree and its branch itself.
   path="${root}/.claude/worktrees/${name}"
   branch="worktree-${name}"
   child_args=(--worktree "$name")
-  report_args=(--session "$session" "$url" "$branch")
+  report_args=(${session_args[@]+"${session_args[@]}"} "$url" "$branch")
   dir="$root"
 fi
 

@@ -166,9 +166,11 @@ timing and signal tests waiting on a real scheduler.
   next to a stub `report.sh` shows `--session <id>` handed over, before the
   URL, for a fresh and a resumed launch. An empty id, a wrong shape, a
   trailing character or `$(…)`, underscores, a non-hex digit, or a path is
-  refused with exit 2 by both scripts before the child or any `gh` write, as
-  is a launch with no session id or `--session` with no value; an
-  upper-case id is accepted.
+  dropped by `launch.sh`, which warns `jikkyo: status line off`, does not
+  echo the value, and starts the run without `--session` (fresh and
+  resumed); `report.sh` refuses the same values with exit 2 before any `gh`
+  write. A launch with no session id argument at all, or `--session` with
+  no value, is refused; an upper-case id is accepted.
 - **`statusline.sh`** — against a fake clock, with state files written into
   a scratch checkout's common dir:
   - Nothing with no state directory or an empty one. Running:

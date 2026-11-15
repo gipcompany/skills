@@ -197,9 +197,13 @@ The arguments are: $ARGUMENTS
    ```
 
    The session id is this session's own, filled in already: copy it as it
-   stands. `launch.sh` refuses anything that is not shaped like a session id.
-   It goes into the state file the status line reads, so the run shows in
-   this session's status line only (see *Status line* below).
+   stands. It goes into the state file the status line reads, so the run
+   shows in this session's status line only (see *Status line* below).
+   `launch.sh` drops anything not shaped like a session id (a Claude Code
+   that does not fill in `${CLAUDE_SESSION_ID}` passes it literally) and
+   starts the run anyway, printing `jikkyo: status line off: …`. If it does,
+   tell the user in step 5 that this run will not show in the status line,
+   only in the status comment.
 
    Do not wrap it, pipe it, or add an environment assignment: `launch.sh`
    builds the child pipeline itself (todo tools on, `--worktree` for a fresh
