@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/49
 branch: worktree-jikkyo-49-20261115-174159
-updated: 2026-11-15T17:46:03+0900
-next: name the status line in the "only the current agreed state" rule
+updated: 2026-11-15T17:46:30+0900
+next: make Phase 1/2 treat an existing status line as data, not a point to grill
 
 ## Todos
 
@@ -9,7 +9,7 @@ next: name the status line in the "only the current agreed state" rule
 - [x] Document the three tail cases (de5d4bd)
 - [x] Replace an existing line; keep it last, after Known gaps (3c3f597)
 - [x] Write the line for both target kinds (ac3864b)
-- [ ] Name the status line in the current-state rule
+- [x] Name the status line in the current-state rule (57bd43f)
 - [ ] Phase 1/2 treat an existing status line as data
 - [ ] Mention the status line in README's kabeuchi section
 - [ ] Remove the progress log and open the PR
@@ -20,6 +20,7 @@ next: name the status line in the "only the current agreed state" rule
 - The tail follows the three cases in the table: ready-for-goal.md "What it says" has the table and all three lines; tests/run.sh "status line wording" passes and shellcheck is clean
 - An existing status line is replaced (at most one), last line after Known gaps: ready-for-goal.md "Where it goes, and replacing it", "Gaps left open" now puts Known gaps above the line, SKILL.md Phase 3 says so; tests pass
 - The line is written for both target kinds: ready-for-goal.md "When it is written" names the issue body (gh issue edit --body-file) and the local file; SKILL.md Phase 3 says both kinds; tests pass
+- The "only the current agreed state" rule names the status line: SKILL.md Phase 3 rule bullet now lists Known gaps and the status line as allowed current state; tests pass
 
 ## Dead ends and decisions
 
