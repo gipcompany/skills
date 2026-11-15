@@ -1220,20 +1220,24 @@ EOF2
 
   BR8="worktree-jikkyo-12-20261114-300004"
   push_branch "$BR8"
+  # A resumed worktree is named by the second it starts in: wait one out, so
+  # this launch cannot pick the name of one an earlier test left behind.
+  sleep 1
   rm -f "$REPORT_ARGS" "$CLAUDE_ARGS"; rc=0
   out="$(cd "$rs/repo" && PATH="$rs/bin:$PATH" bash "$ho/launch.sh" --resume "$BR8" 4242 "$SID" "$URL" 2>&1 < /dev/null)" || rc=$?
   assert_eq "a resumed launch hands the session id to report.sh as --session" \
-    "$(printf -- '--session\n%s\n%s\n%s\n4242' "$SID" "$URL" "$BR8")" "$(cat "$REPORT_ARGS" 2>/dev/null)"
+    "$(printf -- '--session\n%s\n%s\n%s\n4242' "$SID" "$URL" "$BR8")" "$(cat "$REPORT_ARGS" 2>/dev/null || printf 'rc=%s: %s' "$rc" "$out")"
   wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
   [ -n "$wpath" ] && git_t -C "$rs/repo" worktree remove --force "$wpath" 2>/dev/null
 
   # A resumed launch with a bad session id starts too, without --session.
   BR9="worktree-jikkyo-12-20261114-300005"
   push_branch "$BR9"
+  sleep 1
   rm -f "$REPORT_ARGS" "$CLAUDE_ARGS"; rc=0
   out="$(cd "$rs/repo" && PATH="$rs/bin:$PATH" bash "$ho/launch.sh" --resume "$BR9" 4242 "not-a-session" "$URL" 2>&1 < /dev/null)" || rc=$?
   assert_eq "a resumed launch with a bad session id starts without --session" \
-    "0:$(printf -- '%s\n%s\n4242' "$URL" "$BR9")" "$rc:$(cat "$REPORT_ARGS" 2>/dev/null)"
+    "0:$(printf -- '%s\n%s\n4242' "$URL" "$BR9")" "$rc:$(cat "$REPORT_ARGS" 2>/dev/null || printf '%s' "$out")"
   assert_has "...and warns that the status line is off" "jikkyo: status line off" "$out"
   wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
   [ -n "$wpath" ] && git_t -C "$rs/repo" worktree remove --force "$wpath" 2>/dev/null

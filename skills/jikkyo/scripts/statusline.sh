@@ -165,7 +165,9 @@ main() {
   [ -n "$common" ] && [ -d "$common/jikkyo" ] || return 0
   # One find for all the state files: regular files only (a FIFO would
   # block), at most 4 KiB each.
-  while IFS= read -r -d '' f; do files+=("$f"); done \
+  # Readable ones only: some awks (mawk) stop at the first file they cannot
+  # open, which would take the others down with it.
+  while IFS= read -r -d '' f; do [ -r "$f" ] && files+=("$f"); done \
     < <(find "$common/jikkyo" -maxdepth 1 -type f -name '[1-9]*.json' -size -4097c -print0)
   [ "${#files[@]}" -gt 0 ] || return 0
   t="$(now)"
