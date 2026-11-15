@@ -95,7 +95,8 @@ Exit status is non-zero if any assertion fails; the last line reports
 ## CI
 
 `.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
-request that touches `skills/kabeuchi/**` or the workflow itself. `shellcheck`
+request that touches `skills/kabeuchi/**`, the repository README (its kabeuchi
+section is checked by the status line wording test), or the workflow itself. `shellcheck`
 ships preinstalled on the `ubuntu-latest` runner, and all five scripts plus this
 test file are clean at its default severity.
 
@@ -103,9 +104,9 @@ test file are clean at its default severity.
 name: kabeuchi tests
 on:
   push:
-    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+    paths: ['skills/kabeuchi/**', 'README.md', '.github/workflows/kabeuchi-tests.yml']
   pull_request:
-    paths: ['skills/kabeuchi/**', '.github/workflows/kabeuchi-tests.yml']
+    paths: ['skills/kabeuchi/**', 'README.md', '.github/workflows/kabeuchi-tests.yml']
 
 permissions:
   contents: read

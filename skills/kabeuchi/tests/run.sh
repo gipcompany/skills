@@ -625,6 +625,7 @@ echo "status line wording (SKILL.md, references, README)"
   # in the docs must use that exact prefix and one of the three tails. (The
   # prefix holds no ERE metacharacters, so it is used as-is in the regex.)
   REF="${HERE}/../references/ready-for-goal.md"
+  README="${HERE}/../../../README.md"
   prefix='> Grilled with `/kabeuchi` on '
   date_re='[0-9]{4}-[0-9]{2}-[0-9]{2}'
   tails='ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not checked for `/goal`\.'
@@ -635,7 +636,7 @@ echo "status line wording (SKILL.md, references, README)"
       bad "ready-for-goal.md shows the line ending \"${tail}\""
     fi
   done
-  for f in "${HERE}/../SKILL.md" "$REF"; do
+  for f in "${HERE}/../SKILL.md" "$REF" "$README"; do
     name="${f##*/}"
     lines="$(grep -E '^ *> Grilled with' "$f" | grep -vF '<YYYY-MM-DD>' | sed 's/^ *//')"
     if [ -z "$lines" ]; then bad "${name} shows the status line"; continue; fi
