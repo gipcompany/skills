@@ -1,13 +1,13 @@
 issue: https://github.com/gipcompany/skills/issues/52
 branch: worktree-jikkyo-52-20261115-233631
-updated: 2026-11-15T23:58:00+09:00
-next: fold $HOME to ~ for path targets in statusline.sh
+updated: 2026-11-16T00:04:00+09:00
+next: add the kabeuchi "In your status line" subsection to the root README
 
 ## Todos
 
 - [x] Add kabeuchi statusline.sh (marker read, plain line) (905268c)
 - [x] Wrap GitHub issue targets in a hardened OSC 8 link (5cee77a)
-- [ ] Show path targets with $HOME folded to ~
+- [x] Show path targets with $HOME folded to ~ (cc80592)
 - [ ] README: add kabeuchi 'In your status line' subsection
 - [ ] README: trim 'How it stays visible' and point to new subsection
 - [ ] jikkyo: name its own 'In your status line' section in SKILL.md and test
@@ -20,6 +20,7 @@ next: fold $HOME to ~ for path targets in statusline.sh
 
 - Add skills/kabeuchi/scripts/statusline.sh: ran it against a temp marker dir (marker present prints the one line, placeholder printed plain, pid line ignored; empty, "..", "a/b" and unknown session ids print nothing and exit 0); shellcheck clean
 - GitHub issue target shown as OWNER/REPO#N in a hardened OSC 8 link: ran it on valid, fragment, trailing-path, leading-zero, missing-repo, dot owner/repo, extra-segment, zero, hyphen-led owner and embedded-OSC 8 markers; links rebuilt from captures with BEL terminators, the rest plain text with control bytes gone; shellcheck clean
+- Path target shown as plain text with $HOME folded to ~: ran it with HOME set to a test value; a path under it, HOME itself, a sibling sharing the prefix (left alone), and a path with backslash sequences (printed literally) all came out as expected; shellcheck clean
 
 ## Dead ends and decisions
 
