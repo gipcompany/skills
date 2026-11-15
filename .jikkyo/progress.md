@@ -1,12 +1,12 @@
 issue: https://github.com/gipcompany/skills/issues/46
 branch: worktree-jikkyo-46-20261115-213256
-updated: 2026-11-15T21:35:46+09:00
-next: fix the stale mktemp/mv comment in report.sh publish()
+updated: 2026-11-15T21:38:00+09:00
+next: rewrap the report.sh comment near line 72 and the SKILL.md settings paragraph
 
 ## Todos
 
 - [x] place(): JIKKYO_NO_PERL switch, per-path docs, tests for both paths (a597c04)
-- [ ] Fix stale mktemp/mv comment in report.sh
+- [x] Fix stale mktemp/mv comment in report.sh (1f44c76)
 - [ ] Rewrap report.sh comment near line 72 and SKILL.md settings paragraph
 - [ ] SKILL.md step 4/5 wording and CLAUDE_SESSION_ID pin in run.sh
 - [ ] README: estimate does not count down + assert_has
@@ -17,6 +17,7 @@ next: fix the stale mktemp/mv comment in report.sh publish()
 ## Verified task-list items
 
 - place() without perl is untested, and the docs overstate it: run.sh passes with the new [perl] and [noperl] cases; ignoring JIKKYO_NO_PERL makes the [noperl] symlink assertion fail
+- A stale comment: report.sh publish() comment now says mktemp and place(); grep finds no other stale mention
 
 ## Dead ends and decisions
 
