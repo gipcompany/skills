@@ -200,8 +200,8 @@ The arguments are: $ARGUMENTS
    stands. It goes into the state file the status line reads, so the run
    shows in this session's status line only (see *Status line* below).
    Before launching, look at the value you are about to pass: if it is not
-   a UUID (8-4-4-4-12 hex digits), for example the variable's own name,
-   still starting with `$`, from a Claude Code that does not fill it in,
+   a UUID (8-4-4-4-12 hex digits), for example a placeholder left as
+   written (it starts with `$`) by a Claude Code that does not fill it in,
    launch anyway and say in step 5 that this run will not show in the
    status line, only in the status comment. You will not see `launch.sh`'s
    own `jikkyo: status line off: …` warning in time, since you do not watch
@@ -224,11 +224,10 @@ The arguments are: $ARGUMENTS
    that progress appears in a status comment on it (on resume, a new one,
    with a `Resumed from` row), that the child works in its own worktree so
    they can keep using their checkout, and that the run cannot be steered
-   from here; and, only when step 4 found the session id not shaped like
-   one, that this run will not show in the status line. Then **end the
-   turn**. Do not poll or watch
-   the output: you are notified when the background command exits, and
-   `report.sh` keeps the issue current without you.
+   from here; and, only when step 4 found the session id not a UUID, that
+   this run will not show in the status line. Then **end the turn**. Do not
+   poll or watch the output: you are notified when the background command
+   exits, and `report.sh` keeps the issue current without you.
 
 ## Phase 2: While it runs
 
