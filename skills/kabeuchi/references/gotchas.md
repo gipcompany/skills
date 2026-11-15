@@ -20,6 +20,7 @@ you can actually **write** it before spending the session.
 | `kabeuchi-voter` is read-only but its description lacks "Reads the per-question brief" | Abort; it is a copy from before the brief file. Tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again. Re-copy it after every update of this skill. |
 | `kabeuchi-voter` is read-only but its description lacks "ready to hand to /goal" | Abort; it is a copy from before the checker role that Phase 3's "ready for `/goal`" check uses. Tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again. |
 | No scratchpad, so the briefs live in a `mktemp -d` directory | Not yet tried in a real session. If all three voters fail on a question, check first whether they could read the brief there (a permission prompt a background subagent cannot answer). |
+| The "ready for `/goal`" check in Phase 3 (`references/ready-for-goal.md`) | Not yet tried in a real session: the checker's reply format, the re-check after a gap is closed, and the "Known gaps" write-back have only been reviewed. If it misbehaves, suspect first a reply rejected as malformed (a checker that wraps `READY` or its `GAP:` lines in prose or a code fence fails twice and leaves the target not checked), and then a "Known gaps" section reported as a gap of its own (a `GAP:` line about the section itself rather than about an open point it lists, so even a session that closes every gap never gets `READY`). |
 
 ## Known pitfalls
 

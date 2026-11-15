@@ -617,6 +617,57 @@ echo "tally.sh"
   assert_eq "a missing input file exits 2" "2" "$rc"
 }
 
+echo "agents/kabeuchi-voter.md"
+{
+  # The preflight stops every session whose installed kabeuchi-voter lacks one
+  # of these phrases in its description, so the shipped description must
+  # contain each of them, or rewording it makes every /kabeuchi stop at startup.
+  # The phrases are read from both places that list them: the bold phrases in
+  # SKILL.md's preflight sentence (from "description lacks" to "it is an older
+  # copy"), which is what a session actually checks, and the gotchas table's
+  # "description lacks" rows. The two sets must be equal, so a phrase added to
+  # either one alone fails here instead of going unchecked.
+  SKILL_MD="${HERE}/../SKILL.md"
+  GOTCHAS="${HERE}/../references/gotchas.md"
+  VOTER="${HERE}/../agents/kabeuchi-voter.md"
+
+  # desc_has <agent file> <phrase>: exit 0 if the frontmatter's description:
+  # line contains the phrase as a fixed string. It reads that one line only, so
+  # the description must stay on a single line (no YAML folded or block style).
+  desc_has() {
+    awk 'NR == 1 && $0 != "---" { exit } NR > 1 && $0 == "---" { exit }
+         /^description:/ { print }' "$1" | grep -qF -- "$2"
+  }
+
+  # One phrase per line, sorted. Lines are joined first, so a phrase wrapped
+  # across two lines of SKILL.md is still read as one.
+  skill_phrases="$(awk '/description lacks/ { on = 1 } on { print } /it is an older copy/ { exit }' "$SKILL_MD" |
+    tr '\n' ' ' | grep -o '\*\*"[^"]*"\*\*' | sed 's/^\*\*"//; s/"\*\*$//' | sort)"
+  gotchas_phrases="$(grep -o 'description lacks "[^"]*"' "$GOTCHAS" |
+    sed 's/^description lacks "//; s/"$//' | sort)"
+
+  if [ -n "$skill_phrases" ]; then ok "the preflight in SKILL.md names at least one phrase"
+  else bad "no bold phrase found in SKILL.md's preflight sentence"; fi
+  assert_eq "SKILL.md's preflight and the gotchas table name the same phrases" \
+    "$skill_phrases" "$gotchas_phrases"
+
+  while IFS= read -r p; do
+    [ -n "$p" ] || continue
+    if desc_has "$VOTER" "$p"; then ok "the voter's description contains \"$p\""
+    else bad "the voter's description lacks \"$p\" (the preflight would stop every session)"; fi
+  done <<<"$skill_phrases"
+
+  # The check fails on a description that lacks a phrase, including one where
+  # the phrase appears only in the body, outside the description: line.
+  d="$(mktemp -d)"
+  printf -- '---\nname: kabeuchi-voter\ndescription: Read-only voter. Reads the per-question brief.\n---\n\nready to hand to /goal\n' >"$d/voter.md"
+  rc=0; desc_has "$d/voter.md" "ready to hand to /goal" || rc=$?
+  assert_eq "a description lacking a phrase fails the check" "1" "$rc"
+  rc=0; desc_has "$d/voter.md" "Reads the per-question brief" || rc=$?
+  assert_eq "a description containing a phrase passes the check" "0" "$rc"
+  rm -rf "$d"
+}
+
 echo
 printf 'total: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
