@@ -155,6 +155,8 @@ A kabeuchi on an issue is often followed by `/jikkyo <issue URL>`, which runs `/
 - You decide, gap by gap. A gap you want closed goes back into the interview — one question, voted, written back with a diff — and the check runs again afterwards. The check is advisory: you can always end with gaps left open.
 - Gaps left open are listed in the closing summary and written into the target as a **"Known gaps"** section, so the `/goal` run sees them too. The next `/kabeuchi` on the same target asks about those entries from the start, and the section is replaced wholesale at the end of each checked session (removed when nothing is left), never appended to.
 
+The check costs one more subagent run when you answer "yes", one more after each round of closing gaps, and none at all when you answer "no".
+
 The checklist lives in [`references/ready-for-goal.md`](skills/kabeuchi/references/ready-for-goal.md). kabeuchi refuses an installed `kabeuchi-voter` copied before the checker role existed, so re-copy it when you update the skill.
 
 ### How it stays safe
