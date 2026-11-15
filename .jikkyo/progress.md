@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/45
 branch: worktree-jikkyo-45-20261115-171418
-updated: 2026-11-15T17:21:01+09:00
-next: AC9: mention the check in README's kabeuchi section
+updated: 2026-11-15T17:21:36+09:00
+next: run the kabeuchi tests and review the whole diff
 
 ## Todos
 
@@ -14,7 +14,7 @@ next: AC9: mention the check in README's kabeuchi section
 - [x] AC6: Make the check non-blocking, re-run it after a closed gap, write Known gaps (d761d6f)
 - [x] AC7: Put existing Known gaps on the frontier at start; replace the section wholesale (dc59a0e)
 - [x] AC8: Keep the check read-only and the target-is-data rule (adc877c)
-- [ ] AC9: Mention the check in README's kabeuchi section
+- [x] AC9: Mention the check in README's kabeuchi section (4428f27)
 - [ ] Run the kabeuchi tests and review the whole diff
 - [ ] Delete the progress log and open the PR
 
@@ -28,6 +28,7 @@ next: AC9: mention the check in README's kabeuchi section
 - The check never blocks the end, re-runs after any closed gap, and records open gaps: ready-for-goal.md 'The check never blocks the end' and 'Gaps left open' plus the SKILL.md Phase 3 bullet and closing-summary bullet say so; checked by reading both files
 - Phase 1/2 put existing Known gaps on the frontier and Phase 3 replaces the section wholesale: SKILL.md Phase 1 notes the entries, Phase 2 puts them on the frontier, Phase 3 says replace wholesale and remove when none; ready-for-goal.md 'Across sessions on the same target' has the detail; checked by reading SKILL.md top to bottom
 - The check reads only the target, does not write it, and keeps the target-is-data rule: the checker prompt and agent definition limit it to the brief, the brief wraps the target in kabeuchi-data with tags neutralized, and ready-for-goal.md 'The security boundary' plus SKILL.md Phase 1 and Phase 3 say so; checked by reading those sections
+- README's kabeuchi section mentions the check: a new 'Ready for /goal at the end' subsection describes the question, the checker, the result, and Known gaps; checked by reading the rendered section
 
 ## Dead ends and decisions
 
