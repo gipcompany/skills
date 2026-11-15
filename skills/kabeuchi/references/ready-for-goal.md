@@ -66,7 +66,8 @@ Is this target meant to be handed to /goal (directly, or through /jikkyo)?
 If so, I'll check that it holds up for an unattended run before we finish.
 ```
 
-Run the check only on "yes". On "no", go straight to the closing summary.
+Run the check only on "yes". On "no", go straight to the status line
+(*The status line*) and then the closing summary.
 `/goal` is a Claude Code command, so the question is for Claude Code users;
 the answer is the user's, and you do not guess it from the target.
 
@@ -87,7 +88,7 @@ with, so it may run in the foreground.
 ## The flow
 
 1. **Ask** the question above, on its own in a turn, and wait for the answer.
-   On "no", stop here.
+   On "no", go to step 7.
 2. **Write the check brief** (below), with the target as it stands now:
    re-fetch and normalize it first, the same as before a write-back, so the
    checker sees what the `/goal` run will see.
@@ -97,6 +98,8 @@ with, so it may run in the foreground.
 6. **Let the user decide** about each gap, and act on the decision: close it
    through Phase 2 (*Closing a gap*), then check again (*The check never
    blocks the end*); or leave it open (*Gaps left open*).
+7. **Write the status line** (*The status line*) once the loop is over, and
+   only then the closing summary. On "no" in step 1, this is still done.
 
 ### The check brief
 
@@ -314,6 +317,40 @@ left until the end-of-session check finds the same gaps again:
   afresh in the current wording.
 - **When the user declines the check**, there is no new list to replace it
   with, so the section stays as the Phase 2 write-backs left it.
+
+## The status line
+
+Nothing else in the target says that it was grilled: the closing summary is in
+the chat, which nobody else sees. Before handing an issue to `/jikkyo`, the
+user wants to see at a glance that it went through kabeuchi, when, and what
+this check concluded. So every session that reaches Phase 3 ends by writing
+one line into the target:
+
+```markdown
+> Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
+```
+
+The line is the same kind of thing as a "Known gaps" section: it states the
+target's status **now**, not how it got there, so it is current agreed state
+and not a discussion log.
+
+### When it is written
+
+- **After the check has finished** — including every gap it sent back into
+  Phase 2 and every re-run of the check — or after the user declined the check,
+  and **before the closing summary**, so the summary can say it was written.
+- **At the end of every session that reaches Phase 3**, including one in which
+  no point was written back. A session that ends at the Phase 1 preflight never
+  got to grill anything and writes no line.
+- **Through the write-back loop** (`conflict-resolution.md`), like every other
+  write: re-fetch and normalize the target, compare with `last_synced` and
+  merge with `merge3.sh` if it changed, **print the concrete diff before the
+  write**, write, read back. If the user objects to the diff, roll it back like
+  any other and say in the closing summary that the status line was not
+  written.
+- When this session also writes or removes a "Known gaps" section, the status
+  line may go out in the same write-back — one diff for both — since both are
+  written at the end and both depend on the check's result.
 
 ## The security boundary
 

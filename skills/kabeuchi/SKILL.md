@@ -401,6 +401,22 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
     **"Known gaps"** section, since the `/goal` run reads only the target. That
     section is **replaced wholesale** by this session's open gaps — never
     appended to — and removed when none is left.
+- **Then write the status line**, once the check — and any gap it sent back
+  into Phase 2 — has finished, and before the closing summary. It is one
+  blockquote line saying that the target was grilled, on which date, and
+  what the check concluded:
+
+  ```markdown
+  > Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
+  ```
+
+  It is written through the write-back loop like any other conclusion: the
+  concrete diff printed first, the same re-fetch, `normalize.sh` /
+  `merge3.sh` handling and read-back. Write it at the end of every session
+  that reaches this phase, including one that wrote nothing else back. The
+  wording, the cases, and where the line goes are in
+  **`references/ready-for-goal.md`**, *The status line*. (It is unrelated to
+  Claude Code's status line, which shows the session marker.)
 - **Summarize what was written back** to the target at the end, and list any
   gaps the check found that were left open.
 - **Do not wander** into adjacent work on your own initiative.
