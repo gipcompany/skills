@@ -172,7 +172,8 @@ instead of surfacing at run time.
 ## Requires `kabeuchi-voter`
 
 Every recommendation is put to a vote of three read-only subagents and checked
-by a fourth (Phase 2). All four run the **`kabeuchi-voter`** agent definition,
+by a fourth (Phase 2), and the "ready for `/goal`" check at the end (Phase 3)
+is made by a fifth. All of them run the **`kabeuchi-voter`** agent definition,
 which ships in this skill at `agents/kabeuchi-voter.md` but is **not** active
 until you copy it into `~/.claude/agents/`. kabeuchi never copies it for you,
 for the same reason it never installs `/grilling`: putting an agent definition
@@ -197,10 +198,12 @@ did not exist when the session started. If it is present but its tool list is
 broader — or absent, which grants every tool — **stop and say so**: a project's
 `.claude/agents/` overrides the one in `~/.claude/agents/`, so a repository you
 cloned can ship a `kabeuchi-voter` of its own. If it is present and read-only
-but its description lacks the words **"Reads the per-question brief"**, it is a
-copy from before votes went through a brief file: **stop and tell the user to
-copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again** — an older
-definition treats every file it reads as data, the brief's question included.
+but its description lacks either the words **"Reads the per-question brief"**
+or the words **"ready to hand to /goal"**, it is an older copy: **stop and tell
+the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again**.
+A copy without the first phrase predates the brief file and treats every file
+it reads as data, the brief's question included; a copy without the second
+predates the checker role that Phase 3's "ready for `/goal`" check runs.
 Re-copy it whenever you update this skill. Do not fall back to voting with
 another agent type, and do not fall back to unvoted recommendations: either
 would quietly trade the guarantee for convenience.
