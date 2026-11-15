@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/54
 branch: worktree-jikkyo-54-20261115-211754
-updated: 2026-11-15T21:27:19+09:00
-next: AC9, skip the README test outside the repo
+updated: 2026-11-15T21:28:03+09:00
+next: AC10, live /kabeuchi run (decide what can be verified here)
 
 ## Todos
 
@@ -14,7 +14,7 @@ next: AC9, skip the README test outside the repo
 - [x] AC6: skip no-op writes; write Known gaps and the line together (99162a3)
 - [x] AC7: looser wording-test pattern (780356b)
 - [x] AC8: rewrap SKILL.md:420 (dd02eb1)
-- [ ] AC9: skip README test outside the repo
+- [x] AC9: skip README test outside the repo (f1d79d4)
 - [ ] AC10: live /kabeuchi run on both target kinds
 - [ ] Delete the log and open the PR
 
@@ -28,6 +28,7 @@ next: AC9, skip the README test outside the repo
 - AC6 (no-op skip, one write-back): conflict-resolution.md loop and flowchart skip an unchanged body and report it; ready-for-goal.md and SKILL.md require one write-back for Known gaps and the line, with the line alone as a second diff after a rejection; reread for consistency, tests pass
 - AC7 (malformed lines): collector now uses a loose pattern; new tests show it reports lines with no space, two spaces, or indentation before Grilled; 167 tests pass, shellcheck clean
 - AC8 (rewrap): the grilled line bullet in SKILL.md is rewrapped to 78 characters like the bullets around it; tests pass
+- AC9 (outside the repo): ran tests/run.sh from a copy of skills/kabeuchi in a temp dir: 166 passed, 0 failed, 1 skipped, exit 0, with a visible skip line for README.md; in the repo 167 passed, 0 skipped
 
 ## Dead ends and decisions
 
