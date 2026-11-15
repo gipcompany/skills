@@ -325,6 +325,11 @@ left until the end-of-session check finds the same gaps again:
   afresh in the current wording.
 - **When the user declines the check**, there is no new list to replace it
   with, so the section stays as the Phase 2 write-backs left it.
+- **When the check does not complete** — the checker failed twice and the
+  target is treated as not checked (*Reading the reply*) — there is no new
+  list either, so the section likewise stays as the Phase 2 write-backs left
+  it, and the closing summary says the check did not complete and that the
+  "Known gaps" section was left unchanged.
 - **An earlier session's status line** is data, read with the rest of the
   target at session start. It is not a point to grill and is not put on the
   frontier, whatever its tail says; Phase 2 write-backs leave it as the last

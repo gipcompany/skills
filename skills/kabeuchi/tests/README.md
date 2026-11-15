@@ -6,7 +6,9 @@ Regression tests for the deterministic helper scripts — `normalize.sh`,
 asserts on its stdout and exit code. The interview itself is delegated to
 `/grilling`, and the voting is done by subagents; both are prompt-driven, so
 there is nothing to unit-test there. These tests cover the only real logic the
-skill owns, including the vote counting that follows them.
+skill owns, including the vote counting that follows them. A few more tests
+check that `SKILL.md`, its references, and the shipped `kabeuchi-voter`
+definition agree where a mismatch would break a session.
 
 ## Run
 
@@ -91,6 +93,14 @@ Exit status is non-zero if any assertion fails; the last line reports
   tails, and `ready-for-goal.md` must show all three and state, as the exact
   pattern a line must match to count as a status line, the same pattern the
   test uses.
+- **`agents/kabeuchi-voter.md`'s description** — the preflight in `SKILL.md`
+  stops every session whose installed voter's description lacks a phrase it
+  requires, so the shipped `description:` line must contain each of them. The
+  phrases are read from the bold phrases in `SKILL.md`'s preflight sentence and
+  from the `references/gotchas.md` rows that say "description lacks"; the two
+  sets must be equal, so a phrase added to only one of them fails. The check is
+  shown to fail on a description without a phrase — even when the phrase
+  appears in the body below the frontmatter.
 - **no temp litter** — running `merge3.sh` from a working directory leaves no
   extra files behind (it does all work under `mktemp -d` and cleans up on exit).
 
