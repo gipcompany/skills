@@ -379,9 +379,15 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   the checker role reads only the target and a six-item checklist, and reports
   what an unattended run would be missing. On "no", skip it. Read that file
   before you ask.
-- **Summarize what was written back** to the target at the end.
+  The check is **advisory and never blocks the end**: the user decides, gap by
+  gap, whether to close it (back into Phase 2) or leave it. After any gap is
+  closed, the check runs again. Gaps left open are listed in the closing
+  summary and written into the target as a **"Known gaps"** section, since the
+  `/goal` run reads only the target.
+- **Summarize what was written back** to the target at the end, and list any
+  gaps the check found that were left open.
 - **Do not wander** into adjacent work on your own initiative.
-- The target must contain **only the current agreed state** — never a change-history or discussion-log section.
+- The target must contain **only the current agreed state** — never a change-history or discussion-log section. A "Known gaps" section is current state: what is unresolved now, nothing about how it got there.
 - **Remove the briefs** — the vote briefs and the check briefs — if you made a
   directory for them with `mktemp -d` (`references/voting.md`, *The brief*).
   Briefs in the scratchpad need nothing: that directory belongs to the session.

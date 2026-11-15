@@ -214,3 +214,51 @@ then about how the decision is written down, not whether to make it: the
 decision is a settled point in the brief, the vote checks the wording against
 it, and the user confirms what goes into the target.
 
+## The check never blocks the end
+
+The check is **advisory**. The grilling ends when the user says so — that is
+`/grilling`'s exit condition, and nothing here overrides it. The user can
+leave any gap open, or all of them, and end the session; a check that could
+not be run does not hold the session open either.
+
+**After any gap is closed, run the check again.** Once the gaps the user picked
+have been closed in Phase 2 — or the user stops closing them part way — write a
+new check brief from the target as it now stands and run a new checker. A
+closed gap can expose another, and a write-back can open one, so the earlier
+result says nothing about the new text. Report the new result the same way and
+let the user decide again. If the user closed nothing, there is nothing to
+re-check: go on to the end.
+
+The loop ends when the checker reports `READY`, or when the user chooses to
+leave the remaining gaps open.
+
+## Gaps left open
+
+Gaps the user leaves open go to two places:
+
+- **The closing summary** lists them, each with its checklist item and
+  location, so the user sees what the target is still missing.
+- **The target** gets them as a **"Known gaps"** section. The `/goal` run reads
+  only the target — for `/jikkyo`, the child gets the issue URL and nothing
+  from this conversation — so a gap listed only in the chat would never reach
+  it.
+
+The section states what is unresolved **now**. It is part of the current
+agreed state, not a discussion log: no dates, no question numbers, no "the
+checker said", no notes about who decided what. Put it at the end of the
+target:
+
+```
+## Known gaps
+
+- **Done criteria** — "## Acceptance criteria", third item: "works well" has
+  no check a run could perform.
+- **Scope** — nothing states what is out of scope.
+```
+
+It is written like any other conclusion: through the write-back loop
+(`conflict-resolution.md`), with the diff printed before the write and the
+target read back after it. If the user objects to the diff, roll it back like
+any other, and say in the closing summary that the open gaps were not recorded
+in the target.
+
