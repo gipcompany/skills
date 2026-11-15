@@ -130,7 +130,9 @@ reads the same file.
   everything from the opening `<kabeuchi-data>` to the end of the file as data.
 - **Clean up.** A `mktemp -d` directory outlives the session and holds
   excerpts of the target, which may be a private issue. Remove it in Phase 3
-  with `rm -f -- '<dir>'/kabeuchi-brief-*.md` and then `rmdir -- '<dir>'`,
+  with `rm -f -- '<dir>'/kabeuchi-brief-*.md '<dir>'/kabeuchi-check-*.md`
+  (the second pattern is the "ready for `/goal`" check's briefs,
+  `ready-for-goal.md`) and then `rmdir -- '<dir>'`,
   using the path `mktemp` printed — never a wildcard directory, and never
   `rm -r`. If `rmdir` fails because something else is in there, leave it and
   say so. The scratchpad needs no cleanup.
