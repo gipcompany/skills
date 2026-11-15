@@ -2085,10 +2085,12 @@ echo "SKILL.md"
   assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   assert_has "SKILL.md: the parent checks the session id's shape itself before launching" "Before launching, look at the value you are about to pass" "$skill"
   assert_has "...and tells the user the run will not show in the status line" "say in step 5 that this run will not show in the" "$skill"
+  # Matched with runs of spaces and newlines squeezed to one space, so a
+  # rewrap of step 4 does not break it.
   # shellcheck disable=SC2016  # a literal backtick and $
   assert_has "...naming a placeholder by its \$, not by the variable's name" \
-    'for example a placeholder left as written
-   (it starts with `$`)' "$skill"
+    'for example a placeholder left as written (it starts with `$`)' \
+    "$(tr -s ' \n' '  ' <<<"$skill")"
   assert_has "...which step 5 says too, in the same words" "only when step 4 found the session id not a UUID" "$skill"
   # Claude Code fills in the variable everywhere in the skill text, so it is
   # named on exactly these three lines (the two launch lines and the Status
