@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/48
 branch: worktree-jikkyo-48-20261115-173739
-updated: 2026-11-15T18:05:00+09:00
-next: Add a gotchas.md row saying the ready-for-/goal check is not yet tried in a real session
+updated: 2026-11-15T18:10:00+09:00
+next: State the check's cost in the README's "Ready for /goal at the end" section
 
 ## Todos
 
@@ -9,7 +9,7 @@ next: Add a gotchas.md row saying the ready-for-/goal check is not yet tried in 
 - [x] Clarify when Known gaps is replaced (662fd72)
 - [x] Rewrap SKILL.md paragraphs at 226 and 425 (c905d4d)
 - [x] Test voter description has preflight phrases (c8030a0)
-- [ ] Add gotchas row: check not yet tried in a real session
+- [x] Add gotchas row: check not yet tried in a real session (436af3b)
 - [ ] State the check's cost in README
 - [ ] Run tests/run.sh and confirm pass
 - [ ] Delete progress log and open PR
@@ -20,6 +20,7 @@ next: Add a gotchas.md row saying the ready-for-/goal check is not yet tried in 
 - SKILL.md says Known gaps is replaced only when the check ran; ready-for-goal.md says an incomplete check leaves it and the summary says so: read both edited passages
 - Paragraphs around SKILL.md:226 and SKILL.md:425 rewrapped: measured line lengths, all within the surrounding 82-column width
 - tests/run.sh fails if the voter description lacks a preflight phrase and passes on the current file: ran it (all pass), then reworded the description temporarily and saw it fail with exit 1, then restored; shellcheck clean
+- gotchas.md has a row saying the ready-for-/goal check is not yet tried in a real session: read the new table row; tests still pass (the row does not use "description lacks")
 
 ## Dead ends and decisions
 
