@@ -413,9 +413,10 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
     the last check of the session completed, that section is **replaced wholesale** by this session's
     open gaps — never appended to — and removed when none is left. When the
     last check of the session did not complete but an earlier check in the
-    same session did, the section is **replaced wholesale** by the gaps from
-    the last check that completed that the user left open, minus the ones
-    closed since, and removed when none is left. When the check was declined,
+    same session did, the section is **replaced wholesale** by every gap from
+    the last check that completed that has not been closed since — whether
+    the user chose to leave it open or picked it to close and did not — and
+    removed when none is left. When the check was declined,
     or no check in the session completed, it stays as the Phase 2 write-backs
     left it (`references/ready-for-goal.md`, *Across sessions on the same
     target*).
