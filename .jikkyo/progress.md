@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/52
 branch: worktree-jikkyo-52-20261115-233631
-updated: 2026-11-16T00:45:00+09:00
-next: add statusline.sh to skills/kabeuchi/tests/README.md
+updated: 2026-11-16T00:50:00+09:00
+next: run the four CI checks locally
 
 ## Todos
 
@@ -12,7 +12,7 @@ next: add statusline.sh to skills/kabeuchi/tests/README.md
 - [x] README: trim 'How it stays visible' and point to new subsection (24a0222)
 - [x] jikkyo: name its own 'In your status line' section in SKILL.md and test (221bb64)
 - [x] Add statusline.sh tests to kabeuchi tests/run.sh (17d1383)
-- [ ] Update kabeuchi tests/README.md for statusline.sh
+- [x] Update kabeuchi tests/README.md for statusline.sh (29c2765)
 - [ ] Run the four CI checks locally
 - [ ] Delete progress log and open the pull request
 
@@ -25,6 +25,7 @@ next: add statusline.sh to skills/kabeuchi/tests/README.md
 - Root README "How it stays visible": the write-your-own-row guidance and its example are gone, the marker explanation stays, and one sentence links to the new subsection (anchor #in-your-status-line, the first of the two headings); checked by reading the section
 - jikkyo references name the "## jikkyo" section: SKILL.md now says "*In your status line* in the README's `## jikkyo` section"; the heading assertion in skills/jikkyo/tests/run.sh looks only inside "## jikkyo"; bash skills/jikkyo/tests/run.sh passes with 0 failed and shellcheck of the jikkyo scripts and tests is clean
 - Tests in skills/kabeuchi/tests/run.sh for every listed case: bash skills/kabeuchi/tests/run.sh passes with 0 failed and shellcheck is clean; six mutations of a temp copy of statusline.sh (%b, no control-byte strip, no leading-zero drop, no dot-repo check, no home fold, ST terminator) each make at least one test fail
+- skills/kabeuchi/tests/README.md: statusline.sh is in the list of covered scripts, has its own "What is covered" entry naming each required point, and "all six scripts" now reads "all seven scripts"; checked with grep
 
 ## Dead ends and decisions
 
@@ -33,3 +34,4 @@ next: add statusline.sh to skills/kabeuchi/tests/README.md
 - Control bytes stripped are C0 and DEL (byte-wise with LC_ALL=C tr), so UTF-8 paths stay intact; an issue number of 0 (all zeros) or over 18 digits falls back to plain text.
 - The README's combined example first used `[ -n "$row" ] && printf ...`; with the last script silent that left exit status 1, so it uses `if ...; then ...; fi`.
 - The kabeuchi README example broke two jikkyo tests: they cut the appended example out of the whole README with a sed range starting at the first indented shebang, which is now kabeuchi's. The appended-setup assertion and that extraction were scoped to "## jikkyo" as well, beyond the one heading assertion the issue names.
+- jikkyo-tests.yml does not trigger on README.md although its tests read it; left as is (out of scope) and to be named as a follow-up in the PR.
