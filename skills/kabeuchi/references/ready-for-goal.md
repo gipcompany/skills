@@ -385,8 +385,9 @@ after it without touching it, and no skill decides anything from it.
   got to grill anything and writes no line.
 - **Through the write-back loop** (`conflict-resolution.md`), like every other
   write: re-fetch and normalize the target, compare with `last_synced` and
-  merge with `merge3.sh` if it changed, **print the concrete diff before the
-  write**, write, read back. If the user objects to the diff, roll it back like
+  merge with `merge3.sh` if it changed, **then run `scripts/grilled-line.sh`
+  on that body** (*Where it goes, and replacing it*), **print the concrete diff
+  before the write**, write, read back. If the user objects to the diff, roll it back like
   any other and say in the closing summary that the grilled line was not
   written.
 - When this session also writes or removes a "Known gaps" section, the grilled
@@ -402,13 +403,16 @@ the check in this session:
 > Grilled with `/kabeuchi` at <timestamp> — <tail>
 ```
 
-| Check result in this session | Tail |
-|---|---|
-| The checker's last run reported `READY` | ``ready for `/goal`.`` |
-| The user left gaps open, and they are in a "Known gaps" section of the target | ``not yet ready for `/goal`; see Known gaps.`` |
-| The last check failed twice, but an earlier check in the same session completed and some of its gaps have not been closed since, and they are in a "Known gaps" section of the target | ``not yet ready for `/goal`; see Known gaps.`` |
-| Gaps are left open — either of the two rows above — but no "Known gaps" section was written; for example, the user rejected its diff | ``not yet ready for `/goal`.`` |
-| The user said the target is not meant for `/goal`, so the check was skipped; or the check failed twice and the target was treated as not checked, in a session in which no check completed or no gap is left open | ``not checked for `/goal`.`` |
+| Check result in this session | Tail | Key |
+|---|---|---|
+| The checker's last run reported `READY` | ``ready for `/goal`.`` | `ready` |
+| The user left gaps open, and they are in a "Known gaps" section of the target | ``not yet ready for `/goal`; see Known gaps.`` | `gaps` |
+| The last check failed twice, but an earlier check in the same session completed and some of its gaps have not been closed since, and they are in a "Known gaps" section of the target | ``not yet ready for `/goal`; see Known gaps.`` | `gaps` |
+| Gaps are left open — either of the two rows above — but no "Known gaps" section was written; for example, the user rejected its diff | ``not yet ready for `/goal`.`` | `not-ready` |
+| The user said the target is not meant for `/goal`, so the check was skipped; or the check failed twice and the target was treated as not checked, in a session in which no check completed or no gap is left open | ``not checked for `/goal`.`` | `not-checked` |
+
+You never type a tail: you pass its key to `scripts/grilled-line.sh` (below),
+which is the one place in code that spells the four tails out.
 
 So the four possible lines are:
 
@@ -424,7 +428,8 @@ So the four possible lines are:
   `2026-11-15T17:41:59+09:00` — so a reader can tell the time and the time
   zone, not only the day. Take it from the clock, never from memory: run
   `date -Iseconds` (GNU and BSD `date` both print exactly this shape; UTC is
-  `+00:00`, never `Z`) right before drafting the line, and copy what it prints.
+  `+00:00`, never `Z`) right before drafting the line, and pass what it prints
+  to the script, which refuses any other shape.
 - **The line is always in English**, whatever the target's language: the
   prefix has to stay the same to be found again (below), and a reader — a
   person, `/goal`, or `/jikkyo`'s child — can rely on its wording.
@@ -451,7 +456,8 @@ So the four possible lines are:
   one blank line.
 - **What counts as a grilled line.** A line is one only when **both** hold:
   - it is **outside any fenced code block** (a block opened by a line of three
-    or more `` ` `` or `~`, closed by a matching fence; a fence left open runs
+    or more `` ` `` or `~`, indented or not, and closed by a line of the same
+    character at least as long with nothing else on it; a fence left open runs
     to the end of the body), and
   - it **matches the whole line exactly**: it starts at the first column with
     the fixed prefix `` > Grilled with `/kabeuchi` at ``, then a timestamp
@@ -478,6 +484,23 @@ So the four possible lines are:
 - **"Known gaps" stays above it.** When this session adds, replaces, or
   removes a "Known gaps" section (*Gaps left open*), the grilled line stays
   below it: write the section above the line, never after it.
+- **`scripts/grilled-line.sh` does the replacing**, never you by hand. Finding
+  the lines outside fences, removing them with their blank line, and putting
+  the new one last are fixed text operations, and a clean `merge3.sh` merge of
+  someone's edit at the end of the body can leave the line no longer last. So
+  in the write-back that writes the grilled line, take the body as it stands
+  after the re-fetch and any merge — with this session's "Known gaps" edit in
+  it — and run:
+
+  ```bash
+  ${CLAUDE_SKILL_DIR}/scripts/grilled-line.sh "$(date -Iseconds)" <key> < body.txt > new-body.txt
+  ```
+
+  `<key>` is the key from the table above. Its stdout is the body to diff and
+  write; it reads a normalized body and prints one, and running it twice with
+  the same arguments gives the same body. Exit `2` — an unknown key or a
+  timestamp of the wrong shape — prints nothing: fix the call; never write the
+  line by hand instead.
 
 The diff for a replaced line therefore shows one removed line and one added
 line at the end of the body (or one line removed elsewhere and one added at

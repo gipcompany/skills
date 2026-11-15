@@ -15,6 +15,7 @@ MERGE3="${SCRIPTS}/merge3.sh"
 MARK="${SCRIPTS}/mark.sh"
 PROMPT_HOOK="${SCRIPTS}/prompt-hook.sh"
 TALLY="${SCRIPTS}/tally.sh"
+GRILLED="${SCRIPTS}/grilled-line.sh"
 
 pass=0
 fail=0
@@ -617,6 +618,112 @@ echo "tally.sh"
   assert_eq "a missing input file exits 2" "2" "$rc"
 }
 
+echo "grilled-line.sh"
+# The backticks below are literal markdown, never command substitution.
+# shellcheck disable=SC2016
+{
+  TS='2026-11-15T17:41:59+09:00'
+  OLD='> Grilled with `/kabeuchi` at 2026-11-14T09:00:00+09:00 — ready for `/goal`.'
+  NEW_READY="> Grilled with \`/kabeuchi\` at ${TS} — ready for \`/goal\`."
+  NEW_GAPS="> Grilled with \`/kabeuchi\` at ${TS} — not yet ready for \`/goal\`; see Known gaps."
+  # gl <key> <body>: run the script on <body> with the fixed timestamp.
+  gl() { printf '%s' "$2" | bash "$GRILLED" "$TS" "$1"; }
+
+  out="$(gl ready "$(printf 'Spec\n\nBody text')")"
+  assert_eq "no existing line: one blank line and the line are appended" \
+    "$(printf 'Spec\n\nBody text\n\n%s' "$NEW_READY")" "$out"
+
+  out="$(gl ready "")"
+  assert_eq "an empty body becomes the line alone" "$NEW_READY" "$out"
+
+  out="$(gl ready "$(printf 'Spec\n\n%s\n' "$OLD")")"
+  assert_eq "a line at the end is replaced" "$(printf 'Spec\n\n%s' "$NEW_READY")" "$out"
+
+  out="$(gl ready "$(printf 'Spec\n\n%s\n\nMore text\n' "$OLD")")"
+  assert_eq "a line moved up the body is removed with its blank line, the new one goes last" \
+    "$(printf 'Spec\n\nMore text\n\n%s' "$NEW_READY")" "$out"
+
+  out="$(gl ready "$(printf '%s\n\nSpec\n' "$OLD")")"
+  assert_eq "a line at the very top is removed with the blank line after it" \
+    "$(printf 'Spec\n\n%s' "$NEW_READY")" "$out"
+
+  fenced_bt="$(printf 'Spec\n\n```markdown\n%s\n```\n' "$OLD")"
+  out="$(gl ready "$fenced_bt")"
+  assert_eq "a line inside a \`\`\` fence is left untouched" \
+    "$(printf '%s\n\n%s' "$fenced_bt" "$NEW_READY")" "$out"
+
+  fenced_tl="$(printf 'Spec\n\n~~~~\n%s\n~~~\n%s\n~~~~\n' "$OLD" "$OLD")"
+  out="$(gl ready "$fenced_tl")"
+  assert_eq "a line inside a ~~~ fence is left untouched (a shorter fence does not close it)" \
+    "$(printf '%s\n\n%s' "$fenced_tl" "$NEW_READY")" "$out"
+
+  fenced_in="$(printf -- '- item:\n\n    ```\n    x\n%s\n    ```\n' "$OLD")"
+  out="$(gl ready "$fenced_in")"
+  assert_eq "a line inside an indented fence is left untouched" \
+    "$(printf '%s\n\n%s' "$fenced_in" "$NEW_READY")" "$out"
+
+  unclosed="$(printf 'Spec\n\n```\n%s\n' "$OLD")"
+  out="$(gl ready "$unclosed")"
+  assert_eq "an unclosed fence runs to the end, so a line after it is content" \
+    "$(printf '%s\n\n%s' "$unclosed" "$NEW_READY")" "$out"
+
+  after_fence="$(printf 'Spec\n\n```\ncode\n```\n\n%s\n' "$OLD")"
+  out="$(gl ready "$after_fence")"
+  assert_eq "a line after a closed fence is replaced" \
+    "$(printf 'Spec\n\n```\ncode\n```\n\n%s' "$NEW_READY")" "$out"
+
+  lookalikes="$(printf 'Spec\n\n  %s\n> %s\n%s Thanks.\n> Grilled with `/kabeuchi` at 2026-11-14 — ready for `/goal`.' "$OLD" "$OLD" "$OLD")"
+  out="$(gl ready "$lookalikes")"
+  assert_eq "indented, quoted, extended and malformed copies are content" \
+    "$(printf '%s\n\n%s' "$lookalikes" "$NEW_READY")" "$out"
+
+  gaps="$(printf 'Spec\n\n## Known gaps\n\n- **Scope** — nothing states what is out of scope.\n\n%s\n' "$OLD")"
+  out="$(gl gaps "$gaps")"
+  assert_eq "with \"Known gaps\" present the line goes below it" \
+    "$(printf 'Spec\n\n## Known gaps\n\n- **Scope** — nothing states what is out of scope.\n\n%s' "$NEW_GAPS")" "$out"
+
+  two="$(printf 'Spec\n\n%s\n\nMore\n\n%s' "$OLD" "$OLD")"
+  out="$(gl ready "$two")"
+  assert_eq "every existing line is removed, so at most one remains" \
+    "$(printf 'Spec\n\nMore\n\n%s' "$NEW_READY")" "$out"
+
+  once="$(gl gaps "$gaps")"
+  twice="$(gl gaps "$once")"
+  assert_eq "running it twice gives the same body" "$once" "$twice"
+
+  out="$(printf 'Spec\r\n\r\n%s\r\n\r\n\r\n' "$OLD" | bash "$GRILLED" "$TS" ready)"
+  assert_eq "the body is normalized (CRLF, trailing blank lines)" \
+    "$(printf 'Spec\n\n%s' "$NEW_READY")" "$out"
+
+  for key in ready gaps not-ready not-checked; do
+    out="$(gl "$key" "$(printf 'Spec\n\n%s' "$OLD")")"
+    last="$(printf '%s' "$out" | tail -n 1)"
+    count="$(printf '%s\n' "$out" | grep -c '^> Grilled with')"
+    assert_eq "key ${key}: exactly one line, and it is last" "1" "$count"
+    case "$last" in "> Grilled with \`/kabeuchi\` at ${TS} — "*) ok "key ${key}: the line has the prefix and timestamp" ;;
+      *) bad "key ${key}: the line has the prefix and timestamp ([$last])" ;; esac
+    # Its own output counts as a grilled line, so every key's line is replaced.
+    again="$(gl ready "$out")"
+    assert_eq "key ${key}: its line is recognised and replaced" "$(printf 'Spec\n\n%s' "$NEW_READY")" "$again"
+  done
+
+  # Bad usage exits 2 with nothing on stdout, like tally.sh and merge3.sh.
+  check_usage() {
+    local label="$1"; shift
+    local rc=0 o
+    o="$(printf 'Spec' | bash "$GRILLED" "$@" 2>/dev/null)" || rc=$?
+    if [ "$rc" -eq 2 ] && [ -z "$o" ]; then ok "$label"; else bad "$label (rc=$rc, stdout=[$o])"; fi
+  }
+  check_usage "an unknown tail key exits 2" "$TS" ready-for-goal
+  check_usage "a timestamp in Z form exits 2" "2026-11-15T08:41:59Z" ready
+  check_usage "a timestamp without seconds exits 2" "2026-11-15T17:41+09:00" ready
+  check_usage "a date alone exits 2" "2026-11-15" ready
+  check_usage "a timestamp with trailing text exits 2" "${TS}x" ready
+  check_usage "no arguments exits 2"
+  check_usage "a missing tail key exits 2" "$TS"
+  check_usage "an extra argument exits 2" "$TS" ready extra
+}
+
 echo "grilled line wording (SKILL.md, references, README)"
 # The backticks below are literal markdown, never command substitution.
 # shellcheck disable=SC2016
@@ -634,6 +741,21 @@ echo "grilled line wording (SKILL.md, references, README)"
       ok "ready-for-goal.md shows the line ending \"${tail}\""
     else
       bad "ready-for-goal.md shows the line ending \"${tail}\""
+    fi
+  done
+  # grilled-line.sh spells out the four tails in code; the docs' examples must
+  # be exactly the four lines it writes, no more and no fewer.
+  script_lines="$(for key in ready gaps not-ready not-checked; do
+    bash "$GRILLED" 2026-11-15T17:41:59+09:00 "$key" </dev/null; echo; done | sort)"
+  doc_lines="$(grep -xE "${prefix}2026-11-15T17:41:59\+09:00 — .*" "$REF" | sort -u)"
+  assert_eq "ready-for-goal.md's example lines are the four lines grilled-line.sh writes" \
+    "$script_lines" "$doc_lines"
+  for key in ready gaps not-ready not-checked; do
+    line="$(bash "$GRILLED" 2026-11-15T17:41:59+09:00 "$key" </dev/null)"
+    if printf '%s\n' "$line" | grep -qxE "${prefix}${date_re} — (${tails})"; then
+      ok "grilled-line.sh's ${key} line matches the docs' pattern"
+    else
+      bad "grilled-line.sh's ${key} line matches the docs' pattern ([$line])"
     fi
   done
   # ready-for-goal.md spells out the pattern a line must match whole, outside

@@ -1,7 +1,7 @@
 # kabeuchi tests
 
 Regression tests for the deterministic helper scripts — `normalize.sh`,
-`merge3.sh`, `mark.sh`, `prompt-hook.sh` and `tally.sh`. Zero dependencies beyond `git` and
+`merge3.sh`, `mark.sh`, `prompt-hook.sh`, `tally.sh` and `grilled-line.sh`. Zero dependencies beyond `git` and
 `bash`: each test writes small text blobs to a temp dir, runs one script, and
 asserts on its stdout and exit code. The interview itself is delegated to
 `/grilling`, and the voting is done by subagents; both are prompt-driven, so
@@ -86,13 +86,28 @@ Exit status is non-zero if any assertion fails; the last line reports
   an option ID outside `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, a
   control character in a perspective, an unknown option, a missing file — exits
   2 with **nothing on stdout**, so half a tally can never be mistaken for one.
+- **`grilled-line.sh`** — with no existing line, one blank line and the line
+  are appended (an empty body becomes the line alone); a line at the end is
+  replaced; one moved up the body is removed with its blank line (or, at the
+  very top, the blank line after it) and the new one goes last; a line inside a
+  ```` ``` ````, a `~~~` (not closed by a shorter fence) or an indented fence is
+  left untouched; an unclosed fence runs to the end of the body; a line after a
+  closed fence is replaced; indented, quoted, extended and malformed copies are
+  content; with "Known gaps" present the line goes below it; several lines
+  leave one; running it twice gives the same body; the body is normalized; each
+  of the four keys writes one line, last, that a later run recognises and
+  replaces. An unknown key, a malformed timestamp (`Z`, no seconds, a date
+  alone, trailing text) or the wrong number of arguments exits 2 with
+  **nothing on stdout**.
 - **grilled line wording** — the line kabeuchi writes at the end of Phase 3 is
   found again by its fixed prefix, so every example of it in `SKILL.md`,
   `references/ready-for-goal.md` and the repository README must use exactly
   `` > Grilled with `/kabeuchi` at <timestamp> — `` and one of the four
   tails, and `ready-for-goal.md` must show all four and state, as the exact
   pattern a line must match to count as a grilled line, the same pattern the
-  test uses.
+  test uses. Its example lines must be exactly the four lines `grilled-line.sh`
+  writes, and each of those must match the pattern, so the docs and the script
+  cannot drift apart.
 - **`agents/kabeuchi-voter.md`'s description** — the preflight in `SKILL.md`
   stops every session whose installed voter's description lacks a phrase it
   requires, so the shipped `description:` line must contain each of them. The
@@ -109,7 +124,7 @@ Exit status is non-zero if any assertion fails; the last line reports
 `.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
 request that touches `skills/kabeuchi/**`, the repository README (its kabeuchi
 section is checked by the grilled line wording test), or the workflow itself. `shellcheck`
-ships preinstalled on the `ubuntu-latest` runner, and all five scripts plus this
+ships preinstalled on the `ubuntu-latest` runner, and all six scripts plus this
 test file are clean at its default severity.
 
 ```yaml

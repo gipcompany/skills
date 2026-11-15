@@ -380,10 +380,11 @@ applies verbatim to every re-read the write-back loop does below.
 
 **Each time a point is settled**, reflect it into the target: **rewrite the target in place** into the current agreed spec — an `Edit`-style overwrite of the affected section — **not** appending, not keeping a changelog, not logging the Q&A. **Before every write, present the concrete diff**; if the user objects, roll it back. That holds while the next question's votes are out (above): print the diff as text in the same step, immediately before the `gh issue edit` or file write — never after it, and never saved up for when the question appears.
 
-Concurrency is handled the way `git` merges non-conflicting hunks — **optimistic detection, conservative resolution, no locks**. Immediately before each write, re-fetch and normalize the target and compare to `last_synced`; if it changed, run a 3-way merge; after writing, read the target back and verify it matches what you intended. The two helper scripts do the deterministic work:
+Concurrency is handled the way `git` merges non-conflicting hunks — **optimistic detection, conservative resolution, no locks**. Immediately before each write, re-fetch and normalize the target and compare to `last_synced`; if it changed, run a 3-way merge; after writing, read the target back and verify it matches what you intended. The helper scripts do the deterministic work:
 
 - **`scripts/normalize.sh`** — canonicalize a body (LF, strip trailing whitespace/newlines) for every read, comparison, and read-back.
 - **`scripts/merge3.sh <base> <mine> <theirs>`** — 3-way text merge in a self-cleaning temp dir. Exit `0` = clean (auto-integrate, and call out the folded-in external change), `1` = conflict (markers on stdout → a human resolves it, never auto-write), `2` = usage error.
+- **`scripts/grilled-line.sh <timestamp> <key>`** — Phase 3 only: replaces the grilled line at the end of the body (below).
 
 The full write-back loop, the flowchart, and the detect/resolve/verify detail live in **`references/conflict-resolution.md`**. Read it before your first write-back.
 
@@ -439,7 +440,11 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   most one. Only a line **outside any code fence** that matches the whole
   pattern — prefix, timestamp, and one of the four tails — counts as an existing
   one; an example of the line inside a code fence, or anything that merely
-  resembles it, is content and is never touched. The check brief leaves the
+  resembles it, is content and is never touched. **`scripts/grilled-line.sh
+  <timestamp> <key>`** does the replacing — body on stdin, the body to diff
+  on stdout, the tail chosen by a fixed key (`ready`, `gaps`, `not-ready`,
+  `not-checked`) — after the re-fetch and any merge, before the diff; never
+  edit the line by hand. The check brief leaves the
   existing line out, so the checker is not led by an earlier verdict. The
   wording, the cases, and where the line goes are in
   **`references/ready-for-goal.md`**, *The grilled line*. (It is unrelated to
@@ -475,4 +480,4 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 
 - No comment I/O on issues, no PR/Gist/arbitrary-URL targets, no issue-number shorthand.
 - No git side effects on local files.
-- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the two text helpers, `mark.sh`, and the vote counter `tally.sh`; their tests live in `tests/` (`bash tests/run.sh`).
+- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the text helpers (`normalize.sh`, `merge3.sh`, `grilled-line.sh`), `mark.sh`, and the vote counter `tally.sh`; their tests live in `tests/` (`bash tests/run.sh`).
