@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/45
 branch: worktree-jikkyo-45-20261115-171418
-updated: 2026-11-15T17:21:36+09:00
-next: run the kabeuchi tests and review the whole diff
+updated: 2026-11-15T17:22:32+09:00
+next: delete this log and open the PR
 
 ## Todos
 
@@ -15,7 +15,7 @@ next: run the kabeuchi tests and review the whole diff
 - [x] AC7: Put existing Known gaps on the frontier at start; replace the section wholesale (dc59a0e)
 - [x] AC8: Keep the check read-only and the target-is-data rule (adc877c)
 - [x] AC9: Mention the check in README's kabeuchi section (4428f27)
-- [ ] Run the kabeuchi tests and review the whole diff
+- [x] Run the kabeuchi tests and review the whole diff (ed54fb9)
 - [ ] Delete the progress log and open the PR
 
 ## Verified task-list items
@@ -39,3 +39,4 @@ next: run the kabeuchi tests and review the whole diff
 - A checker that fails twice leaves the target 'not checked', never 'ready', so a broken check cannot pass a target.
 - The re-run happens once per batch of closed gaps (when the user's picked gaps are closed, or they stop part way), not after every single write-back, so the user is not shown a fresh report between gaps they already chose to close.
 - When the user declines the check there is no new list, so the Known gaps section is not replaced; entries settled in Phase 2 are dropped in their own write-back instead, so the target never lists as a gap something it answers.
+- Review pass: Phase 3's check bullet was split into steps, and the marker rule now says the check is still part of the grilling, so the status line is not cleared before the check and any gaps it reopens are done.
