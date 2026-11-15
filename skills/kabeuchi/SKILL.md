@@ -424,7 +424,7 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 - **Summarize what was written back** to the target at the end, and list any
   gaps the check found that were left open.
 - **Do not wander** into adjacent work on your own initiative.
-- The target must contain **only the current agreed state** — never a change-history or discussion-log section. A "Known gaps" section is current state: what is unresolved now, nothing about how it got there.
+- The target must contain **only the current agreed state** — never a change-history or discussion-log section. Two things kabeuchi itself writes are current state, and allowed: a "Known gaps" section (what is unresolved now, nothing about how it got there) and the **status line** (that the target was grilled, by the latest session, and with what result). Each is replaced wholesale, never appended to, so neither turns into a history of sessions.
 - **Remove the briefs** — the vote briefs and the check briefs — if you made a
   directory for them with `mktemp -d` (`references/voting.md`, *The brief*).
   Briefs in the scratchpad need nothing: that directory belongs to the session.
