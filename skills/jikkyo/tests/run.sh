@@ -768,22 +768,45 @@ EOF2
   assert_eq "...and nothing is written where it points" "" "$(ls -A "$TMP/elsewhere")"
   rm -f "$sdir"; mv "$sdir.real" "$sdir"
 
-  # A <N>.json that is a directory, or a symlink to one, is not written into.
-  rm -f "$STATE"; mkdir -p "$TMP/elsewhere2"; ln -s "$TMP/elsewhere2" "$STATE"
-  new_log; rc=0
-  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
-  assert_eq "a state file that is a symlink to a directory does not stop the run" "0:2" "$rc:$(calls)"
-  assert_eq "...and nothing is moved into where it points" "" "$(ls -A "$TMP/elsewhere2")"
-  assert_eq "...nor is a temp file left beside it" "" "$(find "$sdir" -name '.12.json.*')"
-  rm -f "$STATE"
-  # ...nor into a real directory there: nothing is written, the run goes on.
-  mkdir -p "$STATE"
-  new_log; rc=0
-  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
-  assert_eq "a state file that is a directory does not stop the run" "0:2" "$rc:$(calls)"
-  assert_eq "...and nothing is written into it or left beside it" ":" \
-    "$(ls -A "$STATE"):$(find "$sdir" -name '.12.json.*')"
-  rmdir "$STATE"
+  # A <N>.json that is a symlink to a directory, or a real directory, is never
+  # written into. place() has two paths (see report.sh): with perl a symlink
+  # is replaced by the state file; without perl (JIKKYO_NO_PERL=1) it is left
+  # as it is and nothing is written. Both run here; the perl path is skipped
+  # when perl is not installed.
+  for path in perl noperl; do
+    if [ "$path" = perl ] && ! command -v perl >/dev/null 2>&1; then
+      echo "  skip the perl path of place(): perl is not installed"
+      continue
+    fi
+    noperl=""; [ "$path" = noperl ] && noperl=1
+    rm -rf "$STATE" "$TMP/elsewhere2"; mkdir -p "$TMP/elsewhere2"
+    ln -s "$TMP/elsewhere2" "$STATE"
+    new_log; rc=0
+    printf '%s\n' "$(result_ok)" \
+      | JIKKYO_NO_PERL="$noperl" bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+    assert_eq "[$path] a state file that is a symlink to a directory does not stop the run" \
+      "0:2" "$rc:$(calls)"
+    assert_eq "[$path] ...and nothing is moved into where it points" "" "$(ls -A "$TMP/elsewhere2")"
+    assert_eq "[$path] ...nor is a temp file left beside it" "" "$(find "$sdir" -name '.12.json.*')"
+    if [ "$path" = perl ]; then
+      if [ -f "$STATE" ] && [ ! -L "$STATE" ]; then
+        ok "[perl] ...and the symlink is replaced by the state file"
+      else bad "[perl] ...and the symlink is replaced by the state file"; fi
+    else
+      assert_eq "[noperl] ...and the symlink is left as it is" "$TMP/elsewhere2" \
+        "$(readlink "$STATE" 2>/dev/null)"
+    fi
+    rm -f "$STATE"
+    # ...nor into a real directory there: nothing is written, the run goes on.
+    mkdir -p "$STATE"
+    new_log; rc=0
+    printf '%s\n' "$(result_ok)" \
+      | JIKKYO_NO_PERL="$noperl" bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+    assert_eq "[$path] a state file that is a directory does not stop the run" "0:2" "$rc:$(calls)"
+    assert_eq "[$path] ...and nothing is written into it or left beside it" ":" \
+      "$(ls -A "$STATE"):$(find "$sdir" -name '.12.json.*')"
+    rmdir "$STATE"
+  done
 
   # A temp file left by a killed write is taken out by the next write.
   touch -t 202001010000 "$sdir/.12.json.Ab12Cd" "$sdir/.13.json.Ab12Cd"
@@ -2026,6 +2049,7 @@ echo "SKILL.md"
     # shellcheck disable=SC2016  # literal backticks
     assert_has "README.md: ...keeps refreshInterval too" 'keep (or add) `"refreshInterval": 10` on your `statusLine` entry' "$readme"
     assert_has "README.md: why refreshInterval" "the session that launched it is idle" "$readme"
+    assert_has "README.md: the estimate is as of the last write" "does not count down" "$readme"
     # shellcheck disable=SC2016  # literal backticks
     assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme"
     assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme"
@@ -2045,7 +2069,8 @@ echo "SKILL.md"
   fi
   assert_has "SKILL.md: a Status line section" "## Status line" "$skill"
   assert_has "SKILL.md: the skill never edits settings" "This skill never edits a settings file" "$skill"
-  assert_has "SKILL.md: refreshInterval and why" "with \`refreshInterval\`, needed because this session is idle while the run" "$skill"
+  assert_has "SKILL.md: refreshInterval" "each with \`refreshInterval\`," "$skill"
+  assert_has "SKILL.md: ...and why" "needed because this session is idle while the run goes." "$skill"
   # No script writes Claude Code settings.
   for s in launch report precheck cleanup statusline; do
     assert_lacks "$s.sh does not touch settings.json" "settings.json" "$(grep -v '^ *#' "$SCRIPTS/$s.sh")"
@@ -2060,8 +2085,22 @@ echo "SKILL.md"
   assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   assert_has "SKILL.md: the parent checks the session id's shape itself before launching" "Before launching, look at the value you are about to pass" "$skill"
   assert_has "...and tells the user the run will not show in the status line" "say in step 5 that this run will not show in the" "$skill"
-  assert_has "...which step 5 says too" "only when step 4 found the session id not shaped like" "$skill"
-  assert_lacks "...without spelling the variable, which Claude Code would fill in" "for example the literal" "$skill"
+  # Matched with runs of spaces and newlines squeezed to one space, so a
+  # rewrap of step 4 does not break it.
+  # shellcheck disable=SC2016  # a literal backtick and $
+  assert_has "...naming a placeholder by its \$, not by the variable's name" \
+    'for example a placeholder left as written (it starts with `$`)' \
+    "$(tr -s ' \n' '  ' <<<"$skill")"
+  assert_has "...which step 5 says too, in the same words" "only when step 4 found the session id not a UUID" "$skill"
+  # Claude Code fills in the variable everywhere in the skill text, so it is
+  # named on exactly these three lines (the two launch lines and the Status
+  # line section) and nowhere else, in any spelling.
+  # shellcheck disable=SC2016  # literal ${...}
+  assert_eq "SKILL.md: CLAUDE_SESSION_ID appears only on the launch lines and in Status line" \
+    "   \${CLAUDE_SKILL_DIR}/scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'
+   \${CLAUDE_SKILL_DIR}/scripts/launch.sh --resume '<branch>' '<comment id>' '\${CLAUDE_SESSION_ID}' '<URL>'
+\`\${CLAUDE_SESSION_ID}\` passed to \`launch.sh\` against the status line's" \
+    "$(grep 'CLAUDE_SESSION_ID' "$SKILL_MD")"
   assert_has "SKILL.md: documents resuming" "**Resuming a run.**" "$skill"
   assert_has "SKILL.md: resume lists the other authors first" "precheck.sh --author '<login>' --authors" "$skill"
   assert_has "SKILL.md: ...checks each one's permission" "gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission" "$skill"
