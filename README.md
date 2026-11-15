@@ -188,6 +188,49 @@ kabeuchi in progress · gipcompany/path#125
 
 Because the marker is keyed by session id it can never light up a different window's bar, and it records the owning process so a session that dies without clearing it is collected on the next run. Clearing it is the skill's own last step.
 
+### In your status line
+
+The session you ran `/kabeuchi` in can show the grilling in Claude Code's [status line](https://code.claude.com/docs/en/statusline), for as long as it runs:
+
+```
+kabeuchi in progress · gipcompany/skills#52
+```
+
+`scripts/statusline.sh` reads the status line's JSON on stdin, takes `session_id`, and prints that one line when the marker for the session exists, and nothing otherwise. A GitHub issue target is shown as `OWNER/REPO#N` and is a link to the issue; a path target is shown as it is, with your home directory folded to `~`; until the target is resolved, the line shows `(resolving target)`. The link is rebuilt from the parts of the URL the script has checked, never copied from the marker, and control characters are stripped before anything is printed, so the marker cannot write escape sequences to your terminal. It needs nothing but `bash`, `sed`, and `tr`, uses no network, and always exits 0, so it cannot break your status line.
+
+**Whether the link is clickable depends on your terminal.** In one that supports hyperlinks (iTerm2, Kitty, and WezTerm, for example), Cmd+click on macOS or Ctrl+click on Windows and Linux opens the issue; elsewhere you see the same text, just not clickable. If the text is not clickable in a terminal that does support hyperlinks, Claude Code may not have detected that support: start it with `FORCE_HYPERLINK=1`, as the [status line docs](https://code.claude.com/docs/en/statusline) describe.
+
+`kabeuchi` does not edit your settings; add it yourself, in one of two ways. Use the full path of the installed `scripts/statusline.sh`, not a relative one (`~` is fine; for a personal install it is usually `~/.claude/skills/kabeuchi/scripts/statusline.sh`).
+
+- **As the whole status line**, in `~/.claude/settings.json`:
+
+  ```json
+  {"statusLine": {"type": "command", "command": "/absolute/path/to/kabeuchi/scripts/statusline.sh"}}
+  ```
+
+- **Appended to the status line you already have**: give `statusline.sh` the same stdin from your own script and print what it prints, if anything, on a row of its own. If you also use [jikkyo](#jikkyo), its status line script goes the same way, one row each:
+
+  ```bash
+  #!/usr/bin/env bash
+  input="$(cat)"
+  printf '%s' "$input" | ~/.claude/my-statusline.sh   # what you print today
+  for script in /absolute/path/to/jikkyo/scripts/statusline.sh \
+                /absolute/path/to/kabeuchi/scripts/statusline.sh; do
+    row="$(printf '%s' "$input" | "$script")"
+    if [ -n "$row" ]; then printf '%s\n' "$row"; fi
+  done
+  ```
+
+  which shows, while both are running:
+
+  ```
+  Opus · ⚡xhigh · ~/git/path · 5h: [███░░░░░░░] 28% ↻2h10m
+  jikkyo #27 · 60% · ~12m left
+  kabeuchi in progress · gipcompany/skills#52
+  ```
+
+**No `refreshInterval` is needed for kabeuchi.** The marker changes only when a grilling starts and when it ends, and the session is active the whole time in between, so the status line's own updates on each new message keep the row current. Do not copy jikkyo's `refreshInterval: 10` for it; if you combine the two as above, keep the interval for jikkyo's sake, since that one is needed (see *In your status line* under [jikkyo](#jikkyo)).
+
 ### What it runs on your machine
 
 Two things here go beyond reading and writing the target, and you should know about both before installing this — reviewing what a checked-in skill grants itself is the recommended habit, not a special precaution for this one.
