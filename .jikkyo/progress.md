@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/54
 branch: worktree-jikkyo-54-20261115-211754
-updated: 2026-11-15T21:25:06+09:00
-next: AC6, skip no-op writes and write Known gaps with the line
+updated: 2026-11-15T21:26:03+09:00
+next: AC7, looser wording-test pattern
 
 ## Todos
 
@@ -11,7 +11,7 @@ next: AC6, skip no-op writes and write Known gaps with the line
 - [x] AC3: add the fourth tail "not yet ready for /goal." (f5d8ab8)
 - [x] AC4: say the line is not a trust signal (273dd4a)
 - [x] AC5: add scripts/grilled-line.sh with tests (c90e17e)
-- [ ] AC6: skip no-op writes; write Known gaps and the line together
+- [x] AC6: skip no-op writes; write Known gaps and the line together (99162a3)
 - [ ] AC7: looser wording-test pattern
 - [ ] AC8: rewrap SKILL.md:420
 - [ ] AC9: skip README test outside the repo
@@ -25,6 +25,7 @@ next: AC6, skip no-op writes and write Known gaps with the line
 - AC3 (never points at a missing Known gaps): fourth tail added to the tail table, examples, exact pattern, SKILL.md, README and tests; the rejected-diff case now uses it; tests pass
 - AC4 (not a trust signal): sentence added to README and to the grilled line section of ready-for-goal.md; tests pass
 - AC5 (replacement script): scripts/grilled-line.sh added; tests/run.sh covers no line, line at end, moved up, inside backtick and tilde fences, unclosed fence, Known gaps present, running twice, bad keys and timestamps; 164 tests pass, shellcheck clean; a wording drift in a copy of the script fails the docs agreement test
+- AC6 (no-op skip, one write-back): conflict-resolution.md loop and flowchart skip an unchanged body and report it; ready-for-goal.md and SKILL.md require one write-back for Known gaps and the line, with the line alone as a second diff after a rejection; reread for consistency, tests pass
 
 ## Dead ends and decisions
 
