@@ -1,7 +1,8 @@
 # Conflict resolution and the write-back loop
 
-Read this when you are in Phase 2 and about to reflect a settled point back into
-the target. It expands the "optimistic detect, conservative resolve, no locks"
+Read this before your first write-back. Every write to the target goes through
+the loop below: each settled point in Phase 2, and the "Known gaps" section and
+the grilled line at the end of Phase 3. It expands the "optimistic detect, conservative resolve, no locks"
 rule and shows exactly how to drive `scripts/normalize.sh` and
 `scripts/merge3.sh`.
 
@@ -42,12 +43,14 @@ flowchart TD
     A([grilling settles a point]) --> B[Prepare the in-place edit for the target]
     B --> C[Re-fetch the current target body and normalize<br/>gh issue view / read file -> normalize.sh]
     C --> D{Same as last_synced?}
-    D -- unchanged --> P[Present the concrete diff]
+    D -- unchanged --> N{Body to write equals<br/>the re-fetched body?}
     D -- changed --> O{Does the external change overlap<br/>or conflict with this edit?}
     O -- disjoint --> AM[Auto-integrate: merge3.sh both changes]
-    AM --> P
+    AM --> N
     O -- overlaps / may conflict --> H[Show base / theirs / mine<br/>and ask the user to resolve]
-    H --> P
+    H --> N
+    N -- equal --> K(["Say #quot;no change#quot;, skip the write and read-back,<br/>set last_synced to the re-fetched body"])
+    N -- differs --> P[Present the concrete diff]
     P --> W[Write the target<br/>gh issue edit --body-file / write file]
     W --> V[Read-back: re-read what was written -> normalize.sh]
     V --> Q{Matches what you intended to write?}
@@ -90,6 +93,15 @@ store one, and a crashed terminal would leave it stale).
   - **Conflict (exit 1, overlapping / possibly contradictory):** **do not
     auto-resolve.** Show the user `base`, `theirs`, and `mine` (or the marked-up
     `merged.txt`) and have them resolve it before writing.
+
+- **Skip a write that changes nothing.** Once the body to be written is
+  final — your edit applied to the re-fetched body, merged if it had changed,
+  conflicts resolved — compare it with the re-fetched normalized body. Equal
+  means the write would change nothing (for example, someone else already made
+  the same edit, so a clean `merge3.sh` result equals what is there): say
+  "no change", **skip the write and the read-back**, set `last_synced` to the
+  re-fetched body, and list the skipped write in the closing summary. This
+  holds for every write-back, not only the ones in Phase 2.
 
 - **Verify (read-back).** The issue API has no conditional update (no If-Match /
   CAS), so an interruption between fetch and write cannot be prevented outright.

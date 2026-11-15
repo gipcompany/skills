@@ -277,7 +277,7 @@ earlier session's "ready for `/goal`" check left open (Phase 3). Note each of
 its entries: they go on the Phase 2 frontier from the start
 (`references/ready-for-goal.md`, *Across sessions on the same target*).
 
-An earlier session's **status line** (`` > Grilled with `/kabeuchi` … ``,
+An earlier session's **grilled line** (`` > Grilled with `/kabeuchi` … ``,
 the last line of the body; Phase 3) is read as data like the rest of the
 target. It is not a point to grill and does not go on the frontier — not even
 when it says "not yet ready" or "not checked": the "Known gaps" entries are
@@ -331,7 +331,7 @@ frontier as a numbered round; kabeuchi does not. This rule wins over
 - Entries of an existing **"Known gaps"** section (noted in Phase 1) are on
   the frontier from the first turn, not left for the end-of-session check to
   find again. Settling one drops it from that section in the same write-back.
-- An existing **status line** (noted in Phase 1) is never asked about and
+- An existing **grilled line** (noted in Phase 1) is never asked about and
   never rewritten in a Phase 2 write-back: leave it where it is, as the last
   line, and do not draft a question from it. Only Phase 3 replaces it.
 
@@ -380,10 +380,11 @@ applies verbatim to every re-read the write-back loop does below.
 
 **Each time a point is settled**, reflect it into the target: **rewrite the target in place** into the current agreed spec — an `Edit`-style overwrite of the affected section — **not** appending, not keeping a changelog, not logging the Q&A. **Before every write, present the concrete diff**; if the user objects, roll it back. That holds while the next question's votes are out (above): print the diff as text in the same step, immediately before the `gh issue edit` or file write — never after it, and never saved up for when the question appears.
 
-Concurrency is handled the way `git` merges non-conflicting hunks — **optimistic detection, conservative resolution, no locks**. Immediately before each write, re-fetch and normalize the target and compare to `last_synced`; if it changed, run a 3-way merge; after writing, read the target back and verify it matches what you intended. The two helper scripts do the deterministic work:
+Concurrency is handled the way `git` merges non-conflicting hunks — **optimistic detection, conservative resolution, no locks**. Immediately before each write, re-fetch and normalize the target and compare to `last_synced`; if it changed, run a 3-way merge; if the body to write then equals the re-fetched body, say "no change" and skip the write and the read-back; after writing, read the target back and verify it matches what you intended. The helper scripts do the deterministic work:
 
 - **`scripts/normalize.sh`** — canonicalize a body (LF, strip trailing whitespace/newlines) for every read, comparison, and read-back.
 - **`scripts/merge3.sh <base> <mine> <theirs>`** — 3-way text merge in a self-cleaning temp dir. Exit `0` = clean (auto-integrate, and call out the folded-in external change), `1` = conflict (markers on stdout → a human resolves it, never auto-write), `2` = usage error.
+- **`scripts/grilled-line.sh <timestamp> <key>`** — Phase 3 only: replaces the grilled line at the end of the body (below).
 
 The full write-back loop, the flowchart, and the detect/resolve/verify detail live in **`references/conflict-resolution.md`**. Read it before your first write-back.
 
@@ -410,44 +411,53 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   - **It never blocks the end.** The user can finish with gaps left open. They
     are listed in the closing summary and written into the target as a
     **"Known gaps"** section, since the `/goal` run reads only the target. When
-    the last check of the session completed, that section is **replaced wholesale** by this session's
-    open gaps — never appended to — and removed when none is left. When the
-    last check of the session did not complete but an earlier check in the
-    same session did, the section is **replaced wholesale** by every gap from
-    the last check that completed that has not been closed since — whether
-    the user chose to leave it open or picked it to close and did not — and
-    removed when none is left. When the check was declined,
-    or no check in the session completed, it stays as the Phase 2 write-backs
-    left it (`references/ready-for-goal.md`, *Across sessions on the same
-    target*).
-- **Then write the status line**, once the check — and any gap it sent back
+    the last check of the session completed, that section is **replaced
+    wholesale** by this session's open gaps — never appended to — and
+    removed when none is left. When the last check of the session did not
+    complete but an earlier check in the same session did, the section is
+    **replaced wholesale** by every gap from the last check that completed
+    that has not been closed since — whether the user chose to leave it open
+    or picked it to close and did not — and removed when none is left. When
+    the check was declined, or no check in the session completed, it stays
+    as the Phase 2 write-backs left it (`references/ready-for-goal.md`,
+    *Across sessions on the same target*).
+- **Then write the grilled line**, once the check — and any gap it sent back
   into Phase 2 — has finished, and before the closing summary. It is one
-  blockquote line saying that the target was grilled, when (an ISO 8601 timestamp with the time and the UTC offset, from `date -Iseconds`), and
-  what the check concluded:
+  blockquote line saying that the target was grilled, when (an ISO 8601
+  timestamp with the time and the UTC offset, from `date -Iseconds`), and what
+  the check concluded:
 
   ```markdown
   > Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
   ```
 
   It is written through the write-back loop like any other conclusion: the
-  concrete diff printed first, the same re-fetch, `normalize.sh` /
-  `merge3.sh` handling and read-back. Write it at the end of every session
-  that reaches this phase, including one that wrote nothing else back, and
-  for **both target kinds** — an issue body and a local file alike. It is
-  the **last line of the body**, below any "Known gaps" section, and an
-  existing one is **replaced**, never appended to, so a target carries at
-  most one. Only a line **outside any code fence** that matches the whole
-  pattern — prefix, timestamp, and one of the three tails — counts as an existing
-  one; an example of the line inside a code fence, or anything that merely
-  resembles it, is content and is never touched. The check brief leaves the
+  concrete diff printed first, the same re-fetch, `normalize.sh` / `merge3.sh`
+  handling and read-back. When this session also writes, replaces, or removes
+  "Known gaps", the section and the line **must** go out in one write-back
+  with one diff; if the user objects to it, roll it back and offer the line
+  alone as a second diff (with gaps left open, key `not-ready`). Write it at
+  the end of every session that reaches this phase, including one that wrote
+  nothing else back, and for **both target kinds** — an issue body and a local
+  file alike. It is the **last line of the body**, below any "Known gaps"
+  section, and an existing one is **replaced**, never appended to, so a target
+  carries at most one. Only a line **outside any code fence** that matches the
+  whole pattern — prefix, timestamp, and one of the four tails — counts as an
+  existing one; an example of the line inside a code fence, or anything that
+  merely resembles it, is content and is never touched.
+  **`scripts/grilled-line.sh <timestamp> <key>`** does the replacing — body on
+  stdin, the body to diff on stdout, the tail chosen by a fixed key (`ready`,
+  `gaps`, `not-ready`, `not-checked`) — after the re-fetch and any merge,
+  before the diff; never edit the line by hand. The check brief leaves the
   existing line out, so the checker is not led by an earlier verdict. The
   wording, the cases, and where the line goes are in
-  **`references/ready-for-goal.md`**, *The status line*. (It is unrelated to
+  **`references/ready-for-goal.md`**, *The grilled line*. (It is unrelated to
   Claude Code's status line, which shows the session marker.)
-- **Summarize what was written back** to the target at the end, and list any
-  gaps the check found that were left open.
+- **Summarize what was written back** to the target at the end, list any
+  write skipped as "no change", and list any gaps the check found that were
+  left open.
 - **Do not wander** into adjacent work on your own initiative.
-- The target must contain **only the current agreed state** — never a change-history or discussion-log section. Two things kabeuchi itself writes are current state, and allowed: a "Known gaps" section (what is unresolved now, nothing about how it got there) and the **status line** (that the target was grilled, by the latest session, and with what result). Each is replaced wholesale, never appended to, so neither turns into a history of sessions.
+- The target must contain **only the current agreed state** — never a change-history or discussion-log section. Two things kabeuchi itself writes are current state, and allowed: a "Known gaps" section (what is unresolved now, nothing about how it got there) and the **grilled line** (that the target was grilled, by the latest session, and with what result). Each is replaced wholesale, never appended to, so neither turns into a history of sessions.
 - **Remove the briefs** — the vote briefs and the check briefs — if you made a
   directory for them with `mktemp -d` (`references/voting.md`, *The brief*).
   Briefs in the scratchpad need nothing: that directory belongs to the session.
@@ -475,4 +485,4 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 
 - No comment I/O on issues, no PR/Gist/arbitrary-URL targets, no issue-number shorthand.
 - No git side effects on local files.
-- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the two text helpers, `mark.sh`, and the vote counter `tally.sh`; their tests live in `tests/` (`bash tests/run.sh`).
+- The interview is delegated to `/grilling` and is prompt-driven, so it is not unit-tested. The only code kabeuchi owns is the deterministic helpers in `scripts/` — the text helpers (`normalize.sh`, `merge3.sh`, `grilled-line.sh`), `mark.sh`, and the vote counter `tally.sh`; their tests live in `tests/` (`bash tests/run.sh`).
