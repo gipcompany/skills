@@ -2047,16 +2047,16 @@ echo "SKILL.md"
     readme_jikkyo="$(awk '/^## /{ f = ($0 == "## jikkyo") } f' "$README_MD")"
     assert_has "README.md: the status line section, under ## jikkyo" "### In your status line" "$readme_jikkyo"
     assert_has "README.md: the standalone setup, with refreshInterval" \
-      '{"statusLine": {"type": "command", "command": "/absolute/path/to/jikkyo/scripts/statusline.sh", "refreshInterval": 10}}' "$readme"
+      '{"statusLine": {"type": "command", "command": "/absolute/path/to/jikkyo/scripts/statusline.sh", "refreshInterval": 10}}' "$readme_jikkyo"
     assert_has "README.md: the appended setup, under ## jikkyo" "**Appended to the status line you already have**" "$readme_jikkyo"
     # shellcheck disable=SC2016  # literal backticks
-    assert_has "README.md: ...keeps refreshInterval too" 'keep (or add) `"refreshInterval": 10` on your `statusLine` entry' "$readme"
-    assert_has "README.md: why refreshInterval" "the session that launched it is idle" "$readme"
-    assert_has "README.md: the estimate is as of the last write" "does not count down" "$readme"
+    assert_has "README.md: ...keeps refreshInterval too" 'keep (or add) `"refreshInterval": 10` on your `statusLine` entry' "$readme_jikkyo"
+    assert_has "README.md: why refreshInterval" "the session that launched it is idle" "$readme_jikkyo"
+    assert_has "README.md: the estimate is as of the last write" "does not count down" "$readme_jikkyo"
     # shellcheck disable=SC2016  # literal backticks
-    assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme"
-    assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme"
-    assert_has "README.md: after /clear, the status comment" "After \`/clear\` you are in a new session" "$readme"
+    assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme_jikkyo"
+    assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme_jikkyo"
+    assert_has "README.md: after /clear, the status comment" "After \`/clear\` you are in a new session" "$readme_jikkyo"
     # The appended example works as written, with its two paths filled in.
     printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
     chmod +x "$TMP/my-statusline.sh"
