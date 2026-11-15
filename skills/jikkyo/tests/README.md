@@ -97,7 +97,10 @@ timing and signal tests waiting on a real scheduler.
   Japanese issue records `ja`. Nothing from the issue, the result line, or
   `gh`'s answer (escape sequences included) reaches it. From a linked
   worktree it goes to the shared common dir; outside a git repository, or
-  with an unwritable directory, there is no file and the run goes on.
+  with an unwritable directory, there is no file and the run goes on. A
+  `jikkyo/` swapped for a symlink is not written through, and an old temp
+  file of the issue left by a killed write is removed by the next write
+  (another issue's is left).
 - **`launch.sh`** — anything that is not exactly a GitHub issue URL is rejected
   with exit 2 before the child or `gh` runs, as is an issue whose repository is
   not a remote of the checkout (a host like `notgithub.com` does not count),
@@ -184,10 +187,12 @@ timing and signal tests waiting on a real scheduler.
   - Several runs on one line by issue number, joined with ` | `, an expired
     one dropped; another session's run and a run with no session not shown,
     while the other session sees its own; found from a linked worktree's
-    subdirectory with only `current_dir` or `cwd`.
+    subdirectory with only `current_dir` or `cwd`, and from `current_dir` or
+    `cwd` when `project_dir` is outside any git checkout.
   - Japanese: `残り ~12m`, `12 ターン`, `1 ターン`, `完了`, `失敗`, `中断`,
     `応答なし`, mixed languages on one line, an unknown or missing `lang`
-    skipped, and the words checked against `report.sh`'s own labels.
+    skipped, and each ended state's word checked against what `report.sh`'s
+    `state_word` gives for that state.
   - Quiet: empty or non-JSON stdin, a missing, malformed, or numeric
     `session_id`, no, relative, missing, or non-git directory, a bad clock,
     and no `jq` all print nothing, exit 0, and write nothing to stderr.
@@ -195,11 +200,19 @@ timing and signal tests waiting on a real scheduler.
     a bad state, negative or fractional numbers, `done` over `total`, a file
     over 4 KiB, a misnamed file, a FIFO, a directory, and an unreadable file
     are skipped while good runs still show; files without a trailing newline
-    are read whole; odd extra fields never reach the output.
-  - No network tool (`gh`, `curl`, `wget`, `nc`, `ssh`) is run, and 50 state
-    files take well under a second.
+    are read whole; odd extra fields never reach the output. An ended run
+    whose `updated` is far in the future (the clock was set back) is not
+    shown; one a few seconds ahead is.
+  - No network tool (`gh`, `curl`, `wget`, `nc`, `ssh`) is run. 50 state
+    files take well under a second, and 501 under half a second (one `find`,
+    one `awk`, one `jq` for all of them). Under `/bin/bash` when it is 3.2,
+    as on macOS, the main cases give the same line.
   - End to end, what `report.sh` writes (English and Japanese) is what it
     shows.
+- **Constants shared by the scripts** — `statusline.sh` and `precheck.sh`
+  call a `running` file stale at the same age, longer than `report.sh`'s
+  heartbeat; `launch.sh`, `report.sh`, and `statusline.sh` check the session
+  id with the same pattern.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and

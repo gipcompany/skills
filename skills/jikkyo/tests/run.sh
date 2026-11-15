@@ -758,6 +758,23 @@ EOF2
   chmod 700 "${STATE%/*}"
   assert_eq "an unwritable state directory does not stop the run" "0:2" "$rc:$(calls)"
   assert_eq "...and leaves no file" "" "$(ls -A "${STATE%/*}")"
+
+  # A jikkyo/ swapped for a symlink is not written through.
+  sdir="${STATE%/*}"
+  mv "$sdir" "$sdir.real"; mkdir -p "$TMP/elsewhere"; ln -s "$TMP/elsewhere" "$sdir"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+  assert_eq "a symlinked state directory does not stop the run" "0:2" "$rc:$(calls)"
+  assert_eq "...and nothing is written where it points" "" "$(ls -A "$TMP/elsewhere")"
+  rm -f "$sdir"; mv "$sdir.real" "$sdir"
+
+  # A temp file left by a killed write is taken out by the next write.
+  touch -t 202001010000 "$sdir/.12.json.Ab12Cd" "$sdir/.13.json.Ab12Cd"
+  new_log
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > /dev/null 2>&1
+  assert_eq "an old temp file of the issue is removed, another issue's is left" ".13.json.Ab12Cd 12.json" \
+    "$(find "$sdir" -mindepth 1 -maxdepth 1 -exec basename {} \; | sort | tr '\n' ' ' | sed 's/ $//')"
+  rm -f "$sdir/.13.json.Ab12Cd"
 }
 
 echo "launch.sh"
@@ -1387,11 +1404,19 @@ echo "statusline.sh"
   assert_eq "an unknown lang is skipped" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
   put 31 '{"lang": null}'
   assert_eq "...as is a missing one" "jikkyo #27 · 60% · 残り ~12m" "$(sl)"
-  # The Japanese words are the status comment's own.
+  # The Japanese words are the status comment's own, state by state: what
+  # statusline.sh shows for each ended state is what report.sh's state_word
+  # gives for it.
   report_src="$(cat "$REPORT")"
-  for w in '"完了"' '"失敗"' '"中断"' 'L_LEFT_PRE=" · 残り ~"' 'L_TURN_MANY=" ターン"'; do
+  for w in 'L_LEFT_PRE=" · 残り ~"' 'L_TURN_MANY=" ターン"'; do
     assert_has "report.sh's comment uses [$w] too" "$w" "$report_src"
   done
+  eval "$(sed -n '/^state_word() {/,/^}/p' "$REPORT")"
+  for st in finished failed interrupted; do
+    put 27 "{\"state\": \"$st\", \"updated\": 9900, \"lang\": \"ja\"}"
+    assert_eq "ja, $st: the status line's word is the comment's" "jikkyo #27 · $(LANG_CODE=ja state_word "$st")" "$(sl)"
+  done
+  put 27 '{"lang": "ja"}'
   # End to end in Japanese.
   sl_reset
   new_log
@@ -1510,6 +1535,57 @@ echo "statusline.sh"
   (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stream.jsonl" > /dev/null 2>&1)
   assert_eq "a run report.sh just finished shows as finished" "jikkyo #12 · finished" \
     "$(sl_input | bash "$STATUSLINE")"
+
+  # A file from the future (the clock was set back) is skipped, so an ended
+  # run cannot stay on the line; a few seconds ahead is fine.
+  sl_reset
+  put 27 '{"state": "finished", "updated": 100000}'
+  assert_eq "an ended run updated far in the future is not shown" "" "$(sl)"
+  put 27 '{"state": "finished", "updated": 10030}'
+  assert_eq "...one written seconds ahead still is" "jikkyo #27 · finished" "$(sl)"
+
+  # Claude Code started outside the repository, then moved into it: the
+  # first directory inside a git checkout is used.
+  sl_reset; put 27
+  assert_eq "project_dir outside git, current_dir in the checkout: shown" "jikkyo #27 · 60% · ~12m left" \
+    "$(jq -cn --arg sid "$SID" --arg o "$TMP/nogit" --arg d "$sl_repo" \
+         '{session_id: $sid, workspace: {project_dir: $o, current_dir: $d}, cwd: $o}' | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE")"
+  assert_eq "...and cwd when it is the only one inside" "jikkyo #27 · 60% · ~12m left" \
+    "$(jq -cn --arg sid "$SID" --arg o "$TMP/nogit" --arg d "$sl_repo" \
+         '{session_id: $sid, workspace: {project_dir: $o, current_dir: $o}, cwd: $d}' | JIKKYO_CLOCK_FILE="$sl_clock" bash "$STATUSLINE")"
+
+  # Many files cost about as much as a few: one find, one awk, one jq.
+  sl_reset
+  for n in $(seq 100 599); do put "$n" "{\"session\": \"$OTHER_SID\"}"; done
+  put 600
+  TIMEFORMAT=%R
+  secs="$( { time sl > "$TMP/sl-out"; } 2>&1 )"
+  unset TIMEFORMAT
+  assert_eq "...with 501 state files, this session's one run is shown" "jikkyo #600 · 60% · ~12m left" "$(cat "$TMP/sl-out")"
+  if awk -v s="$secs" 'BEGIN { exit !(s < 0.5) }'; then ok "501 state files take under half a second (${secs}s)"
+  else bad "501 state files take under half a second (${secs}s)"; fi
+
+  # bash 3.2, what macOS ships as /bin/bash, when it is there.
+  if [ -x /bin/bash ] && /bin/bash -c '[ "${BASH_VERSINFO[0]}" -lt 4 ]'; then
+    sl_reset; put 27; put 31 '{"state": "finished", "updated": 9900, "lang": "ja"}'
+    assert_eq "under /bin/bash (3.2) too" "jikkyo #27 · 60% · ~12m left | jikkyo #31 · 完了" \
+      "$(sl_input | JIKKYO_CLOCK_FILE="$sl_clock" /bin/bash "$STATUSLINE")"
+  fi
+}
+
+# ===========================================================================
+echo "constants shared by the scripts"
+{
+  sl_stale="$(sed -n 's/^STALE_AFTER=\([0-9]*\).*/\1/p' "$STATUSLINE")"
+  pc_stale="$(sed -n 's/^STALE_AFTER=\([0-9]*\).*/\1/p' "${SCRIPTS}/precheck.sh")"
+  # shellcheck disable=SC2016  # a sed program, matching a literal ${...}
+  hb="$(sed -n 's/^HEARTBEAT_INTERVAL="${JIKKYO_HEARTBEAT_INTERVAL:-\([0-9]*\)}".*/\1/p' "$REPORT")"
+  assert_eq "statusline.sh and precheck.sh call a run stale at the same age" "$pc_stale" "$sl_stale"
+  if [ -n "$sl_stale" ] && [ -n "$hb" ] && [ "$sl_stale" -gt "$hb" ]; then ok "...longer than the heartbeat ($sl_stale > $hb)"
+  else bad "...longer than the heartbeat ([$sl_stale] > [$hb])"; fi
+  sid_res="$(grep -ho "\^\[0-9a-fA-F\]{8}-\[0-9a-fA-F\]{4}-\[0-9a-fA-F\]{4}-\[0-9a-fA-F\]{4}-\[0-9a-fA-F\]{12}\\$" "$LAUNCH" "$REPORT" "$STATUSLINE" | wc -l | tr -d ' ')"
+  sid_any="$(grep -c '0-9a-fA-F\]{8}' "$LAUNCH" "$REPORT" "$STATUSLINE" | awk -F: '{ s += $2 } END { print s }')"
+  assert_eq "launch.sh, report.sh, and statusline.sh check the session id with the same pattern" "3:3" "$sid_res:$sid_any"
 }
 
 # ===========================================================================

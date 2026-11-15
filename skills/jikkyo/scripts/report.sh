@@ -68,7 +68,10 @@
 # eta_secs is the remaining-time estimate in seconds, null when there is
 # none; session and comment are null when unknown. Nothing deletes the file;
 # the next run of the issue overwrites it. Outside a git repository, or when
-# the directory cannot be written, there is no state file and the run goes on.
+# the directory cannot be written or is a symlink, there is no state file and
+# the run goes on. The file is a convenience for the status line, not a
+# record: the status comment is the record, and anything that can write to
+# the git common dir (the child included) can write this file too.
 #
 # Tuning, for tests: JIKKYO_TODO_INTERVAL (30), JIKKYO_HEARTBEAT_INTERVAL (300),
 # JIKKYO_TICK (1, seconds between scheduler passes), JIKKYO_MIN_GAP (1, seconds
@@ -266,13 +269,21 @@ eta_secs() {
 # otherwise ignored: the status line is a convenience, the comment is the record.
 publish() {
   [ -n "$state_out" ] || return 0
-  local st="$1" json="$2" end_ts="$3" t dir tmp eta comment=""
+  local st="$1" json="$2" end_ts="$3" t dir tmp eta comment="" completed total
   t="${end_ts:-$(now)}"
   dir="${state_out%/*}"
-  eta="$(eta_secs "$st" "$(jq -r '.done' <<<"$json")" "$(jq -r '.total' <<<"$json")" $((t - start_ts)))"
+  read -r completed total < <(jq -r '"\(.done) \(.total)"' <<<"$json") || return 0
+  eta="$(eta_secs "$st" "$completed" "$total" $((t - start_ts)))"
   [[ "$comment_id" =~ ^[1-9][0-9]*$ ]] \
     && comment="https://github.com/${owner}/${repo}/issues/${num}#issuecomment-${comment_id}"
   mkdir -p "$dir" 2>/dev/null || return 0
+  # Only into a real directory. The child can write to the common dir, and a
+  # jikkyo/ swapped for a symlink would have this script write wherever it
+  # points, a place the child itself might not have been allowed to write.
+  if [ ! -d "$dir" ] || [ -L "$dir" ]; then return 0; fi
+  # A temp file is left behind only when this script is killed between
+  # mktemp and mv; the next write of the issue takes such leftovers out.
+  find "$dir" -maxdepth 1 -type f -name ".${num}.json.*" -mmin +1 -delete 2>/dev/null
   tmp="$(mktemp "${dir}/.${num}.json.XXXXXX" 2>/dev/null)" || return 0
   if jq -c -n --argjson s "$json" --arg st "$st" --arg lang "$LANG_CODE" --arg session "$session" \
        --arg issue "https://github.com/${owner}/${repo}/issues/${num}" --arg comment "$comment" \

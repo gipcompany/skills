@@ -5,9 +5,10 @@
 #
 #   {"statusLine": {"type": "command", "command": "<skill dir>/scripts/statusline.sh", "refreshInterval": 10}}
 #
-# It reads the status line's JSON on stdin (session_id, and
-# workspace.project_dir, workspace.current_dir, or cwd for the directory),
-# finds the state files report.sh writes in that checkout's git common dir
+# It reads the status line's JSON on stdin (session_id, and for the directory
+# the first of workspace.project_dir, workspace.current_dir, and cwd that is
+# inside a git checkout), finds the state files report.sh writes in that
+# checkout's git common dir
 # (<git common dir>/jikkyo/<N>.json), and prints one line with a segment for
 # each run whose `session` is this session_id, ordered by issue number and
 # joined with ` | `:
@@ -16,7 +17,9 @@
 #
 #   - running: `jikkyo #<N> · <pct>% · ~<eta> left` (no ` · ~<eta> left`
 #     before the first completed todo), or `jikkyo #<N> · <turns> turns`
-#     when the run has no todos;
+#     when the run has no todos. <eta> is the estimate as of the last write,
+#     the same figure as the status comment's `Remaining` row; it does not
+#     count down between writes (at most 5 minutes apart, the heartbeat);
 #   - finished, failed, interrupted: `jikkyo #<N> · <state>` for 5 minutes
 #     after the file's `updated`, then nothing;
 #   - stale: `jikkyo #<N> · stale` for a `running` file whose `updated` is 15
@@ -35,12 +38,14 @@
 #
 # Only the session that launched (or resumed) a run shows it: launch.sh gets
 # that session's ${CLAUDE_SESSION_ID} and report.sh records it as `session`.
-# With no matching run it prints nothing.
+# With no matching run it prints nothing. What it shows is a convenience, not
+# a record: anything that can write to the git common dir can write a state
+# file, so the status comment on the issue is where a run's state is settled.
 #
-# It is local and quiet: no network and no `gh`, only `git rev-parse`, `head`,
-# and `jq` on local files. It prints nothing but numbers it has checked and
-# the fixed words above, so no text from an issue or a terminal escape
-# sequence can reach the terminal. A state file that is malformed, too large,
+# It is local and quiet: no network and no `gh`, only local tools (`git
+# rev-parse`, `find`, `awk`, `head`, `date`, and `jq`) on local files. It
+# prints nothing but numbers it has checked and the fixed words above, so no
+# text from an issue or a terminal escape sequence can reach the terminal. A state file that is malformed, too large,
 # not a regular file, or not of this session is skipped; anything else that
 # goes wrong (no jq, bad stdin, not a git checkout) prints nothing. It always
 # exits 0 and writes nothing to stderr, so it never breaks the status line it
@@ -98,14 +103,21 @@ segment() {
 
 # One line per run to show, tab-separated: number, kind (running, stale, or
 # the ended state), percentage (-1 with no todos), eta seconds (-1 for none),
-# turns, and language.
+# turns, and language. The input is every line of the state files as
+# `<path>\t<line>` (one awk for all of them, which ends each file's last line
+# even without a newline), so a malformed one is skipped without taking the
+# others down; a state file is one line of JSON, and should one hold more,
+# the last valid line wins.
+# A file whose `updated` is more than a minute in the future (the clock was
+# set back since it was written) is skipped, or an ended run would stay on
+# the line until the clock caught up.
 # shellcheck disable=SC2016  # jq program
 SELECT='
 def nat: type == "number" and . >= 0 and . == floor;
 [ inputs
   | index("\t") as $tab
   | select($tab != null)
-  | .[:$tab] as $file
+  | (.[:$tab] | sub("^.*/"; "")) as $file
   | (.[$tab + 1:] | try fromjson catch null) as $j
   | select($j | type == "object")
   | $j
@@ -116,6 +128,7 @@ def nat: type == "number" and . >= 0 and . == floor;
   | select(.eta_secs == null or (.eta_secs | nat))
   | select(.lang | IN("en", "ja"))
   | ($now - .updated) as $age
+  | select($age >= -60)
   | if .state == "running" and $age >= $stale_after then .kind = "stale"
     elif .state == "running" then .kind = "running"
     elif $age < $ended_shown then .kind = .state
@@ -129,23 +142,31 @@ def nat: type == "number" and . >= 0 and . == floor;
 '
 
 main() {
-  local input sid="" dir="" common t f c n kind pct eta turns seg line=""
-  local -a files
+  local input sid="" d common="" t f n kind pct eta turns seg line=""
+  local -a dirs=() files=()
   command -v jq >/dev/null 2>&1 || return 0
   input="$(head -c 1048576)" || return 0
+  # The session id, then the candidate directories, NUL-separated: where
+  # Claude Code was started, the current directory, and cwd, in that order.
   {
-    IFS= read -r -d '' sid
-    IFS= read -r -d '' dir
-  } < <(jq -j '((.session_id | strings) // "") + "\u0000"
-               + ((.workspace.project_dir | strings) // (.workspace.current_dir | strings) // (.cwd | strings) // "")
-               + "\u0000"' <<<"$input")
+    IFS= read -r -d '' sid || return 0
+    while IFS= read -r -d '' d; do dirs+=("$d"); done
+  } < <(jq -j '((.session_id | strings) // "") + "\u0000",
+               ((.workspace.project_dir, .workspace.current_dir, .cwd) | strings | . + "\u0000")' <<<"$input")
   [[ "$sid" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || return 0
-  case "$dir" in /*) ;; *) return 0 ;; esac
-  [ -d "$dir" ] || return 0
-  common="$(git -C "$dir" rev-parse --path-format=absolute --git-common-dir)" || return 0
-  [ -n "$common" ] || return 0
-  shopt -s nullglob
-  files=("$common"/jikkyo/[1-9]*.json)
+  # The first of them inside a git checkout: Claude Code may have been
+  # started outside the repository and moved into it.
+  for d in ${dirs[@]+"${dirs[@]}"}; do
+    case "$d" in /*) ;; *) continue ;; esac
+    [ -d "$d" ] || continue
+    common="$(git -C "$d" rev-parse --path-format=absolute --git-common-dir)" && [ -n "$common" ] && break
+    common=""
+  done
+  [ -n "$common" ] && [ -d "$common/jikkyo" ] || return 0
+  # One find for all the state files: regular files only (a FIFO would
+  # block), at most 4 KiB each.
+  while IFS= read -r -d '' f; do files+=("$f"); done \
+    < <(find "$common/jikkyo" -maxdepth 1 -type f -name '[1-9]*.json' -size -4097c -print0)
   [ "${#files[@]}" -gt 0 ] || return 0
   t="$(now)"
   [[ "$t" =~ ^[0-9]+$ ]] || return 0
@@ -155,16 +176,9 @@ main() {
     case "$lang" in en | ja) ;; *) continue ;; esac
     seg="$(segment "$n" "$kind" "$pct" "$eta" "$turns" "$lang")" || continue
     line="${line:+${line} | }${seg}"
-  done < <(for f in "${files[@]}"; do
-             # One line per file, `<file name>\t<contents>`, so the name goes
-             # with what it holds; a state file is one short line of JSON.
-             # Regular files only (a FIFO would block), and at most 4 KiB read.
-             [ -f "$f" ] || continue
-             c="$(head -c 4097 "$f")" || continue
-             [ "${#c}" -le 4096 ] || continue
-             printf '%s\t%s\n' "${f##*/}" "${c//$'\n'/ }"
-           done | jq -n -R -r --arg sid "$sid" --argjson now "$t" --argjson ended_shown "$ENDED_SHOWN" \
-               --argjson stale_after "$STALE_AFTER" "$SELECT")
+  done < <(awk '{ print FILENAME "\t" $0 }' "${files[@]}" \
+             | jq -n -R -r --arg sid "$sid" --argjson now "$t" --argjson ended_shown "$ENDED_SHOWN" \
+                 --argjson stale_after "$STALE_AFTER" "$SELECT")
   [ -n "$line" ] && printf '%s\n' "$line"
   return 0
 }
