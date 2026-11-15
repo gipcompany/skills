@@ -88,7 +88,9 @@ Exit status is non-zero if any assertion fails; the last line reports
   found again by its fixed prefix, so every example of it in `SKILL.md`,
   `references/ready-for-goal.md` and the repository README must use exactly
   `` > Grilled with `/kabeuchi` on <YYYY-MM-DD> — `` and one of the three
-  tails, and `ready-for-goal.md` must show all three.
+  tails, and `ready-for-goal.md` must show all three and state, as the exact
+  pattern a line must match to count as a status line, the same pattern the
+  test uses.
 - **no temp litter** — running `merge3.sh` from a working directory leaves no
   extra files behind (it does all work under `mktemp -d` and cleans up on exit).
 

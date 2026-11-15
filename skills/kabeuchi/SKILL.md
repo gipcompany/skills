@@ -425,8 +425,12 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   that reaches this phase, including one that wrote nothing else back, and
   for **both target kinds** — an issue body and a local file alike. It is
   the **last line of the body**, below any "Known gaps" section, and an
-  existing one — found by its fixed prefix `` > Grilled with `/kabeuchi` `` —
-  is **replaced**, never appended to, so a target carries at most one. The
+  existing one is **replaced**, never appended to, so a target carries at
+  most one. Only a line **outside any code fence** that matches the whole
+  pattern — prefix, date, and one of the three tails — counts as an existing
+  one; an example of the line inside a code fence, or anything that merely
+  resembles it, is content and is never touched. The check brief leaves the
+  existing line out, so the checker is not led by an earlier verdict. The
   wording, the cases, and where the line goes are in
   **`references/ready-for-goal.md`**, *The status line*. (It is unrelated to
   Claude Code's status line, which shows the session marker.)

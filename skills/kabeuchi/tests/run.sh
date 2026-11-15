@@ -636,6 +636,13 @@ echo "status line wording (SKILL.md, references, README)"
       bad "ready-for-goal.md shows the line ending \"${tail}\""
     fi
   done
+  # ready-for-goal.md spells out the pattern a line must match whole, outside
+  # code fences, to count as a status line; it must be this same pattern.
+  if grep -qxF "    ^${prefix}${date_re} — (${tails})\$" "$REF"; then
+    ok "ready-for-goal.md states the exact status line pattern"
+  else
+    bad "ready-for-goal.md states the exact status line pattern"
+  fi
   for f in "${HERE}/../SKILL.md" "$REF" "$README"; do
     name="${f##*/}"
     lines="$(grep -E '^ *> Grilled with' "$f" | grep -vF '<YYYY-MM-DD>' | sed 's/^ *//')"
