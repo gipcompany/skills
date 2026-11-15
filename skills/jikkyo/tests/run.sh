@@ -768,22 +768,45 @@ EOF2
   assert_eq "...and nothing is written where it points" "" "$(ls -A "$TMP/elsewhere")"
   rm -f "$sdir"; mv "$sdir.real" "$sdir"
 
-  # A <N>.json that is a directory, or a symlink to one, is not written into.
-  rm -f "$STATE"; mkdir -p "$TMP/elsewhere2"; ln -s "$TMP/elsewhere2" "$STATE"
-  new_log; rc=0
-  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
-  assert_eq "a state file that is a symlink to a directory does not stop the run" "0:2" "$rc:$(calls)"
-  assert_eq "...and nothing is moved into where it points" "" "$(ls -A "$TMP/elsewhere2")"
-  assert_eq "...nor is a temp file left beside it" "" "$(find "$sdir" -name '.12.json.*')"
-  rm -f "$STATE"
-  # ...nor into a real directory there: nothing is written, the run goes on.
-  mkdir -p "$STATE"
-  new_log; rc=0
-  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
-  assert_eq "a state file that is a directory does not stop the run" "0:2" "$rc:$(calls)"
-  assert_eq "...and nothing is written into it or left beside it" ":" \
-    "$(ls -A "$STATE"):$(find "$sdir" -name '.12.json.*')"
-  rmdir "$STATE"
+  # A <N>.json that is a symlink to a directory, or a real directory, is never
+  # written into. place() has two paths (see report.sh): with perl a symlink
+  # is replaced by the state file; without perl (JIKKYO_NO_PERL=1) it is left
+  # as it is and nothing is written. Both run here; the perl path is skipped
+  # when perl is not installed.
+  for path in perl noperl; do
+    if [ "$path" = perl ] && ! command -v perl >/dev/null 2>&1; then
+      echo "  skip the perl path of place(): perl is not installed"
+      continue
+    fi
+    noperl=""; [ "$path" = noperl ] && noperl=1
+    rm -rf "$STATE" "$TMP/elsewhere2"; mkdir -p "$TMP/elsewhere2"
+    ln -s "$TMP/elsewhere2" "$STATE"
+    new_log; rc=0
+    printf '%s\n' "$(result_ok)" \
+      | JIKKYO_NO_PERL="$noperl" bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+    assert_eq "[$path] a state file that is a symlink to a directory does not stop the run" \
+      "0:2" "$rc:$(calls)"
+    assert_eq "[$path] ...and nothing is moved into where it points" "" "$(ls -A "$TMP/elsewhere2")"
+    assert_eq "[$path] ...nor is a temp file left beside it" "" "$(find "$sdir" -name '.12.json.*')"
+    if [ "$path" = perl ]; then
+      if [ -f "$STATE" ] && [ ! -L "$STATE" ]; then
+        ok "[perl] ...and the symlink is replaced by the state file"
+      else bad "[perl] ...and the symlink is replaced by the state file"; fi
+    else
+      assert_eq "[noperl] ...and the symlink is left as it is" "$TMP/elsewhere2" \
+        "$(readlink "$STATE" 2>/dev/null)"
+    fi
+    rm -f "$STATE"
+    # ...nor into a real directory there: nothing is written, the run goes on.
+    mkdir -p "$STATE"
+    new_log; rc=0
+    printf '%s\n' "$(result_ok)" \
+      | JIKKYO_NO_PERL="$noperl" bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+    assert_eq "[$path] a state file that is a directory does not stop the run" "0:2" "$rc:$(calls)"
+    assert_eq "[$path] ...and nothing is written into it or left beside it" ":" \
+      "$(ls -A "$STATE"):$(find "$sdir" -name '.12.json.*')"
+    rmdir "$STATE"
+  done
 
   # A temp file left by a killed write is taken out by the next write.
   touch -t 202001010000 "$sdir/.12.json.Ab12Cd" "$sdir/.13.json.Ab12Cd"

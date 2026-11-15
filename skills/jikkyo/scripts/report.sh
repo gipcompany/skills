@@ -76,7 +76,8 @@
 # Tuning, for tests: JIKKYO_TODO_INTERVAL (30), JIKKYO_HEARTBEAT_INTERVAL (300),
 # JIKKYO_TICK (1, seconds between scheduler passes), JIKKYO_MIN_GAP (1, seconds
 # between two writes), JIKKYO_CLOCK_FILE (read "now" in epoch seconds from this
-# file instead of the system clock).
+# file instead of the system clock), JIKKYO_NO_PERL (1: put the state file in
+# place without perl, see place()).
 #
 set -uo pipefail
 
@@ -266,11 +267,16 @@ eta_secs() {
 
 # place <temp> <dest>: rename the temp file onto <dest> without following
 # <dest>. mv into a directory, or a symlink to one, moves the file inside it;
-# rename(2) instead replaces a symlink itself and fails on a directory. perl
-# calls rename(2) directly. Without perl, mv runs after a directory check,
-# which a swap in between can still beat.
+# rename(2) instead replaces a symlink itself and fails on a directory. The
+# two paths differ on a <dest> that is a symlink to a directory:
+# - With perl, which calls rename(2) directly, the symlink is replaced by the
+#   state file.
+# - Without perl (or with JIKKYO_NO_PERL=1), mv runs after a directory check,
+#   so the symlink is left as it is and nothing is written. A swap between
+#   the check and mv can still beat it.
+# On a real directory both paths fail and write nothing.
 place() {
-  if command -v perl >/dev/null 2>&1; then
+  if [ "${JIKKYO_NO_PERL:-}" != 1 ] && command -v perl >/dev/null 2>&1; then
     perl -e 'rename($ARGV[0], $ARGV[1]) or exit 1' -- "$1" "$2"
   else
     ! [ -d "$2" ] && mv -f "$1" "$2"
