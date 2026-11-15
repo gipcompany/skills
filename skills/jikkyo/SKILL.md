@@ -199,11 +199,13 @@ The arguments are: $ARGUMENTS
    The session id is this session's own, filled in already: copy it as it
    stands. It goes into the state file the status line reads, so the run
    shows in this session's status line only (see *Status line* below).
-   `launch.sh` drops anything not shaped like a session id (a Claude Code
-   that does not fill in `${CLAUDE_SESSION_ID}` passes it literally) and
-   starts the run anyway, printing `jikkyo: status line off: …`. If it does,
-   tell the user in step 5 that this run will not show in the status line,
-   only in the status comment.
+   Before launching, look at the value you are about to pass: if it is not
+   a UUID (8-4-4-4-12 hex digits), for example the literal
+   `${CLAUDE_SESSION_ID}` from a Claude Code that does not fill it in,
+   launch anyway and say in step 5 that this run will not show in the
+   status line, only in the status comment. You will not see `launch.sh`'s
+   own `jikkyo: status line off: …` warning in time, since you do not watch
+   the background output; it is there for the record.
 
    Do not wrap it, pipe it, or add an environment assignment: `launch.sh`
    builds the child pipeline itself (todo tools on, `--worktree` for a fresh
@@ -387,9 +389,10 @@ of **the session that launched or resumed the run** only: it matches the
 `${CLAUDE_SESSION_ID}` passed to `launch.sh` against the status line's
 `session_id`. After `/clear` the run is no longer shown; point the user at the
 status comment, which is the record: the status line is a convenience, and
-anything that can write to `.git` can write a state file. This skill never edits a settings file: if the user asks
-about the status line, point them at the README's *In your status line*,
-which shows both setups (the whole status line, or appended to their own)
+anything that can write to `.git` can write a state file.
+This skill never edits a settings file: if the user asks about the status
+line, point them at the README's *In your status line*, which shows both
+setups (the whole status line, or appended to their own)
 with `refreshInterval`, needed because this session is idle while the run
 goes.
 

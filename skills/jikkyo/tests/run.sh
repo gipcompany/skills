@@ -768,6 +768,15 @@ EOF2
   assert_eq "...and nothing is written where it points" "" "$(ls -A "$TMP/elsewhere")"
   rm -f "$sdir"; mv "$sdir.real" "$sdir"
 
+  # A <N>.json that is a directory, or a symlink to one, is not written into.
+  rm -f "$STATE"; mkdir -p "$TMP/elsewhere2"; ln -s "$TMP/elsewhere2" "$STATE"
+  new_log; rc=0
+  printf '%s\n' "$(result_ok)" | bash "$REPORT" "$URL" > "$TMP/out" 2>&1 || rc=$?
+  assert_eq "a state file that is a symlink to a directory does not stop the run" "0:2" "$rc:$(calls)"
+  assert_eq "...and nothing is moved into where it points" "" "$(ls -A "$TMP/elsewhere2")"
+  assert_eq "...nor is a temp file left beside it" "" "$(find "$sdir" -name '.12.json.*')"
+  rm -f "$STATE"
+
   # A temp file left by a killed write is taken out by the next write.
   touch -t 202001010000 "$sdir/.12.json.Ab12Cd" "$sdir/.13.json.Ab12Cd"
   new_log
@@ -2041,7 +2050,8 @@ echo "SKILL.md"
   assert_has "SKILL.md: resume launches with the validated branch, id, and session id" "launch.sh --resume '<branch>' '<comment id>' '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
   assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
-  assert_has "SKILL.md: a dropped session id is told to the user" "printing \`jikkyo: status line off: …\`" "$skill"
+  assert_has "SKILL.md: the parent checks the session id's shape itself before launching" "Before launching, look at the value you are about to pass" "$skill"
+  assert_has "...and tells the user the run will not show in the status line" "say in step 5 that this run will not show in the" "$skill"
   assert_has "SKILL.md: documents resuming" "**Resuming a run.**" "$skill"
   assert_has "SKILL.md: resume lists the other authors first" "precheck.sh --author '<login>' --authors" "$skill"
   assert_has "SKILL.md: ...checks each one's permission" "gh api 'repos/<owner>/<repo>/collaborators/<other login>/permission' --jq .permission" "$skill"

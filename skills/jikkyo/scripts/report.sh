@@ -281,6 +281,9 @@ publish() {
   # jikkyo/ swapped for a symlink would have this script write wherever it
   # points, a place the child itself might not have been allowed to write.
   if [ ! -d "$dir" ] || [ -L "$dir" ]; then return 0; fi
+  # Nor into <N>.json when that is a directory, or a symlink to one: mv
+  # would move the temp file inside it instead of replacing it (checked
+  # right before the mv below).
   # A temp file is left behind only when this script is killed between
   # mktemp and mv; the next write of the issue takes such leftovers out.
   find "$dir" -maxdepth 1 -type f -name ".${num}.json.*" -mmin +1 -delete 2>/dev/null
@@ -294,6 +297,7 @@ publish() {
          eta_secs: (if $eta == "" then null else ($eta | tonumber) end), lang: $lang,
          session: (if $session == "" then null else $session end),
          comment: (if $comment == "" then null else $comment end)}' > "$tmp" 2>/dev/null \
+     && ! [ -d "$state_out" ] \
      && mv -f "$tmp" "$state_out" 2>/dev/null; then
     return 0
   fi

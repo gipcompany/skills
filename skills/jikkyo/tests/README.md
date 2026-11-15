@@ -98,7 +98,9 @@ timing and signal tests waiting on a real scheduler.
   `gh`'s answer (escape sequences included) reaches it. From a linked
   worktree it goes to the shared common dir; outside a git repository, or
   with an unwritable directory, there is no file and the run goes on. A
-  `jikkyo/` swapped for a symlink is not written through, and an old temp
+  `jikkyo/` swapped for a symlink is not written through, nor is a `<N>.json`
+  that is a symlink to a directory (no temp file is moved into it or left
+  beside it), and an old temp
   file of the issue left by a killed write is removed by the next write
   (another issue's is left).
 - **`launch.sh`** — anything that is not exactly a GitHub issue URL is rejected
@@ -293,6 +295,8 @@ timing and signal tests waiting on a real scheduler.
   `precheck.sh --resume '<N>'`, stopping when no valid branch is found, and
   `launch.sh --resume` with the branch, comment id, and
   `${CLAUDE_SESSION_ID}`; a fresh launch passes `${CLAUDE_SESSION_ID}` too.
+  Before launching, the parent checks that value's shape itself and, if it
+  is not a UUID, tells the user the run will not show in the status line.
   It has a Status line section saying the skill edits no settings, and no
   script mentions `settings.json`. The repository README documents both
   status line setups with `refreshInterval` and why, and its appended
