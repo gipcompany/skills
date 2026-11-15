@@ -77,14 +77,17 @@ with, so it may run in the foreground.
 
 ## The flow
 
-1. **Ask** the question above. On "no", stop here.
+1. **Ask** the question above, on its own in a turn, and wait for the answer.
+   On "no", stop here.
 2. **Write the check brief** (below), with the target as it stands now:
    re-fetch and normalize it first, the same as before a write-back, so the
    checker sees what the `/goal` run will see.
 3. **Run the checker** with the checker prompt (below).
 4. **Annotate** each reported gap with what you know from the conversation.
 5. **Report** the result to the user.
-6. **Let the user decide** about each gap, and act on the decision.
+6. **Let the user decide** about each gap, and act on the decision: close it
+   through Phase 2 (*Closing a gap*), then check again (*The check never
+   blocks the end*); or leave it open (*Gaps left open*).
 
 ### The check brief
 
