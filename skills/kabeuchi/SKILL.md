@@ -423,32 +423,32 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
     *Across sessions on the same target*).
 - **Then write the grilled line**, once the check — and any gap it sent back
   into Phase 2 — has finished, and before the closing summary. It is one
-  blockquote line saying that the target was grilled, when (an ISO 8601 timestamp with the time and the UTC offset, from `date -Iseconds`), and
-  what the check concluded:
+  blockquote line saying that the target was grilled, when (an ISO 8601
+  timestamp with the time and the UTC offset, from `date -Iseconds`), and what
+  the check concluded:
 
   ```markdown
   > Grilled with `/kabeuchi` at 2026-11-15T17:41:59+09:00 — ready for `/goal`.
   ```
 
   It is written through the write-back loop like any other conclusion: the
-  concrete diff printed first, the same re-fetch, `normalize.sh` /
-  `merge3.sh` handling and read-back. When this session also writes,
-  replaces, or removes "Known gaps", the section and the line **must** go out
-  in one write-back with one diff; if the user objects to it, roll it back and
-  offer the line alone as a second diff (with gaps left open, key
-  `not-ready`). Write it at the end of every session
-  that reaches this phase, including one that wrote nothing else back, and
-  for **both target kinds** — an issue body and a local file alike. It is
-  the **last line of the body**, below any "Known gaps" section, and an
-  existing one is **replaced**, never appended to, so a target carries at
-  most one. Only a line **outside any code fence** that matches the whole
-  pattern — prefix, timestamp, and one of the four tails — counts as an existing
-  one; an example of the line inside a code fence, or anything that merely
-  resembles it, is content and is never touched. **`scripts/grilled-line.sh
-  <timestamp> <key>`** does the replacing — body on stdin, the body to diff
-  on stdout, the tail chosen by a fixed key (`ready`, `gaps`, `not-ready`,
-  `not-checked`) — after the re-fetch and any merge, before the diff; never
-  edit the line by hand. The check brief leaves the
+  concrete diff printed first, the same re-fetch, `normalize.sh` / `merge3.sh`
+  handling and read-back. When this session also writes, replaces, or removes
+  "Known gaps", the section and the line **must** go out in one write-back
+  with one diff; if the user objects to it, roll it back and offer the line
+  alone as a second diff (with gaps left open, key `not-ready`). Write it at
+  the end of every session that reaches this phase, including one that wrote
+  nothing else back, and for **both target kinds** — an issue body and a local
+  file alike. It is the **last line of the body**, below any "Known gaps"
+  section, and an existing one is **replaced**, never appended to, so a target
+  carries at most one. Only a line **outside any code fence** that matches the
+  whole pattern — prefix, timestamp, and one of the four tails — counts as an
+  existing one; an example of the line inside a code fence, or anything that
+  merely resembles it, is content and is never touched.
+  **`scripts/grilled-line.sh <timestamp> <key>`** does the replacing — body on
+  stdin, the body to diff on stdout, the tail chosen by a fixed key (`ready`,
+  `gaps`, `not-ready`, `not-checked`) — after the re-fetch and any merge,
+  before the diff; never edit the line by hand. The check brief leaves the
   existing line out, so the checker is not led by an earlier verdict. The
   wording, the cases, and where the line goes are in
   **`references/ready-for-goal.md`**, *The grilled line*. (It is unrelated to
