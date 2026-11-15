@@ -399,9 +399,12 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
     after any gap is closed, the check runs again.
   - **It never blocks the end.** The user can finish with gaps left open. They
     are listed in the closing summary and written into the target as a
-    **"Known gaps"** section, since the `/goal` run reads only the target. That
-    section is **replaced wholesale** by this session's open gaps — never
-    appended to — and removed when none is left.
+    **"Known gaps"** section, since the `/goal` run reads only the target. When
+    the check ran, that section is **replaced wholesale** by this session's
+    open gaps — never appended to — and removed when none is left; when the
+    check was declined or did not complete, it stays as the Phase 2
+    write-backs left it (`references/ready-for-goal.md`, *Across sessions on
+    the same target*).
 - **Summarize what was written back** to the target at the end, and list any
   gaps the check found that were left open.
 - **Do not wander** into adjacent work on your own initiative.
