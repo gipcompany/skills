@@ -372,12 +372,19 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
 ## Phase 3: Finish
 
 - **Keep going until the user confirms** a shared understanding has been reached — the standard `/grilling` exit condition. Do not enact anything beyond updating the target.
+- **Then, before the closing summary, offer the "ready for `/goal`" check.**
+  Whatever the target kind, ask the user whether the target is meant to be
+  handed to `/goal` — directly, or through `/jikkyo`. On "yes", run the check
+  as **`references/ready-for-goal.md`** describes: a fresh `kabeuchi-voter` in
+  the checker role reads only the target and a six-item checklist, and reports
+  what an unattended run would be missing. On "no", skip it. Read that file
+  before you ask.
 - **Summarize what was written back** to the target at the end.
 - **Do not wander** into adjacent work on your own initiative.
 - The target must contain **only the current agreed state** — never a change-history or discussion-log section.
-- **Remove the briefs** if you made a directory for them with `mktemp -d`
-  (`references/voting.md`, *The brief*). Briefs in the scratchpad need nothing:
-  that directory belongs to the session.
+- **Remove the briefs** — the vote briefs and the check briefs — if you made a
+  directory for them with `mktemp -d` (`references/voting.md`, *The brief*).
+  Briefs in the scratchpad need nothing: that directory belongs to the session.
 - **Clear the session marker** once the grilling is over, as the last step:
 
   ```bash
