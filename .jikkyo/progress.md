@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/46
 branch: worktree-jikkyo-46-20261115-213256
-updated: 2026-11-15T21:42:31+09:00
-next: run the whole run.sh suite for the Checks item
+updated: 2026-11-15T21:43:46+09:00
+next: run shellcheck over the scripts and tests for the Checks item
 
 ## Todos
 
@@ -10,7 +10,7 @@ next: run the whole run.sh suite for the Checks item
 - [x] Rewrap report.sh comment near line 72 and SKILL.md settings paragraph (d21b581)
 - [x] SKILL.md step 4/5 wording and CLAUDE_SESSION_ID pin in run.sh (2f70a53)
 - [x] README: estimate does not count down + assert_has (7a37014)
-- [ ] Check: run.sh passes (0 failed)
+- [x] Check: run.sh passes (0 failed) (24e4371)
 - [ ] Check: shellcheck passes
 - [ ] Delete progress log and open the PR
 
@@ -21,6 +21,7 @@ next: run the whole run.sh suite for the Checks item
 - Wrapping: the report.sh state-file comment block and the SKILL.md settings paragraph are greedily refilled to 80 columns (line lengths checked); run.sh 749 passed, 0 failed
 - SKILL.md step 4/5 wording after substitution: exact wording in steps 4 and 5, run.sh asserts both and pins the CLAUDE_SESSION_ID lines; 750 passed, 0 failed; an extra mention of the variable makes the pin fail
 - README: say the estimate does not count down: sentence added to the In your status line section, pinned by assert_has "does not count down"; run.sh 751 passed, 0 failed
+- bash skills/jikkyo/tests/run.sh passes locally: 751 passed, 0 failed at 24e4371
 
 ## Dead ends and decisions
 
@@ -30,3 +31,4 @@ next: run the whole run.sh suite for the Checks item
 - The SKILL.md refreshInterval pin in run.sh relied on the old line break; it is split into two phrases that each sit on one line after the refill.
 - The pin compares the grep output of CLAUDE_SESSION_ID in SKILL.md with the exact three lines, which also catches the bare $CLAUDE_SESSION_ID spelling.
 - The README sentence goes at the end of the refreshInterval paragraph, which already says how often the file changes.
+- The Checks items have no commits of their own; their log lines carry the commit they were run against.
