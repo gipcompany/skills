@@ -279,7 +279,7 @@ Gaps the user leaves open go to two places:
 The section states what is unresolved **now**. It is part of the current
 agreed state, not a discussion log: no dates, no question numbers, no "the
 checker said", no notes about who decided what. Put it at the end of the
-target:
+target, above the status line if there is one (*The status line*):
 
 ```
 ## Known gaps
@@ -387,6 +387,31 @@ So the three possible lines are:
   objected to the "Known gaps" diff, the tail is still the "not yet ready"
   one — the target is not ready, and saying "not checked" would be untrue —
   and the closing summary says the open gaps were not recorded in the target.
+
+### Where it goes, and replacing it
+
+- **It is the last line of the body**, after everything else — after the
+  "Known gaps" section when there is one — separated from what precedes it by
+  one blank line.
+- **It is found by its fixed prefix**, `` > Grilled with `/kabeuchi` `` at the
+  start of a line. Look for every line that starts with it, wherever it is in
+  the body.
+- **An existing line is replaced, never appended to.** Remove every line found
+  by the prefix and put this session's line at the end. A target therefore
+  carries at most one status line, the latest session's; there is no history
+  of past sessions. An earlier session's line that someone moved up the body
+  is removed from there, not left behind.
+- **Nothing else in the body moves.** Only the status line is removed and
+  re-added; when an old line is taken out of the middle of the body, take the
+  one blank line before it with it so no extra gap is left.
+- **"Known gaps" stays above it.** When this session adds, replaces, or
+  removes a "Known gaps" section (*Gaps left open*), the status line stays
+  below it: write the section above the line, never after it.
+
+The diff for a replaced line therefore shows one removed line and one added
+line at the end of the body (or one line removed elsewhere and one added at
+the end); for a target that had none, one blank line and the new line added at
+the end.
 
 ## The security boundary
 
