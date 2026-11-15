@@ -134,7 +134,7 @@ The recommendation under each question is the one place a grilling session can q
 
 The counting is done by `scripts/tally.sh`, which is covered by the test suite.
 
-All four subagents run the `kabeuchi-voter` agent definition, which ships with the skill but which you install yourself:
+All four subagents — and the checker described below — run the `kabeuchi-voter` agent definition, which ships with the skill but which you install yourself:
 
 ```
 cp ~/.claude/skills/kabeuchi/agents/kabeuchi-voter.md ~/.claude/agents/
@@ -145,6 +145,17 @@ Read it first; it is short. Copy it again whenever you update the skill: kabeuch
 At startup kabeuchi stops if `kabeuchi-voter` is missing, **or if the definition in effect has broader tools than that** — a project's `.claude/agents/` overrides yours, so a repository you cloned could otherwise ship a `kabeuchi-voter` of its own. It never falls back to unvoted recommendations.
 
 Voting costs four subagent runs per question and makes each question take longer to appear. That trade is deliberate: the point of the vote is that a recommendation you see has been checked. What the vote does not need is to wait on anything else: the voters share one brief file instead of three copies of the same prompt, and the previous answer is written back into the target while they work.
+
+### Ready for `/goal` at the end
+
+A kabeuchi on an issue is often followed by `/jikkyo <issue URL>`, which runs `/goal` in a headless session that cannot ask anyone anything. A target you and the session agree on point by point can still lean on the conversation — a decision called "the option we picked", a term defined out loud but never in the body — and an unattended run only has the target. So when you end a session, kabeuchi asks whether the target is meant to be handed to `/goal`, and on "yes" checks it before the closing summary:
+
+- A fresh `kabeuchi-voter` in a **checker** role reads **only the target and a six-item checklist** — goal, done criteria, scope, no open decisions, self-contained, constraints — never the conversation, so it reads the target the way the `/goal` run will. It cannot write anything, and the target stays data to it.
+- It names each gap with the part of the target it applies to, or reports the target as ready. kabeuchi adds what it knows from the conversation to each gap ("decided as X but not written down"), and drops none.
+- You decide, gap by gap. A gap you want closed goes back into the interview — one question, voted, written back with a diff — and the check runs again afterwards. The check is advisory: you can always end with gaps left open.
+- Gaps left open are listed in the closing summary and written into the target as a **"Known gaps"** section, so the `/goal` run sees them too. The next `/kabeuchi` on the same target asks about those entries from the start, and the section is replaced wholesale at the end of each checked session (removed when nothing is left), never appended to.
+
+The checklist lives in [`references/ready-for-goal.md`](skills/kabeuchi/references/ready-for-goal.md). kabeuchi refuses an installed `kabeuchi-voter` copied before the checker role existed, so re-copy it when you update the skill.
 
 ### How it stays safe
 
