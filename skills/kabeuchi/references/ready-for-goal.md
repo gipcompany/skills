@@ -389,7 +389,7 @@ after it without touching it, and no skill decides anything from it.
   write**, write, read back. If the user objects to the diff, roll it back like
   any other and say in the closing summary that the grilled line was not
   written.
-- When this session also writes or removes a "Known gaps" section, the status
+- When this session also writes or removes a "Known gaps" section, the grilled
   line may go out in the same write-back — one diff for both — since both are
   written at the end and both depend on the check's result.
 
