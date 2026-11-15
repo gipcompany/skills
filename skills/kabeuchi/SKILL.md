@@ -223,8 +223,9 @@ follows no links out of the body. The one exception is the vote in Phase 2,
 whose read-only `kabeuchi-voter` subagents may read the codebase, documentation,
 and the web — and that is deliberately kept out of this session, which holds the
 write access. (The "ready for `/goal`" check in Phase 3 is no exception: its
-read-only checker reads the target and the checklist only, and writes nothing.) Hold that line here in Phase 1 and again in Phase 2, where the
-same text is handed to `/grilling`:
+read-only checker reads the target and the checklist only, and writes
+nothing.) Hold that line here in Phase 1 and again in Phase 2, where the same
+text is handed to `/grilling`:
 
 - **Fetch only an allowlisted target, and validate before fetching.** The two
   shapes in *Usage* — a `https://github.com/<owner>/<repo>/issues/<N>` URL, or a
@@ -426,11 +427,11 @@ The full write-back loop, the flowchart, and the detect/resolve/verify detail li
   **The grilling is over only when the user says it is** — the exit condition at
   the top of this phase — and the "ready for `/goal`" check, with any gap it
   sends back into Phase 2, is still part of it: clear the marker after the
-  closing summary, not when the user first confirms. Ending your turn to wait for an answer is not the end of
-  the grilling, and neither is being told to stop talking: you end a turn after
-  every single question. Clear the marker on either of those and the bar goes
-  dark after your first question, which is the one thing this whole mechanism
-  exists to prevent.
+  closing summary, not when the user first confirms. Ending your turn to wait
+  for an answer is not the end of the grilling, and neither is being told to
+  stop talking: you end a turn after every single question. Clear the marker
+  on either of those and the bar goes dark after your first question, which is
+  the one thing this whole mechanism exists to prevent.
 
 ## Non-goals (v1)
 
