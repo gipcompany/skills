@@ -1,12 +1,12 @@
 issue: https://github.com/gipcompany/skills/issues/54
 branch: worktree-jikkyo-54-20261115-211754
-updated: 2026-11-15T21:18:41+09:00
-next: AC1, rename the target's line to "grilled line"
+updated: 2026-11-15T21:19:50+09:00
+next: AC2, README says reaches Phase 3
 
 ## Todos
 
-- [ ] Start the progress log
-- [ ] AC1: rename the target's line to "grilled line"
+- [x] Start the progress log (f15de66)
+- [x] AC1: rename the target's line to "grilled line" (662f59e)
 - [ ] AC2: README says "reaches Phase 3"
 - [ ] AC3: add the fourth tail "not yet ready for /goal."
 - [ ] AC4: say the line is not a trust signal
@@ -20,4 +20,8 @@ next: AC1, rename the target's line to "grilled line"
 
 ## Verified task-list items
 
+- AC1 (grilled line naming): grep leaves status line only for Claude Code's status line in SKILL.md, ready-for-goal.md, README.md and tests; tests/run.sh passes
+
 ## Dead ends and decisions
+
+- Kept one short pointer to Claude Code's status line in SKILL.md and README; with distinct names it only helps the reader.
