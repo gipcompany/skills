@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/54
 branch: worktree-jikkyo-54-20261115-211754
-updated: 2026-11-15T21:22:00+09:00
-next: AC5, add scripts/grilled-line.sh with tests
+updated: 2026-11-15T21:25:06+09:00
+next: AC6, skip no-op writes and write Known gaps with the line
 
 ## Todos
 
@@ -10,7 +10,7 @@ next: AC5, add scripts/grilled-line.sh with tests
 - [x] AC2: README says "reaches Phase 3" (234a1bb)
 - [x] AC3: add the fourth tail "not yet ready for /goal." (f5d8ab8)
 - [x] AC4: say the line is not a trust signal (273dd4a)
-- [ ] AC5: add scripts/grilled-line.sh with tests
+- [x] AC5: add scripts/grilled-line.sh with tests (c90e17e)
 - [ ] AC6: skip no-op writes; write Known gaps and the line together
 - [ ] AC7: looser wording-test pattern
 - [ ] AC8: rewrap SKILL.md:420
@@ -24,8 +24,10 @@ next: AC5, add scripts/grilled-line.sh with tests
 - AC2 (README condition): README now says sessions that reach Phase 3 write the line, matching SKILL.md and ready-for-goal.md; tests pass
 - AC3 (never points at a missing Known gaps): fourth tail added to the tail table, examples, exact pattern, SKILL.md, README and tests; the rejected-diff case now uses it; tests pass
 - AC4 (not a trust signal): sentence added to README and to the grilled line section of ready-for-goal.md; tests pass
+- AC5 (replacement script): scripts/grilled-line.sh added; tests/run.sh covers no line, line at end, moved up, inside backtick and tilde fences, unclosed fence, Known gaps present, running twice, bad keys and timestamps; 164 tests pass, shellcheck clean; a wording drift in a copy of the script fails the docs agreement test
 
 ## Dead ends and decisions
 
 - Kept one short pointer to Claude Code's status line in SKILL.md and README; with distinct names it only helps the reader.
 - The case where the re-check fails twice after gaps were left open is left to #53, as the issue says.
+- Fence openers are recognised even when indented (conservative: more text counts as content). Wrapped status-line mention missed by AC1 fixed in b9316a3.
