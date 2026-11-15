@@ -32,8 +32,38 @@
 #
 set -u
 
+ESC=$'\e'
+BEL=$'\a'
+
+# A GitHub issue URL, parsed and validated by one anchored regex: the owner is a
+# GitHub login (alphanumerics and single inner hyphens), the repository a run of
+# A-Za-z0-9._- (`.` and `..` are rejected below), the number digits, and
+# anything after it must start with `/`, `?` or `#`. Captures: 1 owner,
+# 3 repository, 4 number.
+ISSUE_RE='^https://github\.com/([A-Za-z0-9](-?[A-Za-z0-9])*)/([A-Za-z0-9._-]+)/issues/([0-9]+)([/?#].*)?$'
+
+# issue_link <target>: print `OWNER/REPO#N` wrapped in an OSC 8 hyperlink to
+# the issue, or fail when the target is not an issue URL this accepts. The link
+# is rebuilt from the captures and never copied from the marker, so nothing the
+# marker holds beyond those checked pieces reaches the escape sequence. It ends
+# with BEL, the form every hyperlink example in the Claude Code status line
+# docs uses.
+issue_link() {
+  local owner repo number url
+  [[ "$1" =~ $ISSUE_RE ]] || return 1
+  owner="${BASH_REMATCH[1]}"
+  repo="${BASH_REMATCH[3]}"
+  number="${BASH_REMATCH[4]}"
+  [ "${#owner}" -le 39 ] && [ "${#repo}" -le 100 ] || return 1
+  case "$repo" in . | ..) return 1 ;; esac
+  number="${number#"${number%%[!0]*}"}"   # drop leading zeros
+  [ -n "$number" ] && [ "${#number}" -le 18 ] || return 1
+  url="https://github.com/$owner/$repo/issues/$number"
+  printf '%s' "${ESC}]8;;${url}${BEL}${owner}/${repo}#${number}${ESC}]8;;${BEL}"
+}
+
 main() {
-  local session marker target
+  local session marker target shown
   [ -t 0 ] && return 0
   session="$(head -c 1048576 | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
   case "$session" in
@@ -43,9 +73,15 @@ main() {
   marker="${KABEUCHI_DIR:-$HOME/.claude/kabeuchi}/$session"
   [ -f "$marker" ] && [ -s "$marker" ] || return 0
   target="$(head -n 1 "$marker")"
+  # mark.sh already strips control bytes, but anything that can write to the
+  # marker directory can write a marker, and a stray ESC would let it draw on
+  # the terminal. Strip them again before anything is printed.
+  target="$(printf '%s' "$target" | LC_ALL=C tr -d '\000-\037\177')"
   [ -n "$target" ] || return 0
 
-  printf '%s\n' "kabeuchi in progress · $target"
+  shown="$(issue_link "$target")" || shown="$target"
+  # Always %s, never %b: a backslash in a path is printed as it is.
+  printf '%s\n' "kabeuchi in progress · $shown"
   return 0
 }
 
