@@ -188,3 +188,29 @@ Which of these do you want to close? The rest will be recorded under
 Use the checker's wording for the item and the location; the note is yours and
 is labelled as such.
 
+## Closing a gap
+
+For each gap, **the user decides** whether to close it or leave it. Do not
+decide for them, and do not close a gap they did not pick.
+
+**A gap to be closed goes back into Phase 2**, exactly as any other open
+point — never into an ad-hoc edit of the target:
+
+- It becomes a frontier question, asked **one per turn**, in `/grilling`'s
+  format with the next question number of the session (`Q<n>` keeps counting).
+  With several gaps to close, ask the most upstream one first, as usual.
+- Its recommendation comes from a **vote** (`voting.md`): a new vote brief,
+  three voters, the verifier, `tally.sh`. Your note goes into the brief only as
+  far as it is a settled point — "decided as X in Q4" is one, and the vote must
+  not contradict it; "never discussed" adds nothing. A gap that is a matter of
+  taste is exempt from the vote like any other, and says so.
+- The user's answer is **written back with a diff** through the write-back loop
+  (`conflict-resolution.md`): re-fetch, merge, print the diff, write, read
+  back. The checker's wording is never pasted into the target as it stands;
+  the target says what the user settled.
+
+A gap whose note says it was already decided is still asked. The question is
+then about how the decision is written down, not whether to make it: the
+decision is a settled point in the brief, the vote checks the wording against
+it, and the user confirms what goes into the target.
+
