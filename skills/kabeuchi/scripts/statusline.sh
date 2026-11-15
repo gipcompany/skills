@@ -62,6 +62,21 @@ issue_link() {
   printf '%s' "${ESC}]8;;${url}${BEL}${owner}/${repo}#${number}${ESC}]8;;${BEL}"
 }
 
+# fold_home <path>: the path with a leading $HOME shown as `~`, as a shell
+# prompt does. Only a whole leading component is folded, so /Users/meow is left
+# alone when $HOME is /Users/me.
+fold_home() {
+  local home="${HOME:-}"
+  home="${home%/}"
+  if [ -n "$home" ] && [ "$1" = "$home" ]; then
+    printf '%s' "~"
+  elif [ -n "$home" ] && [ "${1#"$home"/}" != "$1" ]; then
+    printf '%s/%s' "~" "${1#"$home"/}"
+  else
+    printf '%s' "$1"
+  fi
+}
+
 main() {
   local session marker target shown
   [ -t 0 ] && return 0
@@ -79,7 +94,9 @@ main() {
   target="$(printf '%s' "$target" | LC_ALL=C tr -d '\000-\037\177')"
   [ -n "$target" ] || return 0
 
-  shown="$(issue_link "$target")" || shown="$target"
+  # An issue URL becomes a link; anything else — a path, the placeholder, a URL
+  # this does not accept — is plain text, with $HOME folded to `~`.
+  shown="$(issue_link "$target")" || shown="$(fold_home "$target")"
   # Always %s, never %b: a backslash in a path is printed as it is.
   printf '%s\n' "kabeuchi in progress · $shown"
   return 0
