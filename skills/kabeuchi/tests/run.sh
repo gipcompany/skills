@@ -587,6 +587,38 @@ echo "statusline.sh"
   rc=0; out="$(printf '{"session_id":"%s"}' "$SID" | env -u KABEUCHI_DIR -u HOME bash "$STATUSLINE" 2>&1)" || rc=$?
   assert_eq "no KABEUCHI_DIR and no HOME prints nothing, exits 0" "0:" "$rc:$out"
 
+  # The README's combined example works as written, with its paths filled in:
+  # one row per script that prints something, even when the user's own script
+  # ends without a newline. The repository README is not shipped with the
+  # skill, so in an installed copy this part is skipped.
+  README="${HERE}/../../../README.md"
+  if [ -f "$README" ]; then
+    readme_kabeuchi="$(awk '/^## /{ f = ($0 == "## kabeuchi") } f' "$README")"
+    printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$d/my-statusline.sh"
+    printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "jikkyo #27"\n' > "$d/jikkyo-statusline.sh"
+    printf '#!/usr/bin/env bash\ncat > /dev/null\n' > "$d/jikkyo-silent.sh"
+    chmod +x "$d/my-statusline.sh" "$d/jikkyo-statusline.sh" "$d/jikkyo-silent.sh"
+    # wrapper <jikkyo stub>: the example, extracted and filled in.
+    wrapper() {
+      printf '%s\n' "$readme_kabeuchi" | sed -n '/^  #!\/usr\/bin\/env bash$/,/^  done$/p' | sed -e 's/^  //' \
+        -e "s|~/.claude/my-statusline.sh|$d/my-statusline.sh|" \
+        -e "s|/absolute/path/to/jikkyo/scripts/statusline.sh|$1|" \
+        -e "s|/absolute/path/to/kabeuchi/scripts/statusline.sh|$STATUSLINE|" > "$d/wrapper.sh"
+    }
+    marker "$GH/gipcompany/skills/issues/52"
+    wrapper "$d/jikkyo-statusline.sh"
+    rc=0; out="$(printf '{"session_id":"%s"}' "$SID" | HOME="$d/home" bash "$d/wrapper.sh")" || rc=$?
+    assert_eq "README.md: the combined example prints one row per script" \
+      "0:my line"$'\n'"jikkyo #27"$'\n'"$(link "gipcompany/skills#52" "$GH/gipcompany/skills/issues/52")" "$rc:$out"
+    rm -f "$KABEUCHI_DIR/$SID"
+    wrapper "$d/jikkyo-silent.sh"
+    rc=0; out="$(printf '{"session_id":"%s"}' "$SID" | HOME="$d/home" bash "$d/wrapper.sh")" || rc=$?
+    assert_eq "README.md: ...skips the rows that are empty, and exits 0" "0:my line" "$rc:$out"
+    unset -f wrapper
+  else
+    skip "README.md: no repository README next to this copy of the skill"
+  fi
+
   unset KABEUCHI_DIR
   unset -f sl marker link
   rm -rf "$d"

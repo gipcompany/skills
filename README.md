@@ -208,8 +208,9 @@ kabeuchi in progress · gipcompany/skills#52
   ```bash
   #!/usr/bin/env bash
   input="$(cat)"
-  printf '%s' "$input" | ~/.claude/my-statusline.sh   # what you print today
-  for script in /absolute/path/to/jikkyo/scripts/statusline.sh \
+  # The first is what you print today.
+  for script in ~/.claude/my-statusline.sh \
+                /absolute/path/to/jikkyo/scripts/statusline.sh \
                 /absolute/path/to/kabeuchi/scripts/statusline.sh; do
     row="$(printf '%s' "$input" | "$script")"
     if [ -n "$row" ]; then printf '%s\n' "$row"; fi

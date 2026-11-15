@@ -92,7 +92,11 @@ Exit status is non-zero if any assertion fails; the last line reports
   `/` — **prints nothing**, even when it would name an existing file. Above
   all, it **exits 0 on every input** — no payload, not JSON, a directory or an
   empty file where the marker should be, neither `KABEUCHI_DIR` nor `HOME`
-  set — so it cannot break the status line.
+  set — so it cannot break the status line. The README's **combined example**
+  is extracted from the `## kabeuchi` section and run with stub scripts: one
+  row per script that prints something, even when the user's own script ends
+  without a newline, and exit 0 when a row is empty (skipped, like the
+  wording test, when the repository README is not there).
 - **`tally.sh`** — three valid votes for one option are unanimous; an invalid
   vote stays in the `N/M` denominator while an abstained or failed one leaves it,
   and all three are named differently; a 2-of-3 majority names the dissent; an
@@ -148,7 +152,8 @@ Exit status is non-zero if any assertion fails; the last line reports
 
 `.github/workflows/kabeuchi-tests.yml` runs both steps on every push and pull
 request that touches `skills/kabeuchi/**`, the repository README (its kabeuchi
-section is checked by the grilled line wording test), or the workflow itself. `shellcheck`
+section is checked by the grilled line wording test and the combined status
+line example), or the workflow itself. `shellcheck`
 ships preinstalled on the `ubuntu-latest` runner, and all seven scripts plus this
 test file are clean at its default severity.
 
