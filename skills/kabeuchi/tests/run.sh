@@ -617,6 +617,33 @@ echo "tally.sh"
   assert_eq "a missing input file exits 2" "2" "$rc"
 }
 
+echo "status line wording (SKILL.md, references, README)"
+# The backticks below are literal markdown, never command substitution.
+# shellcheck disable=SC2016
+{
+  # The status line is found again by its fixed prefix, so every example of it
+  # in the docs must use that exact prefix and one of the three tails. (The
+  # prefix holds no ERE metacharacters, so it is used as-is in the regex.)
+  REF="${HERE}/../references/ready-for-goal.md"
+  prefix='> Grilled with `/kabeuchi` on '
+  date_re='[0-9]{4}-[0-9]{2}-[0-9]{2}'
+  tails='ready for `/goal`\.|not yet ready for `/goal`; see Known gaps\.|not checked for `/goal`\.'
+  for tail in 'ready for `/goal`.' 'not yet ready for `/goal`; see Known gaps.' 'not checked for `/goal`.'; do
+    if grep -qxF "${prefix}2026-11-15 — ${tail}" "$REF"; then
+      ok "ready-for-goal.md shows the line ending \"${tail}\""
+    else
+      bad "ready-for-goal.md shows the line ending \"${tail}\""
+    fi
+  done
+  for f in "${HERE}/../SKILL.md" "$REF"; do
+    name="${f##*/}"
+    lines="$(grep -E '^ *> Grilled with' "$f" | grep -vF '<YYYY-MM-DD>' | sed 's/^ *//')"
+    if [ -z "$lines" ]; then bad "${name} shows the status line"; continue; fi
+    stray="$(printf '%s\n' "$lines" | grep -vxE "${prefix}${date_re} — (${tails})")"
+    assert_eq "${name}: every status line uses the fixed prefix and a known tail" "" "$stray"
+  done
+}
+
 echo
 printf 'total: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

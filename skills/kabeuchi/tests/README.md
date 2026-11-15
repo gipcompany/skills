@@ -84,6 +84,11 @@ Exit status is non-zero if any assertion fails; the last line reports
   an option ID outside `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, a
   control character in a perspective, an unknown option, a missing file — exits
   2 with **nothing on stdout**, so half a tally can never be mistaken for one.
+- **status line wording** — the line kabeuchi writes at the end of Phase 3 is
+  found again by its fixed prefix, so every example of it in `SKILL.md`,
+  `references/ready-for-goal.md` and the repository README must use exactly
+  `` > Grilled with `/kabeuchi` on <YYYY-MM-DD> — `` and one of the three
+  tails, and `ready-for-goal.md` must show all three.
 - **no temp litter** — running `merge3.sh` from a working directory leaves no
   extra files behind (it does all work under `mktemp -d` and cleans up on exit).
 

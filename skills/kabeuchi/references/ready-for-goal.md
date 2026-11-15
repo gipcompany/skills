@@ -352,6 +352,42 @@ and not a discussion log.
   line may go out in the same write-back — one diff for both — since both are
   written at the end and both depend on the check's result.
 
+### What it says
+
+The line is the fixed prefix, the date, and a tail that reflects the result of
+the check in this session:
+
+```
+> Grilled with `/kabeuchi` on <YYYY-MM-DD> — <tail>
+```
+
+| Check result in this session | Tail |
+|---|---|
+| The checker's last run reported `READY` | ``ready for `/goal`.`` |
+| The user left gaps open (they are in "Known gaps") | ``not yet ready for `/goal`; see Known gaps.`` |
+| The user said the target is not meant for `/goal`, so the check was skipped; or the check failed twice and the target was treated as not checked | ``not checked for `/goal`.`` |
+
+So the three possible lines are:
+
+```markdown
+> Grilled with `/kabeuchi` on 2026-11-15 — ready for `/goal`.
+> Grilled with `/kabeuchi` on 2026-11-15 — not yet ready for `/goal`; see Known gaps.
+> Grilled with `/kabeuchi` on 2026-11-15 — not checked for `/goal`.
+```
+
+- **The date** is the session's local date, `YYYY-MM-DD`, on the day the line
+  is written.
+- **The line is always in English**, whatever the target's language: the
+  prefix has to stay the same to be found again (below), and a reader — a
+  person, `/goal`, or `/jikkyo`'s child — can rely on its wording.
+- **Write exactly these words.** Nothing else goes on the line: no question
+  count, no list of gaps, no note on who decided what. The gaps themselves are
+  in "Known gaps"; the line only points there.
+- **There are only these three tails.** If the user left gaps open but
+  objected to the "Known gaps" diff, the tail is still the "not yet ready"
+  one — the target is not ready, and saying "not checked" would be untrue —
+  and the closing summary says the open gaps were not recorded in the target.
+
 ## The security boundary
 
 The check changes nothing about who may read or write what:
