@@ -2,9 +2,9 @@
 #
 # run.sh — regression tests for the kabeuchi helper scripts.
 #
-# Zero dependencies beyond git + bash: each test writes small text blobs to a
-# temp dir, runs one script, and asserts on its stdout and exit code. Run from
-# anywhere:  bash tests/run.sh
+# Zero dependencies beyond git, bash, and standard tools (sed, tr, head): each
+# test writes small text blobs to a temp dir, runs one script, and asserts on
+# its stdout and exit code. Run from anywhere:  bash tests/run.sh
 #
 set -uo pipefail
 
@@ -547,6 +547,34 @@ echo "statusline.sh"
   marker 'docs/\e[31mred\c-tail.md'
   assert_eq "backslash sequences are printed literally, line not cut short" \
     'kabeuchi in progress · docs/\e[31mred\c-tail.md' "$(sl "$SID")"
+
+  # C1 controls (U+0080-U+009F, two bytes in UTF-8) are stripped too: a
+  # terminal may take U+009B as CSI and U+009D as OSC. Other non-ASCII text
+  # is kept, and a C1 that only forms once another one is removed is caught.
+  marker "notes/a$(printf '\302\233')31mb$(printf '\302\235')c$(printf '\302\234')d$(printf '\302\302\233\233')e-é-あ.md"
+  assert_eq "C1 controls are stripped, other non-ASCII kept" "kabeuchi in progress · notes/a31mbcde-é-あ.md" "$(sl "$SID")"
+
+  # Out-of-range or unanchored URLs are plain text, never a link.
+  o39="$(printf 'o%.0s' $(seq 39))"; r100="$(printf 'r%.0s' $(seq 100))"
+  marker "$GH/$o39/$r100/issues/123456789012345678"
+  assert_eq "a 39-character owner, 100-character repo and 18-digit number link" \
+    "$(link "$o39/$r100#123456789012345678" "$GH/$o39/$r100/issues/123456789012345678")" "$(sl "$SID")"
+  for t in "$GH/${o39}o/r/issues/9" "$GH/o/${r100}r/issues/9" "$GH/o/r/issues/1234567890123456789" \
+           "x$GH/o/r/issues/9" " $GH/o/r/issues/9"; do
+    marker "$t"
+    assert_eq "plain text: ${t:0:60}" "kabeuchi in progress · $t" "$(sl "$SID")"
+  done
+
+  # Only the first 4096 bytes of the marker are read, so a huge first line
+  # cannot stall the status line; and a symlink is not followed.
+  marker "docs/$(printf 'x%.0s' $(seq 9000)).md"
+  out="$(sl "$SID")"
+  assert_eq "a long first line is cut at 4096 bytes" "kabeuchi in progress · docs/$(printf 'x%.0s' $(seq 4091))" "$out"
+  printf 'secret first line\n' > "$d/elsewhere"
+  rm -f "$KABEUCHI_DIR/$SID"; ln -s "$d/elsewhere" "$KABEUCHI_DIR/$SID"
+  rc=0; out="$(sl "$SID")" || rc=$?
+  assert_eq "a symlinked marker is not followed, exits 0" "0:" "$rc:$out"
+  rm -f "$KABEUCHI_DIR/$SID"
 
   # The placeholder mark.sh seeds before the target is resolved, with the pid
   # line mark.sh writes below it: shown as plain text, the pid line ignored.

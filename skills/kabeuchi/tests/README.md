@@ -3,7 +3,7 @@
 Regression tests for the deterministic helper scripts — `normalize.sh`,
 `merge3.sh`, `mark.sh`, `prompt-hook.sh`, `statusline.sh`, `tally.sh` and
 `grilled-line.sh`.
-Zero dependencies beyond `git` and `bash`: each test writes small text blobs to a temp dir, runs one script, and
+Zero dependencies beyond `git`, `bash`, and the standard tools the scripts use (`sed`, `tr`, `head`): each test writes small text blobs to a temp dir, runs one script, and
 asserts on its stdout and exit code. The interview itself is delegated to
 `/grilling`, and the voting is done by subagents; both are prompt-driven, so
 there is nothing to unit-test there. These tests cover the only real logic the
@@ -81,10 +81,13 @@ Exit status is non-zero if any assertion fails; the last line reports
   rebuilt from the regex captures**, so a fragment, a trailing `/...` or `?...`
   and leading zeros in the number never reach it; anything the regex does not
   accept (no repository segment, a `.` or `..` owner or repository, an extra
-  path segment, issue `0`, a pull request, another host) **falls back to plain
-  text**; **control bytes are stripped** from the target even though `mark.sh`
-  already strips them, so an embedded OSC 8 comes out as plain text with no ESC
-  or BEL left; a path under `$HOME` is shown with `~` (a sibling sharing the
+  path segment, issue `0`, a pull request, another host, anything before
+  `https://`, an owner over 39 characters, a repository over 100, a number over
+  18 digits) **falls back to plain text**; **control bytes are stripped** from
+  the target even though `mark.sh` already strips them, so an embedded OSC 8
+  comes out as plain text with no ESC or BEL left, and so are the UTF-8 C1
+  controls (U+0080-U+009F), with other non-ASCII text kept; only the first 4096
+  bytes of the marker are read, and a symlinked marker is not followed; a path under `$HOME` is shown with `~` (a sibling sharing the
   prefix is not); **backslashes are printed literally**, so `\e[31m` stays text
   and a `\c` does not cut the line short; the `(resolving target)` placeholder
   is plain text and the `pid=` line is ignored; another session's marker never

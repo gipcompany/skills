@@ -90,12 +90,21 @@ main() {
   dir="${KABEUCHI_DIR:-${HOME:+$HOME/.claude/kabeuchi}}"
   [ -n "$dir" ] || return 0
   marker="$dir/$session"
+  # mark.sh writes a regular file; a symlink is not followed, so the marker
+  # cannot make the row show the first line of some other file.
+  [ -L "$marker" ] && return 0
   [ -f "$marker" ] && [ -s "$marker" ] || return 0
-  target="$(head -n 1 "$marker")"
+  # At most 4096 bytes are read: mark.sh caps the target at 200 characters,
+  # and a huge first line would otherwise slow every status line refresh.
+  target="$(head -c 4096 "$marker" | head -n 1)"
   # mark.sh already strips control bytes, but anything that can write to the
   # marker directory can write a marker, and a stray ESC would let it draw on
-  # the terminal. Strip them again before anything is printed.
-  target="$(printf '%s' "$target" | LC_ALL=C tr -d '\000-\037\177')"
+  # the terminal. Strip them again before anything is printed: the C0 bytes
+  # and DEL, then the C1 controls (U+0080-U+009F, \xc2\x80-\xc2\x9f in UTF-8),
+  # which a terminal may read as CSI, OSC or ST. The sed loops until none is
+  # left, since removing one can join a \xc2 to the byte after it.
+  target="$(printf '%s' "$target" | LC_ALL=C tr -d '\000-\037\177' |
+    LC_ALL=C sed -e ':a' -e $'s/\xc2[\x80-\x9f]//' -e 'ta')"
   [ -n "$target" ] || return 0
 
   # An issue URL becomes a link; anything else — a path, the placeholder, a URL
