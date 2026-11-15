@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/48
 branch: worktree-jikkyo-48-20261115-173739
-updated: 2026-11-15T18:15:00+09:00
-next: Run bash skills/kabeuchi/tests/run.sh on the final tree
+updated: 2026-11-15T18:20:00+09:00
+next: Delete this log in one commit, push, and open the pull request
 
 ## Todos
 
@@ -11,7 +11,7 @@ next: Run bash skills/kabeuchi/tests/run.sh on the final tree
 - [x] Test voter description has preflight phrases (c8030a0)
 - [x] Add gotchas row: check not yet tried in a real session (436af3b)
 - [x] State the check's cost in README (7bbb79a)
-- [ ] Run tests/run.sh and confirm pass
+- [x] Run tests/run.sh and confirm pass (7bbb79a)
 - [ ] Delete progress log and open PR
 
 ## Verified task-list items
@@ -22,6 +22,7 @@ next: Run bash skills/kabeuchi/tests/run.sh on the final tree
 - tests/run.sh fails if the voter description lacks a preflight phrase and passes on the current file: ran it (all pass), then reworded the description temporarily and saw it fail with exit 1, then restored; shellcheck clean
 - gotchas.md has a row saying the ready-for-/goal check is not yet tried in a real session: read the new table row; tests still pass (the row does not use "description lacks")
 - README's "Ready for /goal at the end" section states the check's cost: read the new sentence; matches ready-for-goal.md (one re-check once the picked gaps are closed)
+- bash skills/kabeuchi/tests/run.sh passes: ran it on the final tree (all pass, exit 0); shellcheck on scripts and tests is clean
 
 ## Dead ends and decisions
 
