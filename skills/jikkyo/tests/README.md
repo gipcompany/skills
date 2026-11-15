@@ -99,9 +99,11 @@ timing and signal tests waiting on a real scheduler.
   worktree it goes to the shared common dir; outside a git repository, or
   with an unwritable directory, there is no file and the run goes on. A
   `jikkyo/` swapped for a symlink is not written through; a `<N>.json` that
-  is a symlink to a directory is replaced, never written into, and one that
-  is a real directory is left alone (no temp file is moved into either or
-  left beside it); and an old temp
+  is a symlink to a directory is never written into (with perl the symlink
+  is replaced by the state file; without perl, forced by
+  `JIKKYO_NO_PERL=1`, it is left as it is and nothing is written), and one
+  that is a real directory is left alone, on both paths (no temp file is
+  moved into either or left beside it); and an old temp
   file of the issue left by a killed write is removed by the next write
   (another issue's is left).
 - **`launch.sh`** — anything that is not exactly a GitHub issue URL is rejected

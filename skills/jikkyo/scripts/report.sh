@@ -69,14 +69,16 @@
 # none; session and comment are null when unknown. Nothing deletes the file;
 # the next run of the issue overwrites it. Outside a git repository, when
 # the directory cannot be written or is a symlink, or when <N>.json is a
-# directory, there is no state file and the run goes on. The file is a convenience for the status line, not a
-# record: the status comment is the record, and anything that can write to
-# the git common dir (the child included) can write this file too.
+# directory, there is no state file and the run goes on. The file is a
+# convenience for the status line, not a record: the status comment is the
+# record, and anything that can write to the git common dir (the child
+# included) can write this file too.
 #
 # Tuning, for tests: JIKKYO_TODO_INTERVAL (30), JIKKYO_HEARTBEAT_INTERVAL (300),
 # JIKKYO_TICK (1, seconds between scheduler passes), JIKKYO_MIN_GAP (1, seconds
 # between two writes), JIKKYO_CLOCK_FILE (read "now" in epoch seconds from this
-# file instead of the system clock).
+# file instead of the system clock), JIKKYO_NO_PERL (1: put the state file in
+# place without perl, see place()).
 #
 set -uo pipefail
 
@@ -267,10 +269,12 @@ eta_secs() {
 # place <temp> <dest>: rename the temp file onto <dest> without following
 # <dest>. mv into a directory, or a symlink to one, moves the file inside it;
 # rename(2) instead replaces a symlink itself and fails on a directory. perl
-# calls rename(2) directly. Without perl, mv runs after a directory check,
-# which a swap in between can still beat.
+# calls rename(2) directly, so a symlink to a directory is replaced. Without
+# perl, mv runs after a directory check, which a swap in between can still
+# beat, and a symlink to a directory is left as it is with nothing written.
+# JIKKYO_NO_PERL=1 takes the path without perl, for tests.
 place() {
-  if command -v perl >/dev/null 2>&1; then
+  if [ -z "${JIKKYO_NO_PERL:-}" ] && command -v perl >/dev/null 2>&1; then
     perl -e 'rename($ARGV[0], $ARGV[1]) or exit 1' -- "$1" "$2"
   else
     ! [ -d "$2" ] && mv -f "$1" "$2"
@@ -298,7 +302,7 @@ publish() {
   # points.
   if [ ! -d "$dir" ] || [ -L "$dir" ]; then return 0; fi
   # A temp file is left behind only when this script is killed between
-  # mktemp and mv; the next write of the issue takes such leftovers out.
+  # mktemp and place; the next write of the issue takes such leftovers out.
   find "$dir" -maxdepth 1 -type f -name ".${num}.json.*" -mmin +1 -delete 2>/dev/null
   tmp="$(mktemp "${dir}/.${num}.json.XXXXXX" 2>/dev/null)" || return 0
   if jq -c -n --argjson s "$json" --arg st "$st" --arg lang "$LANG_CODE" --arg session "$session" \
