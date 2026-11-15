@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/52
 branch: worktree-jikkyo-52-20261115-233631
-updated: 2026-11-16T00:30:00+09:00
-next: add statusline.sh tests to skills/kabeuchi/tests/run.sh
+updated: 2026-11-16T00:45:00+09:00
+next: add statusline.sh to skills/kabeuchi/tests/README.md
 
 ## Todos
 
@@ -11,7 +11,7 @@ next: add statusline.sh tests to skills/kabeuchi/tests/run.sh
 - [x] README: add kabeuchi 'In your status line' subsection (d88d270)
 - [x] README: trim 'How it stays visible' and point to new subsection (24a0222)
 - [x] jikkyo: name its own 'In your status line' section in SKILL.md and test (221bb64)
-- [ ] Add statusline.sh tests to kabeuchi tests/run.sh
+- [x] Add statusline.sh tests to kabeuchi tests/run.sh (17d1383)
 - [ ] Update kabeuchi tests/README.md for statusline.sh
 - [ ] Run the four CI checks locally
 - [ ] Delete progress log and open the pull request
@@ -24,6 +24,7 @@ next: add statusline.sh tests to skills/kabeuchi/tests/run.sh
 - Root README "### In your status line" under "## kabeuchi": section added after "How it stays visible" with both setups, the jikkyo-and-kabeuchi example, the no-refreshInterval note and the FORCE_HYPERLINK note; hyperlink claims checked against the status line docs page; the combined example run with stub scripts, with and without a marker, prints one row per non-empty script and exits 0
 - Root README "How it stays visible": the write-your-own-row guidance and its example are gone, the marker explanation stays, and one sentence links to the new subsection (anchor #in-your-status-line, the first of the two headings); checked by reading the section
 - jikkyo references name the "## jikkyo" section: SKILL.md now says "*In your status line* in the README's `## jikkyo` section"; the heading assertion in skills/jikkyo/tests/run.sh looks only inside "## jikkyo"; bash skills/jikkyo/tests/run.sh passes with 0 failed and shellcheck of the jikkyo scripts and tests is clean
+- Tests in skills/kabeuchi/tests/run.sh for every listed case: bash skills/kabeuchi/tests/run.sh passes with 0 failed and shellcheck is clean; six mutations of a temp copy of statusline.sh (%b, no control-byte strip, no leading-zero drop, no dot-repo check, no home fold, ST terminator) each make at least one test fail
 
 ## Dead ends and decisions
 
