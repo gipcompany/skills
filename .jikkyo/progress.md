@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/52
 branch: worktree-jikkyo-52-20261115-233631
-updated: 2026-11-16T00:50:00+09:00
-next: run the four CI checks locally
+updated: 2026-11-16T00:55:00+09:00
+next: delete this log in its own commit, push, and open the pull request
 
 ## Todos
 
@@ -13,7 +13,7 @@ next: run the four CI checks locally
 - [x] jikkyo: name its own 'In your status line' section in SKILL.md and test (221bb64)
 - [x] Add statusline.sh tests to kabeuchi tests/run.sh (17d1383)
 - [x] Update kabeuchi tests/README.md for statusline.sh (29c2765)
-- [ ] Run the four CI checks locally
+- [x] Run the four CI checks locally (29c2765)
 - [ ] Delete progress log and open the pull request
 
 ## Verified task-list items
@@ -26,6 +26,7 @@ next: run the four CI checks locally
 - jikkyo references name the "## jikkyo" section: SKILL.md now says "*In your status line* in the README's `## jikkyo` section"; the heading assertion in skills/jikkyo/tests/run.sh looks only inside "## jikkyo"; bash skills/jikkyo/tests/run.sh passes with 0 failed and shellcheck of the jikkyo scripts and tests is clean
 - Tests in skills/kabeuchi/tests/run.sh for every listed case: bash skills/kabeuchi/tests/run.sh passes with 0 failed and shellcheck is clean; six mutations of a temp copy of statusline.sh (%b, no control-byte strip, no leading-zero drop, no dot-repo check, no home fold, ST terminator) each make at least one test fail
 - skills/kabeuchi/tests/README.md: statusline.sh is in the list of covered scripts, has its own "What is covered" entry naming each required point, and "all six scripts" now reads "all seven scripts"; checked with grep
+- All four CI checks pass locally: both run.sh files exit 0 (kabeuchi 216 passed, jikkyo 751 passed, none failed) and both shellcheck runs report nothing; the kabeuchi tests also pass under macOS /bin/bash 3.2
 
 ## Dead ends and decisions
 
@@ -35,3 +36,4 @@ next: run the four CI checks locally
 - The README's combined example first used `[ -n "$row" ] && printf ...`; with the last script silent that left exit status 1, so it uses `if ...; then ...; fi`.
 - The kabeuchi README example broke two jikkyo tests: they cut the appended example out of the whole README with a sed range starting at the first indented shebang, which is now kabeuchi's. The appended-setup assertion and that extraction were scoped to "## jikkyo" as well, beyond the one heading assertion the issue names.
 - jikkyo-tests.yml does not trigger on README.md although its tests read it; left as is (out of scope) and to be named as a follow-up in the PR.
+- A Linux run in a container was not possible (the local Docker daemon is not running); CI on the PR covers ubuntu-latest.
