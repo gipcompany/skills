@@ -304,7 +304,7 @@ publish() {
   # points.
   if [ ! -d "$dir" ] || [ -L "$dir" ]; then return 0; fi
   # A temp file is left behind only when this script is killed between
-  # mktemp and mv; the next write of the issue takes such leftovers out.
+  # mktemp and place(); the next write of the issue takes such leftovers out.
   find "$dir" -maxdepth 1 -type f -name ".${num}.json.*" -mmin +1 -delete 2>/dev/null
   tmp="$(mktemp "${dir}/.${num}.json.XXXXXX" 2>/dev/null)" || return 0
   if jq -c -n --argjson s "$json" --arg st "$st" --arg lang "$LANG_CODE" --arg session "$session" \
