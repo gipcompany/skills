@@ -25,18 +25,29 @@
 #
 #   > Grilled with `/kabeuchi` at <timestamp> — <one of the four tails>
 #
-# A fence is opened by a line of three or more ` or ~ (indented or not; a
-# backtick fence's info string has no backtick) and closed by a line of the
-# same character, at least as long, with nothing else on it. A fence that is
-# never closed runs to the end of the body. Everything else — an example inside
-# a fence, an indented or quoted copy, a line that only resembles it — is
-# content and is left exactly as it is.
+# A fence is opened by a line of three or more ` or ~ indented by at most
+# three spaces, as in CommonMark and on GitHub (a backtick fence's info string
+# has no backtick), and closed by a line of the same character, at least as
+# long, indented by at most three spaces, with nothing else on it. A line
+# indented by four or more spaces is never a fence. A fence that is never
+# closed runs to the end of the body. Everything else — an example inside a
+# fence, an indented or quoted copy, a line that only resembles it — is content
+# and is left exactly as it is.
 #
 # Each removed line takes the one blank line before it with it (or, at the very
-# top of the body, the one after it), so nothing else in the body moves. Then
-# trailing blank lines are dropped and the new line is appended after one blank
-# line — below any "Known gaps" section, since it is last. Running it twice
-# with the same arguments gives the same body.
+# top of the body, the one after it), so nothing else in the body moves — but
+# when content follows it directly, one blank line stays, so the paragraphs on
+# either side do not run together. Then trailing blank lines are dropped and
+# the new line is appended after one blank line — below any "Known gaps"
+# section, since it is last.
+#
+# When a fence is still open at the end of the body, a closing fence of the
+# same character and length is added before the new line. Without it the new
+# line would be inside the fence, a later session would read it as an example
+# and leave it, and the lines would pile up. The open fence already ran to the
+# end, so the closing line changes nothing about how the rest is rendered.
+#
+# Running it twice with the same arguments gives the same body.
 #
 # Output: the body on stdout, normalized (no trailing newline).
 #
@@ -95,13 +106,14 @@ is_grilled() {
 
 body="$("$NORMALIZE")" || die "could not normalize the body"
 
-open_re='^[[:space:]]*(`{3,}|~{3,})(.*)$'
-close_re='^[[:space:]]*(`{3,}|~{3,})[[:space:]]*$'
+open_re='^ {0,3}(`{3,}|~{3,})(.*)$'
+close_re='^ {0,3}(`{3,}|~{3,})[[:space:]]*$'
 
 out=()           # the lines kept, in order
 fence_char=""    # the open fence's character, or empty outside a fence
 fence_len=0
 skip_blank=0     # a line removed at the very top takes the blank line after it
+restore_blank=0  # a removed line took a blank line, to give back if content follows
 
 if [ -n "$body" ]; then
   while IFS= read -r line || [ -n "$line" ]; do
@@ -118,13 +130,15 @@ if [ -n "$body" ]; then
       f="${BASH_REMATCH[1]}"; info="${BASH_REMATCH[2]}"
       if [ "${f:0:1}" = '~' ] || [[ "$info" != *'`'* ]]; then
         fence_char="${f:0:1}"; fence_len="${#f}"
-        skip_blank=0; out+=("$line"); continue
+        skip_blank=0
+        if [ "$restore_blank" -eq 1 ]; then out+=(""); fi
+        restore_blank=0; out+=("$line"); continue
       fi
     fi
     if is_grilled "$line"; then
       n="${#out[@]}"
       if [ "$n" -gt 0 ]; then
-        if [ -z "${out[$((n - 1))]}" ]; then unset "out[$((n - 1))]"; fi
+        if [ -z "${out[$((n - 1))]}" ]; then unset "out[$((n - 1))]"; restore_blank=1; fi
       else
         skip_blank=1
       fi
@@ -132,6 +146,8 @@ if [ -n "$body" ]; then
     fi
     if [ "$skip_blank" -eq 1 ] && [ -z "$line" ]; then skip_blank=0; continue; fi
     skip_blank=0
+    if [ "$restore_blank" -eq 1 ] && [ -n "$line" ]; then out+=(""); fi
+    restore_blank=0
     out+=("$line")
   done <<<"$body"
 fi
@@ -141,6 +157,13 @@ n="${#out[@]}"
 while [ "$n" -gt 0 ] && [ -z "${out[$((n - 1))]}" ]; do
   unset "out[$((n - 1))]"; n=$((n - 1))
 done
+
+# Close a fence left open, so the new line is not inside it.
+if [ -n "$fence_char" ]; then
+  close_fence=""
+  while [ "${#close_fence}" -lt "$fence_len" ]; do close_fence="${close_fence}${fence_char}"; done
+  out+=("$close_fence"); n=$((n + 1))
+fi
 
 if [ "$n" -gt 0 ]; then
   printf '%s\n' "${out[@]}"

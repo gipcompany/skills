@@ -645,6 +645,10 @@ echo "grilled-line.sh"
   assert_eq "a line moved up the body is removed with its blank line, the new one goes last" \
     "$(printf 'Spec\n\nMore text\n\n%s' "$NEW_READY")" "$out"
 
+  out="$(gl ready "$(printf 'Spec\n\n%s\nMore text\n' "$OLD")")"
+  assert_eq "a line with content right after it leaves one blank line, so paragraphs stay apart" \
+    "$(printf 'Spec\n\nMore text\n\n%s' "$NEW_READY")" "$out"
+
   out="$(gl ready "$(printf '%s\n\nSpec\n' "$OLD")")"
   assert_eq "a line at the very top is removed with the blank line after it" \
     "$(printf 'Spec\n\n%s' "$NEW_READY")" "$out"
@@ -659,15 +663,30 @@ echo "grilled-line.sh"
   assert_eq "a line inside a ~~~ fence is left untouched (a shorter fence does not close it)" \
     "$(printf '%s\n\n%s' "$fenced_tl" "$NEW_READY")" "$out"
 
-  fenced_in="$(printf -- '- item:\n\n    ```\n    x\n%s\n    ```\n' "$OLD")"
+  fenced_in="$(printf 'Spec\n\n   ```\n%s\n   ```\n' "$OLD")"
   out="$(gl ready "$fenced_in")"
-  assert_eq "a line inside an indented fence is left untouched" \
+  assert_eq "a line inside a fence indented by three spaces is left untouched" \
     "$(printf '%s\n\n%s' "$fenced_in" "$NEW_READY")" "$out"
 
+  # Four spaces make an indented code block, not a fence (CommonMark, GitHub),
+  # so a line after it is a real grilled line and is replaced.
+  code_block="$(printf 'Spec\n\n    ```\n    x\n\n%s\n\nMore\n' "$OLD")"
+  out="$(gl ready "$code_block")"
+  assert_eq "a \`\`\` indented by four spaces opens no fence" \
+    "$(printf 'Spec\n\n    ```\n    x\n\nMore\n\n%s' "$NEW_READY")" "$out"
+
+  # A fence still open at the end runs to the end, so a line in it is content;
+  # the script closes it before the new line, so the new line is not inside it
+  # and a later run finds and replaces it instead of adding another.
   unclosed="$(printf 'Spec\n\n```\n%s\n' "$OLD")"
   out="$(gl ready "$unclosed")"
-  assert_eq "an unclosed fence runs to the end, so a line after it is content" \
-    "$(printf '%s\n\n%s' "$unclosed" "$NEW_READY")" "$out"
+  assert_eq "an unclosed fence is closed before the new line" \
+    "$(printf '%s\n```\n\n%s' "$unclosed" "$NEW_READY")" "$out"
+  again="$(gl ready "$out")"
+  assert_eq "after an unclosed fence, a second run still leaves one line" "$out" "$again"
+  out="$(gl ready "$(printf 'Spec\n\n~~~~\ncode\n')")"
+  assert_eq "an unclosed fence is closed with its own character and length" \
+    "$(printf 'Spec\n\n~~~~\ncode\n~~~~\n\n%s' "$NEW_READY")" "$out"
 
   after_fence="$(printf 'Spec\n\n```\ncode\n```\n\n%s\n' "$OLD")"
   out="$(gl ready "$after_fence")"

@@ -1,8 +1,8 @@
 # kabeuchi tests
 
 Regression tests for the deterministic helper scripts — `normalize.sh`,
-`merge3.sh`, `mark.sh`, `prompt-hook.sh`, `tally.sh` and `grilled-line.sh`. Zero dependencies beyond `git` and
-`bash`: each test writes small text blobs to a temp dir, runs one script, and
+`merge3.sh`, `mark.sh`, `prompt-hook.sh`, `tally.sh` and `grilled-line.sh`.
+Zero dependencies beyond `git` and `bash`: each test writes small text blobs to a temp dir, runs one script, and
 asserts on its stdout and exit code. The interview itself is delegated to
 `/grilling`, and the voting is done by subagents; both are prompt-driven, so
 there is nothing to unit-test there. These tests cover the only real logic the
@@ -17,7 +17,7 @@ bash skills/kabeuchi/tests/run.sh
 ```
 
 Exit status is non-zero if any assertion fails; the last line reports
-`total: <n> passed, <m> failed`.
+`total: <n> passed, <m> failed, <k> skipped`.
 
 ## What is covered
 
@@ -89,10 +89,13 @@ Exit status is non-zero if any assertion fails; the last line reports
 - **`grilled-line.sh`** — with no existing line, one blank line and the line
   are appended (an empty body becomes the line alone); a line at the end is
   replaced; one moved up the body is removed with its blank line (or, at the
-  very top, the blank line after it) and the new one goes last; a line inside a
-  ```` ``` ````, a `~~~` (not closed by a shorter fence) or an indented fence is
-  left untouched; an unclosed fence runs to the end of the body; a line after a
-  closed fence is replaced; indented, quoted, extended and malformed copies are
+  very top, the blank line after it) and the new one goes last, leaving one
+  blank line when content follows it directly; a line inside a ```` ``` ````,
+  a `~~~` (not closed by a shorter fence) or a fence indented by up to three
+  spaces is left untouched, while a ```` ``` ```` indented by four opens no
+  fence; an unclosed fence runs to the end of the body and is closed before the
+  new line, with its own character and length, so a second run still leaves
+  one line; a line after a closed fence is replaced; indented, quoted, extended and malformed copies are
   content; with "Known gaps" present the line goes below it; several lines
   leave one; running it twice gives the same body; the body is normalized; each
   of the four keys writes one line, last, that a later run recognises and
