@@ -65,13 +65,13 @@
 #    "total":5,"turns":12,"started":<epoch>,"updated":<epoch>,"eta_secs":720,
 #    "lang":"en","session":"<session id>","comment":"<status comment URL>"}
 #
-# eta_secs is the remaining-time estimate in seconds, null when there is
-# none; session and comment are null when unknown. Nothing deletes the file;
-# the next run of the issue overwrites it. Outside a git repository, when
-# the directory cannot be written or is a symlink, or when <N>.json is a
-# directory, there is no state file and the run goes on. The file is a convenience for the status line, not a
-# record: the status comment is the record, and anything that can write to
-# the git common dir (the child included) can write this file too.
+# eta_secs is the remaining-time estimate in seconds, null when there is none;
+# session and comment are null when unknown. Nothing deletes the file; the next
+# run of the issue overwrites it. Outside a git repository, when the directory
+# cannot be written or is a symlink, or when <N>.json is a directory, there is
+# no state file and the run goes on. The file is a convenience for the status
+# line, not a record: the status comment is the record, and anything that can
+# write to the git common dir (the child included) can write this file too.
 #
 # Tuning, for tests: JIKKYO_TODO_INTERVAL (30), JIKKYO_HEARTBEAT_INTERVAL (300),
 # JIKKYO_TICK (1, seconds between scheduler passes), JIKKYO_MIN_GAP (1, seconds

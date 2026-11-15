@@ -392,11 +392,10 @@ of **the session that launched or resumed the run** only: it matches the
 `session_id`. After `/clear` the run is no longer shown; point the user at the
 status comment, which is the record: the status line is a convenience, and
 anything that can write to `.git` can write a state file.
-This skill never edits a settings file: if the user asks about the status
-line, point them at the README's *In your status line*, which shows both
-setups (the whole status line, or appended to their own), each
-with `refreshInterval`, needed because this session is idle while the run
-goes.
+This skill never edits a settings file: if the user asks about the status line,
+point them at the README's *In your status line*, which shows both setups (the
+whole status line, or appended to their own), each with `refreshInterval`,
+needed because this session is idle while the run goes.
 
 ## How the pieces fit
 
