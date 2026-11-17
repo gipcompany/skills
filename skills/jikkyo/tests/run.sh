@@ -2320,6 +2320,15 @@ echo "SKILL.md"
   assert_has "SKILL.md: the todo order's exception for items with no commits" "draft PR, has no push to wait for and is ticked once verified" "$skill"
   assert_has "SKILL.md: the log may list an item not ticked yet" "so it may list an item whose box is not ticked yet" "$skill"
   assert_lacks "SKILL.md: the log does not list only ticked boxes" "each box ticked on the issue and how it was" "$skill"
+  # The todo section of the status comment (#62).
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: the summary is the label alone (#62)" '`<summary>` is the label alone, `Child'"'"'s todos (not the issue'"'"'s task list)`' "$skill"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: the todo lines are not checkboxes (#62)" 'never `- [ ]`, so GitHub does not count them in' "$skill"
+  assert_has "SKILL.md: a todo change is any change in the rendered list (#62)" "A todo change is any change in what the todo list renders (a" "$skill"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: ended runs show the stopped glyph (#62)" '`failed` or `interrupted` its in-progress todos show ⏸️, also when' "$skill"
+  assert_has "tests/README.md: lists the todo-list tests (#62)" "**\`report.sh\`, the todo list**" "$(cat "$HERE/README.md")"
   # The repository README is there in a checkout of the repo, not in an installed copy.
   if [ -f "$README_MD" ]; then
     readme="$(cat "$README_MD")"
@@ -2341,6 +2350,12 @@ echo "SKILL.md"
     assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme_jikkyo"
     assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme_jikkyo"
     assert_has "README.md: after /clear, the status comment" "After \`/clear\` you are in a new session" "$readme_jikkyo"
+    # The todo section (#62): in the sample, and described.
+    assert_has "README.md: the sample comment ends with the todo section (#62)" \
+      "$(printf '%s\n' "<details><summary>Child's todos (not the issue's task list)</summary>" '' '- ✅ `Parse the todo subjects`')" "$readme_jikkyo"
+    assert_has "README.md: the todo lines are not checkboxes (#62)" "never a \`- [ ]\` checkbox" "$readme_jikkyo"
+    assert_has "README.md: a rename or a status change is a todo change (#62)" "a todo added, deleted, renamed, or changing status" "$readme_jikkyo"
+    assert_has "README.md: in-progress todos of an ended run show the stopped glyph (#62)" "show ⏸️ instead of 🔄" "$readme_jikkyo"
     # The appended example works as written, with its two paths filled in.
     printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
     chmod +x "$TMP/my-statusline.sh"

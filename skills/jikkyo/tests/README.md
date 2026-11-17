@@ -34,6 +34,31 @@ timing and signal tests waiting on a real scheduler.
   not JSON objects, and events of an unexpected shape (string `content`, a
   tool use without an id, a string `tool_use_result`), being skipped instead
   of ending the report — a jq error would kill the child with SIGPIPE.
+- **`report.sh`, the todo list** — the section at the end of the comment
+  shows each todo's subject from `TaskCreate`, the new subject after a
+  successful `TaskUpdate` rename (a failed one changes nothing), and the
+  glyphs ✅, 🔄, ⬜; todos listed by id compared as numbers (`2` before
+  `10`); over 50 todos, completed ones hidden first, oldest first, then the
+  newest pending ones, never an in-progress one (also with 52 in progress),
+  with a last bullet `… and M more (K completed)` / `… ほか M 件（うち完了 K
+  件）`; subjects cut at 100 characters after neutralizing, ending in `…`
+  (101, exactly 100, Japanese, and whitespace runs that shrink it under the
+  cap); backticks becoming `'`, newlines, control characters (an escape
+  sequence too), U+2028, and whitespace runs becoming one space, an empty,
+  whitespace-only, or missing subject showing `(no subject)` / `（件名なし）`,
+  and `@user`, `#1`, `<details>`, `</details>`, `<!--`, a link, HTML, an
+  entity, and backslash escapes staying inside one code span, with the
+  section closed once, by the body's last line; no section with no todos
+  (also when all are deleted, and in the start write); the summary being the
+  label alone, with no count, in English and in Japanese, after the table and
+  a blank line, with no `- [` line; the stopped glyph ⏸️ for in-progress
+  todos on `failed` and `interrupted` (also after `precheck.sh --payload`,
+  where nothing else in the list changes) and the snapshot kept on
+  `finished`; `--payload` leaving untouched subjects containing ` · ~`,
+  ` · 残り ~`, `| State | running |`, `| Remaining |`, the running marker,
+  `</details>`, and running headings in both languages, with and without the
+  estimate suffix, in English and in Japanese; and a running marker inside a
+  subject not making a live run for `precheck.sh`.
 - **`report.sh`, end states** — `finished` on a success `result`; `failed` on
   `error_max_turns`, `error_during_execution`, or `is_error: true`;
   `interrupted` when the stream has no `result` line, including an empty
@@ -77,7 +102,10 @@ timing and signal tests waiting on a real scheduler.
   a todo change inside the 30-second window is held until the window ends;
   back-to-back changes are coalesced into one write; a heartbeat comes after
   5 minutes without a change, and not before; a change still held when the
-  stream ends is in the end write, which happens at once.
+  stream ends is in the end write, which happens at once. A change in the
+  rendered todo list alone, with the completed and total counts unchanged, is
+  a todo change too: a status change (pending to in progress) and a rename
+  are each held, then written at the next 30-second slot.
 - **`report.sh`, estimated time remaining** — against the fake clock, the exact
   `Remaining` row and heading for no todos (empty, no suffix), todos
   with none completed (empty, no suffix), partial progress (1 of 4 after
@@ -238,7 +266,9 @@ timing and signal tests waiting on a real scheduler.
   same decisions as markers without it (also side by side), a malformed
   `branch=` does not count, and `--payload` keeps the `branch=` field and
   the Branch row, for a built comment and for the comments `report.sh`
-  itself wrote with a branch in English and in Japanese.
+  itself wrote with a branch in English and in Japanese. With a todo
+  section, `--payload` rewrites only what comes before its first `<details>`
+  line, and in the section changes only 🔄 to ⏸️ (see *the todo list*).
 
   With `--resume <N>`:
   - `none` with no comments, for a `finished` run, another author, a latest
