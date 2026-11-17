@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/62
 branch: worktree-jikkyo-62-20261117-174248
-updated: 2026-11-17T18:24:10+09:00
-next: test that the summary is the bare label in en and ja
+updated: 2026-11-17T18:28:33+09:00
+next: show the stopped glyph on failed and interrupted, in report.sh and precheck.sh --payload
 
 ## Todos
 
@@ -12,7 +12,7 @@ next: test that the summary is the bare label in en and ja
 - [x] Cut subjects at 100 rendered characters (03132fd)
 - [x] Neutralize subjects inside one code span (d885063)
 - [x] Leave the todo section out when there are no todos (c39c6f7)
-- [ ] Use the bare label as the summary in en and ja
+- [x] Use the bare label as the summary in en and ja (da173c2)
 - [ ] Show the stopped glyph for in-progress todos on failed and interrupted
 - [ ] Split the body at the first details line in precheck.sh --payload
 - [ ] Describe the todo section in SKILL.md, tests/README.md, and README.md
@@ -28,6 +28,7 @@ next: test that the summary is the bare label in en and ja
 - A subject longer than 100 rendered characters is cut and ends in an ellipsis: the four length assertions in "report.sh: the todo list" pass (ASCII, exactly 100, Japanese, after whitespace collapse).
 - Subjects are neutralized (backticks to quote, newlines and control characters to one space, empty subject placeholder in en and ja, @user, #1, details tags and comment openers inside one code span): the neutralization assertions in "report.sh: the todo list" pass, full suite green.
 - With no todos the comment has no todo section (also when every todo is deleted, and in the start write): the four "no todos" assertions pass; the only failures in that run were fake-clock timing tests under a load average near 40.
+- The summary is the label alone, in en and in ja, with no count: the summary assertions in "report.sh: the todo list" pass (only load-sensitive state-file timing tests failed in that run).
 
 ## Dead ends and decisions
 
