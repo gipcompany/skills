@@ -39,12 +39,14 @@ timing and signal tests waiting on a real scheduler.
   successful `TaskUpdate` rename (a failed one changes nothing), and the
   glyphs ✅, 🔄, ⬜; todos listed by id compared as numbers (`2` before
   `10`); over 50 todos, completed ones hidden first, oldest first, then the
-  newest pending ones, never an in-progress one (also with 52 in progress),
-  with a last bullet `… and M more (K completed)` / `… ほか M 件（うち完了 K
+  newest pending ones, then (with 52 in progress) the newest in-progress
+  ones, so 1000 in-progress todos with 300-character subjects still give 51
+  bullets and a body under 10,000 characters, with a last bullet `… and M more (K completed)` / `… ほか M 件（うち完了 K
   件）`; subjects cut at 100 characters after neutralizing, ending in `…`
   (101, exactly 100, Japanese, and whitespace runs that shrink it under the
   cap); backticks becoming `'`, newlines, control characters (an escape
-  sequence too), U+2028, and whitespace runs becoming one space, an empty,
+  sequence too), U+2028, and whitespace runs becoming one space, format
+  characters (U+202E, U+2066, U+200B, U+00AD) dropped, an empty,
   whitespace-only, or missing subject showing `(no subject)` / `（件名なし）`,
   and `@user`, `#1`, `<details>`, `</details>`, `<!--`, a link, HTML, an
   entity, and backslash escapes staying inside one code span, with the
@@ -102,7 +104,10 @@ timing and signal tests waiting on a real scheduler.
   a todo change inside the 30-second window is held until the window ends;
   back-to-back changes are coalesced into one write; a heartbeat comes after
   5 minutes without a change, and not before; a change still held when the
-  stream ends is in the end write, which happens at once. A change in the
+  stream ends is in the end write, which happens at once. Before moving the
+  clock by a single second after a write, the tests wait for that write to
+  reach the fake `gh` (which bumps its count only after the body is in
+  place), so a loaded machine does not shift the next slot. A change in the
   rendered todo list alone, with the completed and total counts unchanged, is
   a todo change too: a status change (pending to in progress) and a rename
   are each held, then written at the next 30-second slot.

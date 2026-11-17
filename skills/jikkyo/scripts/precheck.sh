@@ -65,7 +65,9 @@
 # English in both, so the decision lines above do not depend on the language.
 # The child's todo list at the end of the body (from its first `<details>`
 # line on) holds text jikkyo did not write: there, only the in-progress glyph
-# 🔄 at the start of a todo line changes, to the stopped glyph ⏸️.
+# 🔄 at the start of a todo line changes, to the stopped glyph ⏸️. This
+# depends on the shape report.sh writes (see TODOS there): change them
+# together.
 #
 # Exit status: 0 with a decision, 1 as above, 2 on bad input, including
 # empty input or anything that is not a list of comment arrays.

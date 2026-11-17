@@ -31,16 +31,17 @@
 #   - start and end immediately,
 #   - todo changes at most once every 30 seconds (held changes are written at
 #     the next allowed slot, and anything pending is written at the end); a
-#     todo change is any change in the todo list the comment shows (an id, a
-#     subject, or a status), not only in the counts,
+#     todo change is any change in the todo list (an id, a subject as cut for
+#     display, or a status), not only in the counts, including one in a todo
+#     the 50-line cap hides,
 #   - a heartbeat every 5 minutes, so a long silent stretch does not look stale.
 #
 # Progress comes from the stream alone: TaskCreate results give task ids and
 # subjects, TaskUpdate sets their status (and renames them), and % =
 # completed / tasks not deleted. With no tasks the comment shows the turn
 # count instead, never a made-up number. The comment ends with the todo list
-# itself, in a collapsed section (see TODOS below); the state file never
-# holds it.
+# itself, in a collapsed section (see TODOS below); the status line's state
+# file (<N>.json, below) never holds it.
 # While running, once a todo is completed, a `Remaining` row (and a
 # ` · ~<duration> left` heading suffix) gives elapsed / completed * (total -
 # completed), the run-wide rate; otherwise that row is present but empty.
@@ -197,6 +198,26 @@ state_word() {
   else echo "$1"; fi
 }
 
+MAX_TODOS=50
+MAX_SUBJECT=100
+# clean: a todo subject as it is shown, before the code span (see TODOS
+# below). The parser keeps subjects cleaned, so the state stays small however
+# long the child's subjects are; the renderer cleans again, which changes
+# nothing on a cleaned subject. Format characters (\p{Cf}: bidi controls,
+# zero-width spaces) are dropped, so a subject cannot reorder or hide what it
+# shows; control characters, line and paragraph separators, and whitespace
+# runs become one space, ends trimmed; every backtick becomes '; and the
+# result is cut to $max_subject characters, the last one "…".
+# shellcheck disable=SC2016  # jq program
+CLEAN='
+def clean:
+  gsub("\\p{Cf}"; "")
+  | gsub("[\\p{Cc}\\p{Zl}\\p{Zp}]"; " ") | gsub("\\s+"; " ")
+  | ltrimstr(" ") | rtrimstr(" ")
+  | gsub("`"; "'"'"'")
+  | if length > $max_subject then .[0:$max_subject - 1] + "…" else . end;
+'
+
 # ---------------------------------------------------------------------------
 # Parser: one jq process folds the whole stream and prints the state after
 # every line. Lines that are not JSON, and events whose shape the step does not
@@ -204,7 +225,7 @@ state_word() {
 # exit and the child would die of SIGPIPE.
 # ---------------------------------------------------------------------------
 # shellcheck disable=SC2016  # jq program: $e and $u are jq variables
-PARSER='
+PARSER="$CLEAN"'
 def text_of: if type == "string" then . elif type == "array" then map(.text? // "") | join("\n") else "" end;
 def step($e):
   if $e.type == "assistant" then
@@ -213,10 +234,10 @@ def step($e):
     | reduce (($e.message.content // []) | arrays | .[]
               | select(type == "object" and .type == "tool_use" and (.id | type) == "string")) as $u (.;
         if $u.name == "TaskCreate" then .todo = true
-          | .pend[$u.id] = {k: "c", j: ([$u.input | objects | .subject | strings][0])}
+          | .pend[$u.id] = {k: "c", j: ([$u.input | objects | .subject | strings | clean][0])}
         elif $u.name == "TaskUpdate" then .todo = true
           | .pend[$u.id] = {k: "u", t: ($u.input.taskId | tostring), s: $u.input.status,
-                            j: ([$u.input | objects | .subject | strings][0])}
+                            j: ([$u.input | objects | .subject | strings | clean][0])}
         else . end)
   elif $e.type == "user" then
     reduce (($e.message.content // []) | arrays | .[]
@@ -253,26 +274,27 @@ foreach (inputs | fromjson? // empty | select(type == "object")) as $e
 # section, or nothing when there are no todos. The subjects are the child's
 # text, which can carry text from whoever wrote the issue, so each one goes
 # into a single inline code span, where GFM recognizes no mentions, links,
-# entities, HTML, or escapes: control characters and runs of whitespace become
-# one space (ends trimmed), every backtick becomes ', the result is cut to
-# MAX_SUBJECT characters (ending in …), and an empty one gets a placeholder.
-# Lines are plain bullets with a status glyph, never `- [ ]`, so GitHub does
-# not count them in the issue's task progress. In creation order (ids compared
-# as numbers); over MAX_TODOS lines, completed todos are hidden first (oldest
-# first), then the newest pending ones, never an in-progress one, and a last
-# bullet says how many are hidden. An ended `failed` or `interrupted` run
-# claims nothing live: its in-progress todos get the stopped glyph.
+# entities, HTML, or escapes: it is cleaned (see CLEAN above: no backtick, no
+# newline, at most MAX_SUBJECT characters), and an empty one gets a
+# placeholder. Lines are plain bullets with a status glyph, never `- [ ]`, so
+# GitHub does not count them in the issue's task progress. In creation order
+# (ids compared as numbers); over MAX_TODOS lines, completed todos are hidden
+# first (oldest first), then the newest pending ones, then, only when
+# in-progress todos alone are over the cap, the newest in-progress ones, and a
+# last bullet says how many are hidden. So the section has at most MAX_TODOS +
+# 1 bullets of bounded length, and the comment stays far under GitHub's
+# 65,536-character limit. An ended `failed` or `interrupted` run claims
+# nothing live: its in-progress todos get the stopped glyph.
+#
+# precheck.sh --payload depends on this shape: the section starts at the
+# body's first line that starts with `<details>`, and an in-progress line
+# starts with `- 🔄`, which it turns into `- ⏸️`. Change them together.
 # ---------------------------------------------------------------------------
-MAX_TODOS=50
-MAX_SUBJECT=100
 # shellcheck disable=SC2016  # jq program
-TODOS='
+TODOS="$CLEAN"'
 def neutral:
   (if type == "string" then . else "" end)
-  | gsub("[\\p{Cc}\\p{Zl}\\p{Zp}]"; " ") | gsub("\\s+"; " ")
-  | ltrimstr(" ") | rtrimstr(" ")
-  | gsub("`"; "'"'"'")
-  | if length > $max_subject then .[0:$max_subject - 1] + "…" else . end
+  | clean
   | if . == "" then $no_subject else . end
   | "`" + . + "`";
 def glyph:
@@ -288,12 +310,18 @@ def glyph:
   else
     (if length <= $max_todos then {shown: $all, m: 0, k: 0}
      else (length - $max_todos) as $h
+       # Hidden: the oldest completed, then the newest pending, then the
+       # newest in progress, until $h are hidden.
        | [ $all[] | select(.status == "completed") | .id ] as $c
-       | ([$h, ($c | length)] | min) as $hc
-       | ($h - $hc) as $hp
        | [ $all[] | select(.status != "completed" and .status != "in_progress") | .id ] as $p
-       | ($c[:$hc] + (if $hp > 0 then $p[([0, ($p | length) - $hp] | max):] else [] end)) as $hide
-       | {shown: [ $all[] | select(.id as $i | $hide | index([$i]) | not) ], m: ($hide | length), k: $hc}
+       | [ $all[] | select(.status == "in_progress") | .id ] as $r
+       | ([$h, ($c | length)] | min) as $hc
+       | ([$h - $hc, ($p | length)] | min) as $hp
+       | ($h - $hc - $hp) as $hr
+       | def newest($n): if $n > 0 then .[length - $n:] else [] end;
+         ($c[:$hc] + ($p | newest($hp)) + ($r | newest($hr))
+          | map({key: ., value: true}) | from_entries) as $hidden
+       | {shown: [ $all[] | select($hidden[.id] | not) ], m: $h, k: $hc}
      end)
     | "<details><summary>" + $label + "</summary>\n\n"
       + ([ .shown[] | "- " + glyph + " " + (.subject | neutral) ]
@@ -328,10 +356,13 @@ last_write=""        # clock time of the last write
 last_write_real=""   # $SECONDS at the last write, for the 1-second gap
 last_key=""          # the todo list shown by the last write (CHANGE_KEY)
 final_done=""
-# A todo change is any change in what the todo list renders: an id, a subject,
-# or a status. So a todo moving to in progress, or renamed, is written at the
-# next slot even when the completed and total counts stay the same. `// {}`
-# keeps the placeholder state (no .tasks) equal to the parser's empty list.
+# A todo change is any change in the todo list: an id, a subject (as cleaned
+# for display), or a status. So a todo moving to in progress, or renamed, is
+# written at the next slot even when the completed and total counts stay the
+# same. It is the list, not the rendered section: a change in a todo the cap
+# hides is written too, which only costs a write at most every 30 seconds.
+# `// {}` keeps the placeholder state (no .tasks) equal to the parser's empty
+# list.
 CHANGE_KEY='.tasks // {}'
 
 # eta_secs <state> <done> <total> <elapsed secs>: the estimated seconds left,
@@ -472,7 +503,9 @@ write() {
 _write() {
   local st="$1" end_ts="${2:-}" json payload out
   json="$(cat "$state_file")"
-  payload="$(jq -n --arg b "$(body "$st" "$json" "$end_ts")" '{body: $b}')"
+  # The body goes to jq on a pipe, not as an argument, so no size limit on a
+  # single argument applies. It ends with exactly one newline, which is dropped.
+  payload="$(body "$st" "$json" "$end_ts" | jq -Rs '{body: rtrimstr("\n")}')"
   # $SECONDS counts whole seconds, so a difference of 1 can be milliseconds.
   if [ -n "$last_write_real" ] && [ $((SECONDS - last_write_real)) -le "$MIN_GAP" ]; then
     sleep "$MIN_GAP"
@@ -560,7 +593,7 @@ write running
 # redirected, so the stream is handed over on fd 3.
 exec 3<&0
 (
-  jq -R -n -c --unbuffered "$PARSER" | while IFS= read -r s; do
+  jq -R -n -c --unbuffered --argjson max_subject "$MAX_SUBJECT" "$PARSER" | while IFS= read -r s; do
     printf '%s\n' "$s" > "$state_file.tmp" && mv "$state_file.tmp" "$state_file"
   done
   : > "$work/eof"

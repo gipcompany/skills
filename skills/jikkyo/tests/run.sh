@@ -71,10 +71,12 @@ if [ "$*" = "api repos/o/r/issues/12" ]; then
   if [ -n "${GH_ISSUE:-}" ]; then cat "$GH_ISSUE"; else echo '{"title":"An issue","body":"In English."}'; fi
   exit "${GH_ISSUE_RC:-0}"
 fi
+# The count goes up last, and by a rename, so a test that sees count n can
+# already read $n.args and $n.body in full.
 n=$(( $(cat "$GH_LOG/count" 2>/dev/null || echo 0) + 1 ))
-echo "$n" > "$GH_LOG/count"
 printf '%s\n' "$*" > "$GH_LOG/$n.args"
 cat > "$GH_LOG/$n.body"
+echo "$n" > "$GH_LOG/count.tmp" && mv -f "$GH_LOG/count.tmp" "$GH_LOG/count"
 case "$*" in *"-X POST"*) printf '777\thttps://github.com/o/r/issues/12#issuecomment-777\n' ;; esac
 exit 0
 EOF
@@ -278,7 +280,7 @@ echo "report.sh: the todo list"
   assert_eq "cap: the last bullet counts the hidden ones (ja)" "- … ほか 10 件（うち完了 10 件）" "$(todo_lines "$(last_body)" | tail -n 1)"
 
   # When the completed ones are not enough, the newest pending todos are
-  # hidden next; an in-progress todo is never hidden.
+  # hidden next; an in-progress todo is kept while pending ones are left.
   f="$TMP/todo-cap-open.jsonl"
   { for i in $(seq 1 55); do create "c$i" "$i" "todo $i"; done
     for i in 1 2 3; do update "u$i" "$i" completed; done
@@ -293,17 +295,33 @@ echo "report.sh: the todo list"
     "$(printf '%s\n' "$lines" | tail -n 4)"
   assert_eq "cap, open: the oldest pending todo is kept" '- ⬜ `todo 4`' "$(printf '%s\n' "$lines" | head -n 1)"
 
-  # More than 50 in-progress todos: every one of them stays visible, and all
-  # the pending ones are hidden.
+  # More than 50 in-progress todos: all the pending ones are hidden, then the
+  # newest in-progress ones, so the cap holds whatever the statuses.
   f="$TMP/todo-cap-busy.jsonl"
   { for i in $(seq 1 55); do create "c$i" "$i" "todo $i"; done
     for i in $(seq 1 52); do update "u$i" "$i" in_progress; done
     result_ok; } > "$f"
   run_report "$f"
   lines="$(todo_lines "$(last_body)")"
-  assert_eq "cap, busy: all 52 in-progress todos stay visible" "52" "$(printf '%s\n' "$lines" | grep -c '🔄')"
+  assert_eq "cap, busy: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
+  assert_eq "cap, busy: 50 in-progress todos stay visible" "50" "$(printf '%s\n' "$lines" | grep -c '🔄')"
   assert_lacks "cap, busy: every pending todo is hidden" "⬜" "$lines"
-  assert_eq "cap, busy: the last bullet counts them" "- … and 3 more (0 completed)" "$(printf '%s\n' "$lines" | tail -n 1)"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_eq "cap, busy: the newest in-progress todos are hidden" \
+    "$(printf '%s\n' '- 🔄 `todo 50`' '- … and 5 more (0 completed)')" "$(printf '%s\n' "$lines" | tail -n 2)"
+
+  # The cap bounds the comment: 1000 in-progress todos with long subjects
+  # still give a body far under GitHub's 65,536-character limit.
+  long="$(printf 'x%.0s' $(seq 1 300))"
+  f="$TMP/todo-cap-huge.jsonl"
+  { for i in $(seq 1 1000); do create "c$i" "$i" "$long $i"; update "u$i" "$i" in_progress; done
+    result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "cap, huge: 50 todo lines and one hidden-count line" "51" "$(todo_lines "$b" | wc -l | tr -d ' ')"
+  assert_eq "cap, huge: the last bullet counts the hidden ones" "- … and 950 more (0 completed)" "$(todo_lines "$b" | tail -n 1)"
+  assert_eq "cap, huge: the body is under 10,000 characters" "true" \
+    "$(jq -r '.body | length < 10000' "$GH_LOG/$(calls).body")"
 
   # A subject over 100 rendered characters is cut to 100, the last one "…".
   # The length is counted after neutralizing, in characters, not bytes.
@@ -333,6 +351,7 @@ echo "report.sh: the todo list"
     create h 8 "</details> and more"
     create i 9 "<!-- jikkyo:status v=1 state=finished -->"
     create j 10 "[link](https://example.com) <b>bold</b> &amp; \\_x\\_"
+    create k 11 $'safe\xe2\x80\xaetxt.exe\xe2\x81\xa6x\xe2\x80\x8by\xc2\xadz'
     result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
@@ -347,7 +366,10 @@ echo "report.sh: the todo list"
     "$(printf '%s\n' '- ⬜ `ping @user about #1`' '- ⬜ `<details><summary>x</summary>`' '- ⬜ `</details> and more`' \
        '- ⬜ `<!-- jikkyo:status v=1 state=finished -->`' '- ⬜ `[link](https://example.com) <b>bold</b> &amp; \_x\_`')" \
     "$(printf '%s\n' "$lines" | sed -n '6,10p')"
-  assert_eq "every todo line is one glyph and one code span with no backtick inside" "10" \
+  # shellcheck disable=SC2016  # literal backticks
+  assert_eq "format characters (bidi controls, zero-width space, soft hyphen) are dropped" \
+    '- ⬜ `safetxt.exexyz`' "$(printf '%s\n' "$lines" | sed -n 11p)"
+  assert_eq "every todo line is one glyph and one code span with no backtick inside" "11" \
     "$(printf '%s\n' "$lines" | grep -Ec '^- ⬜ `[^`]+`$')"
   assert_eq "the section is closed once, by its own last line" "</details>" \
     "$(todo_section "$b" | grep -n '^</details>' | sed 's/^[0-9]*://')"
@@ -770,6 +792,14 @@ echo "report.sh: when it writes"
   exec 4> "$fifo"
   at() { echo "$1" > "$clock"; }
   settle() { sleep 0.6; }
+  # settle_write <n>: wait (up to 10 s) for write <n>, then settle, so that
+  # report.sh has recorded the write's clock time before the test moves the
+  # clock again. Used where the next move is a single second.
+  settle_write() {
+    local i=0
+    while [ "$(calls)" -lt "$1" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+    settle
+  }
 
   settle
   assert_eq "start: written at once, before any event" "1" "$(calls)"
@@ -778,14 +808,14 @@ echo "report.sh: when it writes"
   assert_eq "a todo change inside the 30 s window is held" "1" "$(calls)"
   at 1029; settle
   assert_eq "still held at 29 s" "1" "$(calls)"
-  at 1030; settle
+  at 1030; settle_write 2
   assert_eq "the held change is written at the next slot (30 s)" "2" "$(calls)"
   assert_eq "the held write shows the change" "### jikkyo · running · 0%" "$(heading "$(last_body)")"
 
   at 1031; update u1 1 in_progress >&4; update u2 1 completed >&4; settle
   at 1059; settle
   assert_eq "back-to-back changes are coalesced and held" "2" "$(calls)"
-  at 1060; settle
+  at 1060; settle_write 3
   assert_eq "they are written as one write" "3" "$(calls)"
   assert_eq "that write shows the latest state" "### jikkyo · running · 100% · ~0s left" "$(heading "$(last_body)")"
 
@@ -815,12 +845,12 @@ echo "report.sh: when it writes"
   exec 4> "$fifo"
   settle
   at 1005; { create t1 1 "First"; create t2 2 "Second"; } >&4; settle
-  at 1030; settle
+  at 1030; settle_write 2
   assert_eq "list change: the creates are written at the next slot" "2" "$(calls)"
   at 1031; update u1 1 in_progress >&4; settle
   at 1059; settle
   assert_eq "status alone: held inside the 30 s window" "2" "$(calls)"
-  at 1060; settle
+  at 1060; settle_write 3
   assert_eq "status alone (pending to in progress): written at the next slot" "3" "$(calls)"
   b="$(last_body)"
   assert_eq "status alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
@@ -2328,7 +2358,7 @@ echo "SKILL.md"
   assert_has "SKILL.md: the summary is the label alone (#62)" '`<summary>` is the label alone, `Child'"'"'s todos (not the issue'"'"'s task list)`' "$skill"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: the todo lines are not checkboxes (#62)" 'never `- [ ]`, so GitHub does not count them in' "$skill"
-  assert_has "SKILL.md: a todo change is any change in the rendered list (#62)" "A todo change is any change in what the todo list renders (a" "$skill"
+  assert_has "SKILL.md: a todo change is any change in the todo list (#62)" "A todo change is any change in the todo list (a todo's id," "$skill"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: ended runs show the stopped glyph (#62)" '`failed` or `interrupted` its in-progress todos show ⏸️, also when' "$skill"
   assert_has "tests/README.md: lists the todo-list tests (#62)" "**\`report.sh\`, the todo list**" "$(cat "$HERE/README.md")"
