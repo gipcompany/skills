@@ -1,13 +1,13 @@
 issue: https://github.com/gipcompany/skills/issues/62
 branch: worktree-jikkyo-62-20261117-174248
-updated: 2026-11-17T17:56:16+09:00
-next: test creation order with numeric ids (2 before 10)
+updated: 2026-11-17T17:59:10+09:00
+next: test the 50-todo cap and the hidden-count line in en and ja
 
 ## Todos
 
 - [x] Parse todo subjects from TaskCreate and renames from TaskUpdate (7497d5d)
 - [x] Make the scheduler change key cover the whole todo list (4c03440)
-- [ ] Render todos in creation order with numeric ids
+- [x] Render todos in creation order with numeric ids (8f52b14)
 - [ ] Cap the list at 50 todos with a hidden-count line
 - [ ] Cut subjects at 100 rendered characters
 - [ ] Neutralize subjects inside one code span
@@ -23,6 +23,7 @@ next: test creation order with numeric ids (2 before 10)
 
 - The todo line shows the subject from TaskCreate, and the new subject after a successful TaskUpdate rename; a failed TaskUpdate changes nothing: "report.sh: the todo list" assertions in tests/run.sh pass, full suite green.
 - A change of status alone and a rename alone each trigger a write at the next 30-second slot, counts unchanged: fake-clock assertions in "report.sh: when it writes" pass, full suite green.
+- Todos are listed in creation order with ids compared numerically: "todos are listed by id, compared as numbers" in tests/run.sh passes, full suite green.
 
 ## Dead ends and decisions
 
