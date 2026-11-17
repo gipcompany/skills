@@ -258,6 +258,51 @@ echo "report.sh: the todo list"
   run_report "$f"
   assert_eq "todos are listed by id, compared as numbers (2 before 10)" \
     "$(printf '%s\n' '- ⬜ `one`' '- ⬜ `two`' '- ⬜ `nine`' '- ⬜ `ten`')" "$(todo_lines "$(last_body)")"
+
+  # Over 50 todos, completed ones are hidden first, oldest first, and a last
+  # bullet counts the hidden ones.
+  f="$TMP/todo-cap.jsonl"
+  { for i in $(seq 1 60); do create "c$i" "$i" "todo $i"; done
+    for i in $(seq 1 15); do update "u$i" "$i" completed; done
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "cap: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
+  assert_eq "cap: the oldest completed todos are hidden first" '- ✅ `todo 11`' "$(printf '%s\n' "$lines" | head -n 1)"
+  assert_has "cap: the newest todo is still shown" '- ⬜ `todo 60`' "$lines"
+  assert_eq "cap: the last bullet counts the hidden ones (en)" "- … and 10 more (10 completed)" "$(printf '%s\n' "$lines" | tail -n 1)"
+  jq -cn '{title: "子の todo", body: ""}' > "$TMP/issue-ja-todos.json"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  assert_eq "cap: the last bullet counts the hidden ones (ja)" "- … ほか 10 件（うち完了 10 件）" "$(todo_lines "$(last_body)" | tail -n 1)"
+
+  # When the completed ones are not enough, the newest pending todos are
+  # hidden next; an in-progress todo is never hidden.
+  f="$TMP/todo-cap-open.jsonl"
+  { for i in $(seq 1 55); do create "c$i" "$i" "todo $i"; done
+    for i in 1 2 3; do update "u$i" "$i" completed; done
+    update u55 55 in_progress
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "cap, open: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
+  assert_lacks "cap, open: every completed todo is hidden" "✅" "$lines"
+  assert_eq "cap, open: the newest pending todos are hidden" \
+    "$(printf '%s\n' '- ⬜ `todo 51`' '- ⬜ `todo 52`' '- 🔄 `todo 55`' '- … and 5 more (3 completed)')" \
+    "$(printf '%s\n' "$lines" | tail -n 4)"
+  assert_eq "cap, open: the oldest pending todo is kept" '- ⬜ `todo 4`' "$(printf '%s\n' "$lines" | head -n 1)"
+
+  # More than 50 in-progress todos: every one of them stays visible, and all
+  # the pending ones are hidden.
+  f="$TMP/todo-cap-busy.jsonl"
+  { for i in $(seq 1 55); do create "c$i" "$i" "todo $i"; done
+    for i in $(seq 1 52); do update "u$i" "$i" in_progress; done
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "cap, busy: all 52 in-progress todos stay visible" "52" "$(printf '%s\n' "$lines" | grep -c '🔄')"
+  assert_lacks "cap, busy: every pending todo is hidden" "⬜" "$lines"
+  assert_eq "cap, busy: the last bullet counts them" "- … and 3 more (0 completed)" "$(printf '%s\n' "$lines" | tail -n 1)"
 }
 
 # ===========================================================================
