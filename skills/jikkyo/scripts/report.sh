@@ -174,11 +174,15 @@ set_labels() {
     L_BRANCH="ブランチ" L_RESUMED="再開元" L_RESUMED_TEXT="前回の実行" L_PROGRESS="進捗" L_TURNS="ターン数" L_ELAPSED="経過" L_REMAINING="残り"
     L_ESTIMATE="（推定）" L_LEFT_PRE=" · 残り ~" L_LEFT_POST=""
     L_TURN_ONE="1 ターン" L_TURN_MANY=" ターン"
+    L_TODOS="子の todo（Issue のタスクリストではありません）" L_NO_SUBJECT="（件名なし）"
+    L_MORE_1="… ほか " L_MORE_2=" 件（うち完了 " L_MORE_3=" 件）"
   else
     L_FIELD="Field" L_VALUE="Value" L_STATE="State" L_STARTED="Started" L_ENDED="Ended"
     L_BRANCH="Branch" L_RESUMED="Resumed from" L_RESUMED_TEXT="earlier run" L_PROGRESS="Progress" L_TURNS="Turns" L_ELAPSED="Elapsed" L_REMAINING="Remaining"
     L_ESTIMATE=" (estimate)" L_LEFT_PRE=" · ~" L_LEFT_POST=" left"
     L_TURN_ONE="1 turn" L_TURN_MANY=" turns"
+    L_TODOS="Child's todos (not the issue's task list)" L_NO_SUBJECT="(no subject)"
+    L_MORE_1="… and " L_MORE_2=" more (" L_MORE_3=" completed)"
   fi
 }
 state_word() {
@@ -203,9 +207,11 @@ def step($e):
      then .turns += 1 | .lastmsg = ($e.message.id // "") else . end)
     | reduce (($e.message.content // []) | arrays | .[]
               | select(type == "object" and .type == "tool_use" and (.id | type) == "string")) as $u (.;
-        if $u.name == "TaskCreate" then .todo = true | .pend[$u.id] = {k: "c"}
+        if $u.name == "TaskCreate" then .todo = true
+          | .pend[$u.id] = {k: "c", j: ([$u.input | objects | .subject | strings][0])}
         elif $u.name == "TaskUpdate" then .todo = true
-          | .pend[$u.id] = {k: "u", t: ($u.input.taskId | tostring), s: $u.input.status}
+          | .pend[$u.id] = {k: "u", t: ($u.input.taskId | tostring), s: $u.input.status,
+                            j: ([$u.input | objects | .subject | strings][0])}
         else . end)
   elif $e.type == "user" then
     reduce (($e.message.content // []) | arrays | .[]
@@ -218,9 +224,11 @@ def step($e):
             ((($r.content | text_of) | capture("Task #(?<n>[0-9]+)").n)
               // (($e.tool_use_result | objects | .task | objects | .id) // null
                   | if . == null then null else tostring end)) as $id
-            | if $id == null then . else .tasks[$id] = "pending" end
+            | if $id == null then . else .tasks[$id] = {status: "pending", subject: $p.j} end
           elif $p.s == "deleted" then del(.tasks[$p.t])
-          elif ($p.s != null) and (.tasks | has($p.t)) then .tasks[$p.t] = $p.s
+          elif .tasks | has($p.t) then
+            (if $p.s != null then .tasks[$p.t].status = $p.s else . end)
+            | (if $p.j != null then .tasks[$p.t].subject = $p.j else . end)
           else . end
         end)
   elif $e.type == "result" then
@@ -231,9 +239,72 @@ foreach (inputs | fromjson? // empty | select(type == "object")) as $e
   ({tasks: {}, pend: {}, turns: 0, lastmsg: null, todo: false, result: null};
    (try step($e) catch .);
    {tasks, pend, turns, lastmsg, todo, result})
-| {done: ([.tasks[] | select(. == "completed")] | length), total: (.tasks | length),
+| {done: ([.tasks[] | select(.status == "completed")] | length), total: (.tasks | length),
    turns, result, tasks, pend, lastmsg, todo}
 '
+
+# ---------------------------------------------------------------------------
+# The child's todo list, rendered at the end of the comment in a collapsed
+# section, or nothing when there are no todos. The subjects are the child's
+# text, which can carry text from whoever wrote the issue, so each one goes
+# into a single inline code span, where GFM recognizes no mentions, links,
+# entities, HTML, or escapes: control characters and runs of whitespace become
+# one space (ends trimmed), every backtick becomes ', the result is cut to
+# MAX_SUBJECT characters (ending in …), and an empty one gets a placeholder.
+# Lines are plain bullets with a status glyph, never `- [ ]`, so GitHub does
+# not count them in the issue's task progress. In creation order (ids compared
+# as numbers); over MAX_TODOS lines, completed todos are hidden first (oldest
+# first), then the newest pending ones, never an in-progress one, and a last
+# bullet says how many are hidden. An ended `failed` or `interrupted` run
+# claims nothing live: its in-progress todos get the stopped glyph.
+# ---------------------------------------------------------------------------
+MAX_TODOS=50
+MAX_SUBJECT=100
+# shellcheck disable=SC2016  # jq program
+TODOS='
+def neutral:
+  (if type == "string" then . else "" end)
+  | gsub("[\\p{Cc}\\p{Zl}\\p{Zp}]"; " ") | gsub("\\s+"; " ")
+  | ltrimstr(" ") | rtrimstr(" ")
+  | gsub("`"; "'"'"'")
+  | if length > $max_subject then .[0:$max_subject - 1] + "…" else . end
+  | if . == "" then $no_subject else . end
+  | "`" + . + "`";
+def glyph:
+  if .status == "completed" then "✅"
+  elif .status == "in_progress" then (if $st == "failed" or $st == "interrupted" then "⏸️" else "🔄" end)
+  else "⬜" end;
+[ (.tasks // {}) | objects | to_entries[]
+  | {id: .key, n: (.key | try tonumber catch null), status: (.value.status? // null),
+     subject: (.value.subject? // null)} ]
+| sort_by([(.n == null), .n, .id])
+| . as $all
+| if length == 0 then empty
+  else
+    (if length <= $max_todos then {shown: $all, m: 0, k: 0}
+     else (length - $max_todos) as $h
+       | [ $all[] | select(.status == "completed") | .id ] as $c
+       | ([$h, ($c | length)] | min) as $hc
+       | ($h - $hc) as $hp
+       | [ $all[] | select(.status != "completed" and .status != "in_progress") | .id ] as $p
+       | ($c[:$hc] + (if $hp > 0 then $p[([0, ($p | length) - $hp] | max):] else [] end)) as $hide
+       | {shown: [ $all[] | select(.id as $i | $hide | index([$i]) | not) ], m: ($hide | length), k: $hc}
+     end)
+    | "<details><summary>" + $label + "</summary>\n\n"
+      + ([ .shown[] | "- " + glyph + " " + (.subject | neutral) ]
+         + (if .m > 0 then ["- " + $more1 + (.m | tostring) + $more2 + (.k | tostring) + $more3] else [] end)
+         | join("\n"))
+      + "\n</details>"
+  end
+'
+
+# todos <state> <state.json contents>: the todo section, or nothing.
+todos() {
+  jq -r --arg st "$1" --arg label "$L_TODOS" --arg no_subject "$L_NO_SUBJECT" \
+    --arg more1 "$L_MORE_1" --arg more2 "$L_MORE_2" --arg more3 "$L_MORE_3" \
+    --argjson max_todos "$MAX_TODOS" --argjson max_subject "$MAX_SUBJECT" \
+    "$TODOS" <<<"$2" 2>/dev/null
+}
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/jikkyo-report.XXXXXX")" || exit 1
 state_file="$work/state.json"
@@ -325,7 +396,7 @@ publish() {
 # body <state> <state.json contents> <end ts or empty>
 body() {
   local st="$1" json="$2" end_ts="$3" t completed total turns heading label value ended elapsed
-  local secs eta="" eta_cell="" eta_suffix="" word
+  local secs eta="" eta_cell="" eta_suffix="" word section
   t="$(now)"
   completed="$(jq -r '.done' <<<"$json")"
   total="$(jq -r '.total' <<<"$json")"
@@ -369,6 +440,11 @@ body() {
   printf '| %s | %s |\n' "$label" "$value"
   printf '| %s | %s |\n' "$L_ELAPSED" "$elapsed"
   printf '| %s | %s |\n' "$L_REMAINING" "$eta_cell"
+  # The todo section goes last: precheck.sh --payload rewrites only what comes
+  # before its first `<details>` line, the part jikkyo alone writes.
+  section="$(todos "$st" "$json")"
+  [ -n "$section" ] && printf '\n%s\n' "$section"
+  return 0
 }
 
 # write <state> [end ts]: create the comment on the first call, PATCH it by id

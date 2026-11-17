@@ -122,10 +122,18 @@ tool_result() {  # <tool_use id> <content> [is_error]
   jq -cn --arg id "$1" --arg c "$2" --argjson err "${3:-false}" \
     '{type: "user", message: {content: [{type: "tool_result", tool_use_id: $id, content: $c, is_error: $err}]}}'
 }
-create() {  # <tool_use id> <task id>
-  assistant_tool "$1" TaskCreate '{"subject":"s","description":"d"}'
+create() {  # <tool_use id> <task id> [subject]
+  assistant_tool "$1" TaskCreate "$(jq -cn --arg s "${3-s}" '{subject: $s, description: "d"}')"
   tool_result "$1" "Task #$2 created successfully: s"
 }
+rename() {  # <tool_use id> <task id> <subject> [is_error]
+  assistant_tool "$1" TaskUpdate "$(jq -cn --arg t "$2" --arg s "$3" '{taskId: $t, subject: $s}')"
+  tool_result "$1" "Updated task #$2 subject" "${4:-false}"
+}
+# todo_section <body>: from the first `<details>` line to the end.
+todo_section() { printf '%s\n' "$1" | sed -n '/^<details>/,$p'; }
+# todo_lines <body>: the bullets of the todo section.
+todo_lines() { todo_section "$1" | grep '^- '; }
 update() {  # <tool_use id> <task id> <status>
   assistant_tool "$1" TaskUpdate "$(jq -cn --arg t "$2" --arg s "$3" '{taskId: $t, status: $s}')"
   tool_result "$1" "Updated task #$2 status"
@@ -220,6 +228,28 @@ echo "report.sh: progress"
   { echo 'not json'; echo '[1,2]'; create a 1; update b 1 completed; result_ok; } > "$f"
   run_report "$f"
   assert_eq "lines that are not JSON objects are skipped" "### jikkyo · finished · 100%" "$(heading "$(last_body)")"
+}
+
+# ===========================================================================
+echo "report.sh: the todo list"
+{
+  # The subject comes from TaskCreate; a successful TaskUpdate with a subject
+  # renames the todo; a failed one changes nothing.
+  f="$TMP/todo-subjects.jsonl"
+  { create a 1 "Write the parser"; create b 2 "Add tests"; create c 3 "Open the PR"
+    rename d 2 "Add the parser tests"
+    rename e 3 "Never applied" true
+    update g 1 completed
+    assistant_tool h TaskUpdate '{"taskId":"3","status":"in_progress","subject":"Open the draft PR"}'
+    tool_result h "Updated task #3 status, subject"
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "todo lines show the TaskCreate subject, renames, and the status glyphs" \
+    "$(printf '%s\n' '- ✅ `Write the parser`' '- ⬜ `Add the parser tests`' '- 🔄 `Open the draft PR`')" "$lines"
+  assert_lacks "a failed TaskUpdate does not rename" "Never applied" "$(last_body)"
+  assert_lacks "the old subject is gone after a rename" '`Add tests`' "$(last_body)"
+  assert_eq "a rename alone keeps the status" "- ⬜ \`Add the parser tests\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
 }
 
 # ===========================================================================
