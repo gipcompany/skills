@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/62
 branch: worktree-jikkyo-62-20261117-174248
-updated: 2026-11-17T18:36:16+09:00
-next: test --payload against hostile subjects, with and without the estimate suffix, en and ja
+updated: 2026-11-17T18:40:59+09:00
+next: describe the todo section in SKILL.md, tests/README.md, and the README.md jikkyo section
 
 ## Todos
 
@@ -14,7 +14,7 @@ next: test --payload against hostile subjects, with and without the estimate suf
 - [x] Leave the todo section out when there are no todos (c39c6f7)
 - [x] Use the bare label as the summary in en and ja (da173c2)
 - [x] Show the stopped glyph for in-progress todos on failed and interrupted (c7db9b6)
-- [ ] Split the body at the first details line in precheck.sh --payload
+- [x] Split the body at the first details line in precheck.sh --payload (2fd730d)
 - [ ] Describe the todo section in SKILL.md, tests/README.md, and README.md
 - [ ] Run the full test suite and shellcheck
 - [ ] Delete the progress log and open the PR with the human-check item
@@ -30,6 +30,7 @@ next: test --payload against hostile subjects, with and without the estimate suf
 - With no todos the comment has no todo section (also when every todo is deleted, and in the start write): the four "no todos" assertions pass; the only failures in that run were fake-clock timing tests under a load average near 40.
 - The summary is the label alone, in en and in ja, with no count: the summary assertions in "report.sh: the todo list" pass (only load-sensitive state-file timing tests failed in that run).
 - On failed and interrupted, in-progress todos show the stopped glyph in report.sh final write and after precheck.sh --payload, and finished keeps the snapshot: the ended-run assertions pass, full suite 809/809 green.
+- precheck.sh --payload rewrites a running comment correctly and leaves the listed hostile subjects untouched, with and without the estimate suffix, in en and ja: the hostile-subject assertions pass (only the known state-file timing flake failed, load near 44); main's precheck.sh cuts a subject containing " · ~" on the same input, the new one does not.
 
 ## Dead ends and decisions
 
