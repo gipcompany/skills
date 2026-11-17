@@ -232,6 +232,7 @@ echo "report.sh: progress"
 
 # ===========================================================================
 echo "report.sh: the todo list"
+# shellcheck disable=SC2016  # literal backticks: the expected todo lines are code spans
 {
   # The subject comes from TaskCreate; a successful TaskUpdate with a subject
   # renames the todo; a failed one changes nothing.
@@ -823,6 +824,7 @@ echo "report.sh: when it writes"
   assert_eq "status alone (pending to in progress): written at the next slot" "3" "$(calls)"
   b="$(last_body)"
   assert_eq "status alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
+  # shellcheck disable=SC2016  # literal backticks
   assert_has "status alone: the write shows the new status" '- 🔄 `First`' "$b"
   at 1061; rename r1 2 "Second, renamed" >&4; settle
   at 1089; settle
@@ -831,6 +833,7 @@ echo "report.sh: when it writes"
   assert_eq "rename alone: written at the next slot" "4" "$(calls)"
   b="$(last_body)"
   assert_eq "rename alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
+  # shellcheck disable=SC2016  # literal backticks
   assert_has "rename alone: the write shows the new subject" '- ⬜ `Second, renamed`' "$b"
   at 1200; settle
   assert_eq "no list change, no write before the heartbeat" "4" "$(calls)"
@@ -2351,6 +2354,7 @@ echo "SKILL.md"
     assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme_jikkyo"
     assert_has "README.md: after /clear, the status comment" "After \`/clear\` you are in a new session" "$readme_jikkyo"
     # The todo section (#62): in the sample, and described.
+    # shellcheck disable=SC2016  # literal backticks
     assert_has "README.md: the sample comment ends with the todo section (#62)" \
       "$(printf '%s\n' "<details><summary>Child's todos (not the issue's task list)</summary>" '' '- ✅ `Parse the todo subjects`')" "$readme_jikkyo"
     assert_has "README.md: the todo lines are not checkboxes (#62)" "never a \`- [ ]\` checkbox" "$readme_jikkyo"
