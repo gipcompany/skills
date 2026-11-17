@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/62
 branch: worktree-jikkyo-62-20261117-174248
-updated: 2026-11-17T18:15:11+09:00
-next: test that the comment has no todo section without todos
+updated: 2026-11-17T18:24:10+09:00
+next: test that the summary is the bare label in en and ja
 
 ## Todos
 
@@ -11,7 +11,7 @@ next: test that the comment has no todo section without todos
 - [x] Cap the list at 50 todos with a hidden-count line (2072ea7)
 - [x] Cut subjects at 100 rendered characters (03132fd)
 - [x] Neutralize subjects inside one code span (d885063)
-- [ ] Leave the todo section out when there are no todos
+- [x] Leave the todo section out when there are no todos (c39c6f7)
 - [ ] Use the bare label as the summary in en and ja
 - [ ] Show the stopped glyph for in-progress todos on failed and interrupted
 - [ ] Split the body at the first details line in precheck.sh --payload
@@ -27,6 +27,7 @@ next: test that the comment has no todo section without todos
 - With more than 50 todos completed ones are hidden oldest first with the en/ja hidden-count line, and with more than 50 open todos in-progress ones stay and the newest pending are hidden: the "cap" assertions in tests/run.sh pass, full suite green.
 - A subject longer than 100 rendered characters is cut and ends in an ellipsis: the four length assertions in "report.sh: the todo list" pass (ASCII, exactly 100, Japanese, after whitespace collapse).
 - Subjects are neutralized (backticks to quote, newlines and control characters to one space, empty subject placeholder in en and ja, @user, #1, details tags and comment openers inside one code span): the neutralization assertions in "report.sh: the todo list" pass, full suite green.
+- With no todos the comment has no todo section (also when every todo is deleted, and in the start write): the four "no todos" assertions pass; the only failures in that run were fake-clock timing tests under a load average near 40.
 
 ## Dead ends and decisions
 
@@ -40,3 +41,4 @@ next: test that the comment has no todo section without todos
 - One run failed the statusline "50 state files take under a second" timing test at 1.07 s; statusline.sh is untouched and the rerun passed at 0.18 s, so it was machine load.
 - The state-file assertion "a todo write updates it" is a pre-existing timing flake: a standalone repro of that scenario with the 0.6 s wait succeeded 11/15 times with main's report.sh and 9/15 with this branch. Not fixed here (out of scope); the full suite is rerun until green.
 - The U+2028 test input is written as UTF-8 byte escapes, since bash 3.2 has no \u in $'...' strings.
+- Under heavy machine load (load average 30-40 from other work) the fake-clock tests with 0.6 s waits fail in bulk; each todo is accepted on its own assertions passing, and the full green run is left to the full-suite todo, retried when the load drops.
