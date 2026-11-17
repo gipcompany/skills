@@ -303,6 +303,21 @@ echo "report.sh: the todo list"
   assert_eq "cap, busy: all 52 in-progress todos stay visible" "52" "$(printf '%s\n' "$lines" | grep -c '🔄')"
   assert_lacks "cap, busy: every pending todo is hidden" "⬜" "$lines"
   assert_eq "cap, busy: the last bullet counts them" "- … and 3 more (0 completed)" "$(printf '%s\n' "$lines" | tail -n 1)"
+
+  # A subject over 100 rendered characters is cut to 100, the last one "…".
+  # The length is counted after neutralizing, in characters, not bytes.
+  a100="$(printf 'a%.0s' $(seq 1 100))"
+  ja120="$(printf 'あ%.0s' $(seq 1 120))"
+  f="$TMP/todo-long.jsonl"
+  { create a 1 "${a100}b"; create b 2 "$a100"; create c 3 "$ja120"
+    create d 4 "$(printf 'a   %.0s' $(seq 1 50))"; result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "a subject of 101 characters is cut to 99 and …" "- ⬜ \`${a100:0:99}…\`" "$(printf '%s\n' "$lines" | sed -n 1p)"
+  assert_eq "a subject of exactly 100 characters is kept" "- ⬜ \`${a100}\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
+  assert_eq "a long Japanese subject is cut by characters" "- ⬜ \`$(printf 'あ%.0s' $(seq 1 99))…\`" "$(printf '%s\n' "$lines" | sed -n 3p)"
+  assert_eq "the cap applies to the rendered text, after whitespace runs collapse" \
+    "- ⬜ \`$(printf 'a %.0s' $(seq 1 49))a\`" "$(printf '%s\n' "$lines" | sed -n 4p)"
 }
 
 # ===========================================================================
