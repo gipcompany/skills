@@ -368,6 +368,28 @@ echo "report.sh: the todo list"
   { create a 1 "gone"; update b 1 deleted; result_ok; } > "$f"
   run_report "$f"
   assert_lacks "every todo deleted: no todo section" "<details>" "$(last_body)"
+
+  # The summary is the label alone: the % stays in the heading and the
+  # Progress row. A blank line follows it, so the list is read as Markdown.
+  f="$TMP/todo-summary.jsonl"
+  { create a 1 "one"; create b 2 "two"; update c 1 completed; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "the summary is the label alone (en), then a blank line" \
+    "$(printf '%s\n' "<details><summary>Child's todos (not the issue's task list)</summary>" '')" \
+    "$(todo_section "$b" | head -n 2)"
+  assert_eq "the section follows the table after a blank line" \
+    "$(printf '%s\n' '| Remaining |  |' '' "<details><summary>Child's todos (not the issue's task list)</summary>")" \
+    "$(printf '%s\n' "$b" | grep -A 2 '^| Remaining')"
+  assert_lacks "the summary carries no count" "%" "$(todo_section "$b")"
+  assert_lacks "no todo line is a task-list item" "- [" "$(todo_section "$b")"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  b="$(last_body)"
+  assert_eq "the summary is the label alone (ja), then a blank line" \
+    "$(printf '%s\n' "<details><summary>子の todo（Issue のタスクリストではありません）</summary>" '')" \
+    "$(todo_section "$b" | head -n 2)"
+  assert_lacks "the Japanese summary carries no count" "%" "$(todo_section "$b")"
 }
 
 # ===========================================================================
