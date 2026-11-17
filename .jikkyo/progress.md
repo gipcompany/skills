@@ -1,6 +1,6 @@
 issue: https://github.com/gipcompany/skills/issues/62
 branch: worktree-jikkyo-62-20261117-174248
-updated: 2026-11-17T18:55:29+09:00
+updated: 2026-11-17T18:56:14+09:00
 next: delete the progress log in one commit, push, and open the PR with the human-check item
 
 ## Todos
@@ -17,6 +17,7 @@ next: delete the progress log in one commit, push, and open the PR with the huma
 - [x] Split the body at the first details line in precheck.sh --payload (2fd730d)
 - [x] Describe the todo section in SKILL.md, tests/README.md, and README.md (452eed6)
 - [x] Run the full test suite and shellcheck (56a4b40)
+- [x] Mention the todo list in report.sh's header comment (d77d48c)
 - [ ] Delete the progress log and open the PR with the human-check item
 
 ## Verified task-list items
@@ -50,3 +51,4 @@ next: delete the progress log in one commit, push, and open the PR with the huma
 - The body split in --payload is line-based (split on newlines, first line starting with <details>), and the todo-part rewrite is a startswith check per line, the same as the (?m)^ pattern but without depending on regex flags.
 - The SKILL.md frontmatter description is left as it was: it already says progress and the estimate, and the todo list is described in the body.
 - shellcheck flagged SC2016 (info) for the literal backticks in the expected todo lines; one directive on the todo-list test block and three per-line ones fix it, the same way run.sh already marks literal backticks. Local full runs at load averages of 40-130 kept failing only fake-clock timing tests, so the green run of record is CI on a clean runner.
+- A self-review of the diff found report.sh's header still describing only ids and statuses; added a comment-only todo for it (shellcheck and bash -n clean).
