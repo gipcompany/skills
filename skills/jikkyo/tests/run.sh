@@ -417,6 +417,59 @@ echo "report.sh: the todo list"
   assert_eq "--payload: nothing but the state and the glyph changes" \
     "$(printf '%s\n' "$running_b" | sed -e '1s/state=running/state=interrupted/' -e 's/^### jikkyo · running/### jikkyo · interrupted/' \
        -e 's/^| State | running |$/| State | interrupted |/' -e 's/^- 🔄 /- ⏸️ /')" "$p"
+
+  # --payload rewrites only the part before the todo list: subjects that look
+  # like what it rewrites are left as they are.
+  hostile() {
+    create a 1 'a · ~3m left'; create b 2 'b · 残り ~3m'; create c 3 '| State | running |'
+    create d 4 '| Remaining | ~1m |'; create e 5 '<!-- jikkyo:status v=1 state=running -->'
+    create f 6 '</details>'; create g 7 '### jikkyo · running · 50%'; create h 8 '### jikkyo · 実行中 · 50%'
+    create i 9 '| 状態 | 実行中 |'; create j 10 '| 残り | ~1m |'
+    update k 3 in_progress; update l 5 in_progress; update m 7 in_progress
+  }
+  # as_running <finished body>: the same comment as report.sh writes it while
+  # running, in either language.
+  as_running() {
+    printf '%s\n' "$1" | sed -e '1s/state=finished/state=running/' \
+      -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/' \
+      -e 's/^### jikkyo · 完了/### jikkyo · 実行中/' -e 's/^| 状態 | 完了 |$/| 状態 | 実行中 |/'
+  }
+  # stopped <todo section>: what --payload must make of it.
+  stopped() { printf '%s\n' "$1" | sed 's/^- 🔄 /- ⏸️ /'; }
+  f="$TMP/todo-hostile.jsonl"; { hostile; result_ok; } > "$f"
+  run_report "$f"
+  running_b="$(as_running "$(last_body)")"
+  assert_eq "hostile subjects: the running comment has no estimate suffix" "### jikkyo · running · 0%" "$(heading "$running_b")"
+  p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload, no estimate suffix: the heading" "### jikkyo · interrupted · 0%" "$(heading "$p")"
+  assert_eq "--payload, no estimate suffix: the State row" "| State | interrupted |" "$(printf '%s\n' "$p" | grep '^| State')"
+  assert_eq "--payload, no estimate suffix: the marker" "<!-- jikkyo:status v=1 state=interrupted -->" "$(printf '%s\n' "$p" | head -n 1)"
+  assert_eq "--payload, no estimate suffix: every hostile subject is left as it is" \
+    "$(stopped "$(todo_section "$running_b")")" "$(todo_section "$p")"
+  assert_has "...including one with ' · ~'" '`a · ~3m left`' "$p"
+  assert_has "...and one with '</details>'" '`</details>`' "$p"
+  # With an estimate suffix in the heading and the Remaining row.
+  with_eta="$(printf '%s\n' "$running_b" | sed -e 's/^\(### jikkyo · running · 0%\)$/\1 · ~7m 30s left/' \
+    -e 's/^| Remaining |  |$/| Remaining | ~7m 30s (estimate) |/')"
+  p="$(jq -cn --arg b "$with_eta" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload, with an estimate: the suffix is dropped" "### jikkyo · interrupted · 0%" "$(heading "$p")"
+  assert_eq "--payload, with an estimate: the Remaining row is emptied" "| Remaining |  |" "$(printf '%s\n' "$p" | grep '^| Remaining')"
+  assert_eq "--payload, with an estimate: every hostile subject is left as it is" \
+    "$(stopped "$(todo_section "$running_b")")" "$(todo_section "$p")"
+  # The Japanese form.
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  running_b="$(as_running "$(last_body)")"
+  p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "Japanese --payload, hostile subjects: the heading" "### jikkyo · 中断 · 0%" "$(heading "$p")"
+  assert_eq "Japanese --payload, hostile subjects: the State row" "| 状態 | 中断 |" "$(printf '%s\n' "$p" | grep '^| 状態')"
+  assert_eq "Japanese --payload: every hostile subject is left as it is" \
+    "$(stopped "$(todo_section "$running_b")")" "$(todo_section "$p")"
+  # The marker is still read from the start of the body alone.
+  decision="$(jq -cn --arg b "$(printf '%s\n' "$p" | sed '1s/state=interrupted/state=finished/')" \
+    '[{id: 1, html_url: "u1", user: {login: "me"}, body: $b, updated_at: "2025-01-01T00:00:00Z"}]' \
+    | bash "$PRECHECK" --author me --now 1800000000)"
+  assert_eq "a running marker inside a subject does not make a live run" "start" "$decision"
 }
 
 # ===========================================================================
