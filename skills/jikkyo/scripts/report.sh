@@ -321,8 +321,13 @@ comment_id=""
 comment_url=""
 last_write=""        # clock time of the last write
 last_write_real=""   # $SECONDS at the last write, for the 1-second gap
-last_key=""          # progress shown by the last write
+last_key=""          # the todo list shown by the last write (CHANGE_KEY)
 final_done=""
+# A todo change is any change in what the todo list renders: an id, a subject,
+# or a status. So a todo moving to in progress, or renamed, is written at the
+# next slot even when the completed and total counts stay the same. `// {}`
+# keeps the placeholder state (no .tasks) equal to the parser's empty list.
+CHANGE_KEY='.tasks // {}'
 
 # eta_secs <state> <done> <total> <elapsed secs>: the estimated seconds left,
 # or nothing. The run-wide rate so far, applied to the todos left. Only while
@@ -485,7 +490,7 @@ _write() {
   publish "$st" "$json" "$end_ts"
   last_write="$(now)"
   last_write_real="$SECONDS"
-  last_key="$(jq -c '[.done, .total]' <<<"$json")"
+  last_key="$(jq -c "$CHANGE_KEY" <<<"$json")"
 }
 
 print_final_message() {
@@ -561,7 +566,7 @@ while [ ! -e "$work/eof" ]; do
   sleep "$TICK"
   [ -e "$work/eof" ] && break
   t="$(now)"
-  key="$(jq -c '[.done, .total]' "$state_file" 2>/dev/null)" || continue
+  key="$(jq -c "$CHANGE_KEY" "$state_file" 2>/dev/null)" || continue
   if [ "$key" != "$last_key" ] && [ $((t - last_write)) -ge "$TODO_INTERVAL" ]; then
     write running
   elif [ $((t - last_write)) -ge "$HEARTBEAT_INTERVAL" ]; then

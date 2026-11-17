@@ -583,6 +583,40 @@ echo "report.sh: when it writes"
   assert_eq "end: written at once when the stream ends" "5" "$(calls)"
   assert_eq "the pending change is in the end write" "### jikkyo · interrupted · 50%" "$(heading "$(last_body)")"
   rm -f "$fifo"
+
+  # A change in the rendered list alone, with the counts unchanged, is a todo
+  # change too: a status change (pending to in progress) and a rename.
+  new_log
+  echo 1000 > "$clock"
+  fifo="$TMP/fifo-key"; rm -f "$fifo"; mkfifo "$fifo"
+  JIKKYO_CLOCK_FILE="$clock" bash "$REPORT" "$URL" < "$fifo" > "$TMP/out" 2>&1 &
+  rpid=$!
+  exec 4> "$fifo"
+  settle
+  at 1005; { create t1 1 "First"; create t2 2 "Second"; } >&4; settle
+  at 1030; settle
+  assert_eq "list change: the creates are written at the next slot" "2" "$(calls)"
+  at 1031; update u1 1 in_progress >&4; settle
+  at 1059; settle
+  assert_eq "status alone: held inside the 30 s window" "2" "$(calls)"
+  at 1060; settle
+  assert_eq "status alone (pending to in progress): written at the next slot" "3" "$(calls)"
+  b="$(last_body)"
+  assert_eq "status alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
+  assert_has "status alone: the write shows the new status" '- 🔄 `First`' "$b"
+  at 1061; rename r1 2 "Second, renamed" >&4; settle
+  at 1089; settle
+  assert_eq "rename alone: held inside the 30 s window" "3" "$(calls)"
+  at 1090; settle
+  assert_eq "rename alone: written at the next slot" "4" "$(calls)"
+  b="$(last_body)"
+  assert_eq "rename alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
+  assert_has "rename alone: the write shows the new subject" '- ⬜ `Second, renamed`' "$b"
+  at 1200; settle
+  assert_eq "no list change, no write before the heartbeat" "4" "$(calls)"
+  exec 4>&-
+  wait "$rpid"
+  rm -f "$fifo"
 }
 
 # ===========================================================================
