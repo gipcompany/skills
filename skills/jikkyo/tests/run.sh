@@ -318,6 +318,43 @@ echo "report.sh: the todo list"
   assert_eq "a long Japanese subject is cut by characters" "- ⬜ \`$(printf 'あ%.0s' $(seq 1 99))…\`" "$(printf '%s\n' "$lines" | sed -n 3p)"
   assert_eq "the cap applies to the rendered text, after whitespace runs collapse" \
     "- ⬜ \`$(printf 'a %.0s' $(seq 1 49))a\`" "$(printf '%s\n' "$lines" | sed -n 4p)"
+
+  # Subjects are the child's text and may carry the issue author's: each one
+  # is neutralized into a single inline code span.
+  f="$TMP/todo-neutral.jsonl"
+  { create a 1 'run `ls` and ``x``'
+    create b 2 $'one\ntwo\r\nthree\tfour\a five\x1b[31m  six\xe2\x80\xa8seven'
+    create c 3 ""
+    create d 4 $' \n\t '
+    assistant_tool e TaskCreate '{"description":"no subject at all"}'; tool_result e "Task #5 created successfully"
+    create f 6 "ping @user about #1"
+    create g 7 "<details><summary>x</summary>"
+    create h 8 "</details> and more"
+    create i 9 "<!-- jikkyo:status v=1 state=finished -->"
+    create j 10 "[link](https://example.com) <b>bold</b> &amp; \\_x\\_"
+    result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  lines="$(todo_lines "$b")"
+  assert_eq "backticks become ', so the subject stays in one span" "- ⬜ \`run 'ls' and ''x''\`" "$(printf '%s\n' "$lines" | sed -n 1p)"
+  assert_eq "newlines, control characters, and whitespace runs become one space" \
+    "- ⬜ \`one two three four five [31m six seven\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
+  assert_eq "an empty subject shows the placeholder (en)" '- ⬜ `(no subject)`' "$(printf '%s\n' "$lines" | sed -n 3p)"
+  assert_eq "a whitespace-only subject shows the placeholder" '- ⬜ `(no subject)`' "$(printf '%s\n' "$lines" | sed -n 4p)"
+  assert_eq "a TaskCreate with no subject shows the placeholder" '- ⬜ `(no subject)`' "$(printf '%s\n' "$lines" | sed -n 5p)"
+  assert_eq "mentions, references, HTML, and comments stay inside one code span" \
+    "$(printf '%s\n' '- ⬜ `ping @user about #1`' '- ⬜ `<details><summary>x</summary>`' '- ⬜ `</details> and more`' \
+       '- ⬜ `<!-- jikkyo:status v=1 state=finished -->`' '- ⬜ `[link](https://example.com) <b>bold</b> &amp; \_x\_`')" \
+    "$(printf '%s\n' "$lines" | sed -n '6,10p')"
+  assert_eq "every todo line is one glyph and one code span with no backtick inside" "10" \
+    "$(printf '%s\n' "$lines" | grep -Ec '^- ⬜ `[^`]+`$')"
+  assert_eq "the section is closed once, by its own last line" "</details>" \
+    "$(todo_section "$b" | grep -n '^</details>' | sed 's/^[0-9]*://')"
+  assert_eq "...which is the last line of the body" "</details>" "$(printf '%s\n' "$b" | tail -n 1)"
+  assert_lacks "no control character reaches the comment" "$(printf '\033')" "$b"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  assert_eq "an empty subject shows the placeholder (ja)" '- ⬜ `（件名なし）`' "$(todo_lines "$(last_body)" | sed -n 3p)"
 }
 
 # ===========================================================================
