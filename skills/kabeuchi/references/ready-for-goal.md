@@ -290,7 +290,14 @@ Gaps the user leaves open go to two places:
 The section states what is unresolved **now**. It is part of the current
 agreed state, not a discussion log: no dates, no question numbers, no "the
 checker said", no notes about who decided what. Put it at the end of the
-target, above the grilled line if there is one (*The grilled line*):
+target, above the grilled line if there is one (*The grilled line*),
+separated from what precedes it by one blank line — the same rule the grilled
+line has (*Where it goes, and replacing it*). Add that blank line explicitly:
+the body you edit is the normalized one, and `scripts/normalize.sh` emits it
+without a trailing newline, so `## Known gaps` appended as it stands would be
+glued onto the last line of the body, and one newline alone would still leave
+it directly under that line (under a closing `~~~`, for example). Put two
+newlines between the body and the heading. The section looks like this:
 
 ```
 ## Known gaps
