@@ -30,12 +30,17 @@
 # (never --edit-last), and writes:
 #   - start and end immediately,
 #   - todo changes at most once every 30 seconds (held changes are written at
-#     the next allowed slot, and anything pending is written at the end),
+#     the next allowed slot, and anything pending is written at the end); a
+#     todo change is any change in the todo list the comment shows (an id, a
+#     subject, or a status), not only in the counts,
 #   - a heartbeat every 5 minutes, so a long silent stretch does not look stale.
 #
-# Progress comes from the stream alone: TaskCreate results give task ids,
-# TaskUpdate sets their status, and % = completed / tasks not deleted. With no
-# tasks the comment shows the turn count instead, never a made-up number.
+# Progress comes from the stream alone: TaskCreate results give task ids and
+# subjects, TaskUpdate sets their status (and renames them), and % =
+# completed / tasks not deleted. With no tasks the comment shows the turn
+# count instead, never a made-up number. The comment ends with the todo list
+# itself, in a collapsed section (see TODOS below); the state file never
+# holds it.
 # While running, once a todo is completed, a `Remaining` row (and a
 # ` · ~<duration> left` heading suffix) gives elapsed / completed * (total -
 # completed), the run-wide rate; otherwise that row is present but empty.
