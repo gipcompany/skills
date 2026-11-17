@@ -250,6 +250,14 @@ echo "report.sh: the todo list"
   assert_lacks "a failed TaskUpdate does not rename" "Never applied" "$(last_body)"
   assert_lacks "the old subject is gone after a rename" '`Add tests`' "$(last_body)"
   assert_eq "a rename alone keeps the status" "- ⬜ \`Add the parser tests\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
+
+  # Creation order is task id order, compared as numbers: "2" before "10",
+  # whatever order the results arrive in.
+  f="$TMP/todo-order.jsonl"
+  { create a 10 "ten"; create b 2 "two"; create c 9 "nine"; create d 1 "one"; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "todos are listed by id, compared as numbers (2 before 10)" \
+    "$(printf '%s\n' '- ⬜ `one`' '- ⬜ `two`' '- ⬜ `nine`' '- ⬜ `ten`')" "$(todo_lines "$(last_body)")"
 }
 
 # ===========================================================================
