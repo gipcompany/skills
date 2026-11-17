@@ -63,6 +63,9 @@
 # Japanese on an issue written in Japanese), including comments written before
 # there was a Japanese form; the state is read from the marker alone, which is
 # English in both, so the decision lines above do not depend on the language.
+# The child's todo list at the end of the body (from its first `<details>`
+# line on) holds text jikkyo did not write: there, only the in-progress glyph
+# 🔄 at the start of a todo line changes, to the stopped glyph ⏸️.
 #
 # Exit status: 0 with a decision, 1 as above, 2 on bad input, including
 # empty input or anything that is not a list of comment arrays.
@@ -112,12 +115,25 @@ if [ "$payload" = true ]; then
     | if $s != "running" then empty
       # jikkyo edits only its own account'"'"'s status comments.
       elif $author != "" and .user.login? != $author then empty
-      else {body: ($b
+      else
+        # The body ends with the child'"'"'s todo list, whose subjects are not
+        # jikkyo'"'"'s text: split it off at the first line that starts with
+        # `<details>` (a subject cannot start a line: its newlines are
+        # flattened and every todo line starts with `- ` and a glyph). The
+        # rewrites below run on the part before it, which jikkyo alone
+        # writes; on the todo part, only an in-progress glyph at the start of
+        # a line changes, to the stopped glyph, as an ended run claims
+        # nothing live.
+        ($b | split("\n")) as $ls
+        | ([$ls | to_entries[] | select(.value | startswith("<details>")) | .key] | first // ($ls | length)) as $i
+        | ($ls[$i:] | map(if startswith("- 🔄") then "- ⏸️" + ltrimstr("- 🔄") else . end)) as $todos
+        | {body: ((($ls[:$i] | join("\n"))
         # Only the state changes; a `branch=` field after it is kept as is.
         | sub("^<!-- jikkyo:status v=1 state=running(?<r>(?: branch=[^ ]+)?) -->"; "<!-- jikkyo:status v=1 state=interrupted\(.r) -->")
         | sub("### jikkyo · running"; "### jikkyo · interrupted")
         # A dead run keeps no forward-looking estimate: drop the heading
-        # suffix (` · ~` occurs nowhere else) and empty the Remaining cell,
+        # suffix (` · ~` occurs nowhere else before the todo list) and empty
+        # the Remaining cell,
         # whose label is `Remaining`, or `Remaining (est.)` in older comments.
         | sub(" · ~[^\\n]*"; "")
         | sub("\\| State \\| running \\|"; "| State | interrupted |")
@@ -128,7 +144,8 @@ if [ "$payload" = true ]; then
         | sub("### jikkyo · 実行中"; "### jikkyo · 中断")
         | sub(" · 残り ~[^\\n]*"; "")
         | sub("\\| 状態 \\| 実行中 \\|"; "| 状態 | 中断 |")
-        | sub("\\| 残り \\|[^\\n]*"; "| 残り |  |"))}
+        | sub("\\| 残り \\|[^\\n]*"; "| 残り |  |"))
+          + (if $todos == [] then "" else "\n" + ($todos | join("\n")) end))}
       end' 2>/dev/null)" || usage
   [ -n "$out" ] || { echo "precheck.sh: that comment is not a running jikkyo status comment${author:+ by $author}" >&2; exit 1; }
   printf '%s\n' "$out"

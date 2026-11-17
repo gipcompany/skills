@@ -390,6 +390,33 @@ echo "report.sh: the todo list"
     "$(printf '%s\n' "<details><summary>子の todo（Issue のタスクリストではありません）</summary>" '')" \
     "$(todo_section "$b" | head -n 2)"
   assert_lacks "the Japanese summary carries no count" "%" "$(todo_section "$b")"
+
+  # An ended run keeps its final snapshot, but claims nothing live: on
+  # `failed` and `interrupted`, in-progress todos get the stopped glyph.
+  todos_ended() { create a 1 "done one"; create b 2 "busy one"; create c 3 "left one"
+                  update d 1 completed; update e 2 in_progress; }
+  ended_lines="$(printf '%s\n' '- ✅ `done one`' '- ⏸️ `busy one`' '- ⬜ `left one`')"
+  f="$TMP/todo-failed.jsonl"; { todos_ended; result_err error_max_turns; } > "$f"
+  run_report "$f"
+  assert_eq "failed: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$(last_body)")"
+  f="$TMP/todo-interrupted.jsonl"; todos_ended > "$f"
+  run_report "$f"
+  assert_eq "interrupted: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$(last_body)")"
+  f="$TMP/todo-finished.jsonl"; { todos_ended; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "finished: the snapshot is kept as is" \
+    "$(printf '%s\n' '- ✅ `done one`' '- 🔄 `busy one`' '- ⬜ `left one`')" "$(todo_lines "$b")"
+  # The same comment while it was running (report.sh writes the same lines
+  # then), rewritten by precheck.sh --payload after the run died.
+  running_b="$(printf '%s\n' "$b" | sed -e '1s/state=finished/state=running/' \
+    -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/')"
+  p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$p")"
+  assert_eq "--payload: the head is rewritten as before" "### jikkyo · interrupted · 33%" "$(heading "$p")"
+  assert_eq "--payload: nothing but the state and the glyph changes" \
+    "$(printf '%s\n' "$running_b" | sed -e '1s/state=running/state=interrupted/' -e 's/^### jikkyo · running/### jikkyo · interrupted/' \
+       -e 's/^| State | running |$/| State | interrupted |/' -e 's/^- 🔄 /- ⏸️ /')" "$p"
 }
 
 # ===========================================================================
