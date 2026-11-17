@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/62
 branch: worktree-jikkyo-62-20261117-174248
-updated: 2026-11-17T18:28:33+09:00
-next: show the stopped glyph on failed and interrupted, in report.sh and precheck.sh --payload
+updated: 2026-11-17T18:36:16+09:00
+next: test --payload against hostile subjects, with and without the estimate suffix, en and ja
 
 ## Todos
 
@@ -13,7 +13,7 @@ next: show the stopped glyph on failed and interrupted, in report.sh and prechec
 - [x] Neutralize subjects inside one code span (d885063)
 - [x] Leave the todo section out when there are no todos (c39c6f7)
 - [x] Use the bare label as the summary in en and ja (da173c2)
-- [ ] Show the stopped glyph for in-progress todos on failed and interrupted
+- [x] Show the stopped glyph for in-progress todos on failed and interrupted (c7db9b6)
 - [ ] Split the body at the first details line in precheck.sh --payload
 - [ ] Describe the todo section in SKILL.md, tests/README.md, and README.md
 - [ ] Run the full test suite and shellcheck
@@ -29,6 +29,7 @@ next: show the stopped glyph on failed and interrupted, in report.sh and prechec
 - Subjects are neutralized (backticks to quote, newlines and control characters to one space, empty subject placeholder in en and ja, @user, #1, details tags and comment openers inside one code span): the neutralization assertions in "report.sh: the todo list" pass, full suite green.
 - With no todos the comment has no todo section (also when every todo is deleted, and in the start write): the four "no todos" assertions pass; the only failures in that run were fake-clock timing tests under a load average near 40.
 - The summary is the label alone, in en and in ja, with no count: the summary assertions in "report.sh: the todo list" pass (only load-sensitive state-file timing tests failed in that run).
+- On failed and interrupted, in-progress todos show the stopped glyph in report.sh final write and after precheck.sh --payload, and finished keeps the snapshot: the ended-run assertions pass, full suite 809/809 green.
 
 ## Dead ends and decisions
 
@@ -43,3 +44,4 @@ next: show the stopped glyph on failed and interrupted, in report.sh and prechec
 - The state-file assertion "a todo write updates it" is a pre-existing timing flake: a standalone repro of that scenario with the 0.6 s wait succeeded 11/15 times with main's report.sh and 9/15 with this branch. Not fixed here (out of scope); the full suite is rerun until green.
 - The U+2028 test input is written as UTF-8 byte escapes, since bash 3.2 has no \u in $'...' strings.
 - Under heavy machine load (load average 30-40 from other work) the fake-clock tests with 0.6 s waits fail in bulk; each todo is accepted on its own assertions passing, and the full green run is left to the full-suite todo, retried when the load drops.
+- The body split in --payload is line-based (split on newlines, first line starting with <details>), and the todo-part rewrite is a startswith check per line, the same as the (?m)^ pattern but without depending on regex flags.
