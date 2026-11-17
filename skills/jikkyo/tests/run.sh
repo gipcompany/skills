@@ -355,6 +355,19 @@ echo "report.sh: the todo list"
   new_log; rc=0
   GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
   assert_eq "an empty subject shows the placeholder (ja)" '- ⬜ `（件名なし）`' "$(todo_lines "$(last_body)" | sed -n 3p)"
+
+  # With no todos there is no section, as there is no % either.
+  f="$TMP/todo-none.jsonl"
+  { assistant_text; assistant_tool x Bash '{"command":"ls"}'; tool_result x "a b"; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_lacks "no todos: no todo section" "<details>" "$b"
+  assert_eq "no todos: the body ends with the Remaining row" "| Remaining |  |" "$(printf '%s\n' "$b" | tail -n 1)"
+  assert_lacks "no todos: no todo section in the start write either" "<details>" "$(nth_body 1)"
+  f="$TMP/todo-all-deleted.jsonl"
+  { create a 1 "gone"; update b 1 deleted; result_ok; } > "$f"
+  run_report "$f"
+  assert_lacks "every todo deleted: no todo section" "<details>" "$(last_body)"
 }
 
 # ===========================================================================
