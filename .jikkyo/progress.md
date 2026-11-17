@@ -1,14 +1,14 @@
 issue: https://github.com/gipcompany/skills/issues/62
 branch: worktree-jikkyo-62-20261117-174248
-updated: 2026-11-17T17:59:10+09:00
-next: test the 50-todo cap and the hidden-count line in en and ja
+updated: 2026-11-17T18:05:40+09:00
+next: test the 100-character subject cut
 
 ## Todos
 
 - [x] Parse todo subjects from TaskCreate and renames from TaskUpdate (7497d5d)
 - [x] Make the scheduler change key cover the whole todo list (4c03440)
 - [x] Render todos in creation order with numeric ids (8f52b14)
-- [ ] Cap the list at 50 todos with a hidden-count line
+- [x] Cap the list at 50 todos with a hidden-count line (2072ea7)
 - [ ] Cut subjects at 100 rendered characters
 - [ ] Neutralize subjects inside one code span
 - [ ] Leave the todo section out when there are no todos
@@ -24,6 +24,7 @@ next: test the 50-todo cap and the hidden-count line in en and ja
 - The todo line shows the subject from TaskCreate, and the new subject after a successful TaskUpdate rename; a failed TaskUpdate changes nothing: "report.sh: the todo list" assertions in tests/run.sh pass, full suite green.
 - A change of status alone and a rename alone each trigger a write at the next 30-second slot, counts unchanged: fake-clock assertions in "report.sh: when it writes" pass, full suite green.
 - Todos are listed in creation order with ids compared numerically: "todos are listed by id, compared as numbers" in tests/run.sh passes, full suite green.
+- With more than 50 todos completed ones are hidden oldest first with the en/ja hidden-count line, and with more than 50 open todos in-progress ones stay and the newest pending are hidden: the "cap" assertions in tests/run.sh pass, full suite green.
 
 ## Dead ends and decisions
 
@@ -34,3 +35,4 @@ next: test the 50-todo cap and the hidden-count line in en and ja
 - One full-suite run failed two state-file timing assertions (0.6 s waits); the rerun passed all, and a traced repro showed a write takes about 0.25 s. Treated as a timing flake, not caused by this change.
 - The branch had no upstream, so the first push sets it with -u; later pushes are plain.
 - The scheduler key is `.tasks // {}` so the placeholder state before the first parser line equals an empty list and does not cause a spurious write.
+- One run failed the statusline "50 state files take under a second" timing test at 1.07 s; statusline.sh is untouched and the rerun passed at 0.18 s, so it was machine load.
