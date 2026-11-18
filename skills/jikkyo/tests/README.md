@@ -44,7 +44,9 @@ timing and signal tests waiting on a real scheduler.
   bullets and a body under 10,000 characters, with a last bullet `… and M more (K completed)` / `… ほか M 件（うち完了 K
   件）`; subjects cut at 100 characters after neutralizing, ending in `…`
   (101, exactly 100, Japanese, and whitespace runs that shrink it under the
-  cap); backticks becoming `'`, newlines, control characters (an escape
+  cap), a 100 KB subject cleaned in seconds (it is cut to 800 characters
+  first) and a subject cut there ending in `…` however short it gets;
+  backticks becoming `'`, newlines, control characters (an escape
   sequence too), U+2028, and whitespace runs becoming one space, format
   characters (U+202E, U+2066, U+200B, U+00AD) dropped, an empty,
   whitespace-only, or missing subject showing `(no subject)` / `（件名なし）`,

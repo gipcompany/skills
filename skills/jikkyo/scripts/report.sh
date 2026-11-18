@@ -207,15 +207,20 @@ MAX_SUBJECT=100
 # zero-width spaces) are dropped, so a subject cannot reorder or hide what it
 # shows; control characters, line and paragraph separators, and whitespace
 # runs become one space, ends trimmed; every backtick becomes '; and the
-# result is cut to $max_subject characters, the last one "…".
+# result is cut to $max_subject characters, the last one "…". jq's gsub takes
+# time quadratic in the number of matches, so a subject is first cut to 8 ×
+# $max_subject characters: a huge one costs no more than that, and one that
+# was cut always ends in "…", even when whitespace runs then shrink it.
 # shellcheck disable=SC2016  # jq program
 CLEAN='
 def clean:
-  gsub("\\p{Cf}"; "")
+  (length > $max_subject * 8) as $cut
+  | .[0:$max_subject * 8]
+  | gsub("\\p{Cf}"; "")
   | gsub("[\\p{Cc}\\p{Zl}\\p{Zp}]"; " ") | gsub("\\s+"; " ")
   | ltrimstr(" ") | rtrimstr(" ")
   | gsub("`"; "'"'"'")
-  | if length > $max_subject then .[0:$max_subject - 1] + "…" else . end;
+  | if $cut or length > $max_subject then .[0:$max_subject - 1] + "…" else . end;
 '
 
 # ---------------------------------------------------------------------------

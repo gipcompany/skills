@@ -338,6 +338,20 @@ echo "report.sh: the todo list"
   assert_eq "the cap applies to the rendered text, after whitespace runs collapse" \
     "- ⬜ \`$(printf 'a %.0s' $(seq 1 49))a\`" "$(printf '%s\n' "$lines" | sed -n 4p)"
 
+  # A huge subject is cut before it is cleaned (jq's gsub is quadratic), so it
+  # costs no more than a short one; a subject cut there ends in … even when
+  # its whitespace then shrinks it under the cap.
+  f="$TMP/todo-huge.jsonl"
+  { create a 1 "$(printf 'a %.0s' $(seq 1 50000))"
+    create b 2 "$(printf ' %.0s' $(seq 1 900))tail"; result_ok; } > "$f"
+  t0=$SECONDS
+  run_report "$f"
+  assert_eq "a 100 KB subject is cleaned in seconds" "true" "$([ $((SECONDS - t0)) -lt 10 ] && echo true || echo false)"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "a 100 KB subject is cut to 99 and …" "- ⬜ \`$(printf 'a %.0s' $(seq 1 49))a…\`" "$(printf '%s\n' "$lines" | sed -n 1p)"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_eq "a subject cut before cleaning ends in … however short it gets" '- ⬜ `…`' "$(printf '%s\n' "$lines" | sed -n 2p)"
+
   # Subjects are the child's text and may carry the issue author's: each one
   # is neutralized into a single inline code span.
   f="$TMP/todo-neutral.jsonl"
@@ -823,7 +837,7 @@ echo "report.sh: when it writes"
   assert_eq "no change, no write before the heartbeat" "3" "$(calls)"
   at 1359; settle
   assert_eq "no heartbeat at 4 m 59 s" "3" "$(calls)"
-  at 1360; settle
+  at 1360; settle_write 4
   assert_eq "a heartbeat after 5 minutes without a change" "4" "$(calls)"
   assert_has "the heartbeat refreshes the elapsed time" "| Elapsed | 6m 00s |" "$(last_body)"
 
@@ -859,7 +873,7 @@ echo "report.sh: when it writes"
   at 1061; rename r1 2 "Second, renamed" >&4; settle
   at 1089; settle
   assert_eq "rename alone: held inside the 30 s window" "3" "$(calls)"
-  at 1090; settle
+  at 1090; settle_write 4
   assert_eq "rename alone: written at the next slot" "4" "$(calls)"
   b="$(last_body)"
   assert_eq "rename alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
