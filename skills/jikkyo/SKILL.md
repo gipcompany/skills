@@ -410,25 +410,24 @@ needed because this session is idle while the run goes.
   (and after the todo instruction below) saying so: tick each box as soon as
   its item is done and verified and its commits are pushed (the log
   instruction's `git push` for that todo has succeeded), before moving on to
-  the next item, and not save the ticks for one edit at the end; an item
-  with no commits of its own (for example "a draft PR is open") is ticked as
-  soon as it is verified; tick only verified items, never
-  untick or reword, change nothing
-  but `[ ]` to `[x]` in those lines' task-list boxes, keeping each line's own
-  marker (`- [ ]` becomes `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]` becomes
-  `+ [x]`), and fetch the current body right
-  before each edit, because `gh issue edit --body` replaces the whole body. The
-  instruction is a constant, so nothing from the issue reaches the command
-  line beyond the validated URL, and the goal is met only when every box the
-  child could verify is ticked. The reporters (`report.sh` and you) never
-  write the body: GitHub's issue update has no conditional write. Limits: the
-  instruction is also what the `/goal` evaluator judges, so "only verified" is
-  asked, not enforced; a human editing the body at the same moment can still
-  race the child, and ticking as it goes means more edits and more chances
-  of that; no script checks that a ticked box has a pushed commit behind it;
-  and an issue without a task list is unaffected. The push comes before the
-  tick so that a run stopped between the two leaves an unticked box with
-  its work on the remote, not a ticked box with nothing behind it.
+  the next item, and not save the ticks for one edit at the end; an item with
+  no commits of its own (for example "a draft PR is open") is ticked as soon as
+  it is verified; tick only verified items, never untick or reword, change
+  nothing but `[ ]` to `[x]` in those lines' task-list boxes, keeping each
+  line's own marker (`- [ ]` becomes `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]`
+  becomes `+ [x]`), and fetch the current body right before each edit, because
+  `gh issue edit --body` replaces the whole body. The instruction is a
+  constant, so nothing from the issue reaches the command line beyond the
+  validated URL, and the goal is met only when every box the child could verify
+  is ticked. The reporters (`report.sh` and you) never write the body: GitHub's
+  issue update has no conditional write. Limits: the instruction is also what
+  the `/goal` evaluator judges, so "only verified" is asked, not enforced; a
+  human editing the body at the same moment can still race the child, and
+  ticking as it goes means more edits and more chances of that; no script
+  checks that a ticked box has a pushed commit behind it; and an issue without
+  a task list is unaffected. The push comes before the tick so that a run
+  stopped between the two leaves an unticked box with its work on the remote,
+  not a ticked box with nothing behind it.
 - **Why scripts report, not you.** You get a turn only when the background
   command exits, and a Monitor watch expires after at most 30 minutes.
   `report.sh` writes on its own: the status comment at the start and the end
