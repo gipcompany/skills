@@ -28,7 +28,7 @@ measurable end state, a stated check, and the constraints that matter.
 | Item | The target passes when |
 |---|---|
 | **Goal** | What is to be achieved is stated in the body, in one place. |
-| **Done criteria** | Acceptance criteria are written as checkable items — a task list (`- [ ]`) that `/jikkyo`'s child can tick — each verifiable by a command, a test, or an observable result. |
+| **Done criteria** | Acceptance criteria are written as checkable items — a task list (`* [ ]` or `- [ ]`, either marker) that `/jikkyo`'s child can tick — each verifiable by a command, a test, or an observable result. Plain bullets (`* foo`, `- foo`) are a gap. |
 | **Scope** | What is out of scope is stated, so the run does not wander. |
 | **No open decisions** | No TODO, TBD, "to be decided", or question is left unresolved, and every option the interview chose between is recorded as chosen. |
 | **Self-contained** | Nothing refers to the conversation ("as discussed", "the option above"), and the terms, files, and commands the run needs are named in the body. |

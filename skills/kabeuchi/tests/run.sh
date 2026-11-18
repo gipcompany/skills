@@ -1039,6 +1039,51 @@ echo "agents/kabeuchi-voter.md"
   rm -rf "$d"
 }
 
+echo "done criteria marker wording (SKILL.md, references)"
+# The backticks below are literal markdown, never command substitution.
+# shellcheck disable=SC2016
+{
+  # Phase 2 writes done criteria as task-list items, falling back to `* [ ]`,
+  # and the ready-for-goal checker's Done criteria row must accept that marker
+  # as well as `- [ ]`. If the two drift apart, the checker reports every
+  # session's own done criteria as a gap.
+  SKILL_MD="${HERE}/../SKILL.md"
+  REF="${HERE}/../references/ready-for-goal.md"
+
+  # done_row <file>: the checklist row whose first cell is **Done criteria**.
+  done_row() { grep -F -- '| **Done criteria** |' "$1"; }
+  # phase2_rule <file>: the task-list rule paragraph inside Phase 2 only.
+  phase2_rule() {
+    awk '/^## Phase 2:/ { on = 1; next } /^## / { on = 0 } on' "$1" |
+      grep -F -- '**Done criteria are written as task-list items.**'
+  }
+  # row_ok <file>: exit 0 if the Done criteria row names both markers.
+  row_ok() {
+    local row; row="$(done_row "$1")" || return 1
+    printf '%s' "$row" | grep -qF -- '`* [ ]`' && printf '%s' "$row" | grep -qF -- '`- [ ]`'
+  }
+  # rule_ok <file>: exit 0 if Phase 2's rule names `* [ ]` as the fallback.
+  rule_ok() { phase2_rule "$1" | grep -qF -- 'otherwise `* [ ]`'; }
+
+  if row_ok "$REF"; then ok "the Done criteria row names both \`* [ ]\` and \`- [ ]\`"
+  else bad "the Done criteria row in ready-for-goal.md does not name both \`* [ ]\` and \`- [ ]\`"; fi
+  if rule_ok "$SKILL_MD"; then ok "SKILL.md Phase 2 names \`* [ ]\` as the fallback marker"
+  else bad "SKILL.md Phase 2 does not name \`* [ ]\` as the fallback task-list marker"; fi
+
+  # The checks fail when either side drifts.
+  d="$(mktemp -d)"
+  printf '| **Done criteria** | a task list (`- [ ]`) that can be ticked. |\n' >"$d/ref.md"
+  rc=0; row_ok "$d/ref.md" || rc=$?
+  assert_eq "a Done criteria row naming only \`- [ ]\` fails the check" "1" "$rc"
+  printf '## Phase 1: x\n\n**Done criteria are written as task-list items.** otherwise `* [ ]`.\n\n## Phase 2: y\n\nnothing here\n' >"$d/skill.md"
+  rc=0; rule_ok "$d/skill.md" || rc=$?
+  assert_eq "a fallback rule outside Phase 2 fails the check" "1" "$rc"
+  printf '## Phase 2: y\n\n**Done criteria are written as task-list items.** otherwise `- [ ]`.\n\n## Phase 3: z\n' >"$d/skill.md"
+  rc=0; rule_ok "$d/skill.md" || rc=$?
+  assert_eq "a Phase 2 rule without the \`* [ ]\` fallback fails the check" "1" "$rc"
+  rm -rf "$d"
+}
+
 echo
 printf 'total: %d passed, %d failed, %d skipped\n' "$pass" "$fail" "$skipped"
 [ "$fail" -eq 0 ]

@@ -148,6 +148,14 @@ Exit status is non-zero if any assertion fails; the last line reports
   sets must be equal, so a phrase added to only one of them fails. The check is
   shown to fail on a description without a phrase — even when the phrase
   appears in the body below the frontmatter.
+- **done criteria marker wording** — Phase 2 writes done criteria as
+  task-list items and the "ready for `/goal`" checker judges them, so the two
+  must agree on the marker, or the checker reports every session's own done
+  criteria as a gap. The **Done criteria** row in
+  `references/ready-for-goal.md` must name both `* [ ]` and `- [ ]`, and the
+  task-list rule in `SKILL.md`'s Phase 2 section must name `* [ ]` as the
+  fallback marker. The test shows that it fails on a row naming only `- [ ]`,
+  on a rule placed outside Phase 2, and on a rule with another fallback.
 - **no temp litter** — running `merge3.sh` from a working directory leaves no
   extra files behind (it does all work under `mktemp -d` and cleans up on exit).
 
