@@ -149,8 +149,10 @@ timing and signal tests waiting on a real scheduler.
   (one argument: the URL, then the fixed instruction to make `TaskCreate`
   todos up front, one per task-list item when there is one, and complete them
   with `TaskUpdate`, then the fixed instruction to tick each box as soon as
-  it is verified, not all at the end, tick only verified boxes, change only `- [ ]` to `- [x]`,
-  and fetch the body before each edit, then, last, the fixed instruction to
+  it is verified, not all at the end, tick only verified boxes, change only
+  `[ ]` to `[x]` in the box and keep each line's own marker (`-`, `*` or `+`;
+  the old wording that named only `- [ ]` fails the run), and fetch the body
+  before each edit, then, last, the fixed instruction to
   keep `.jikkyo/progress.md` in its fixed shape, updating, committing, and
   pushing it after every todo, keeping secrets, environment values, and
   command output out of it, and deleting it in one pushed commit right before
