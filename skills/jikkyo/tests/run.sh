@@ -2380,7 +2380,7 @@ echo "SKILL.md"
   # launch.sh (#68). It is joined into one line with whitespace runs
   # collapsed, so rewrapping the bullet does not matter (#70).
   who_writes="$(awk '/^- \*\*Who writes the issue body\.\*\*/ { on = 1; print; next }
-    on && /^  / { print; next } { on = 0 }' "$SKILL_MD" | tr -s ' \n' '  ')"
+    on && /^  / { print; next } { on = 0 }' <<<"$skill" | tr -s '[:space:]' ' ')"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: the tick rule keeps the - marker (#70)" '`- [ ]` becomes `- [x]`' "$who_writes"
   # shellcheck disable=SC2016  # literal backticks

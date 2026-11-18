@@ -345,8 +345,8 @@ timing and signal tests waiting on a real scheduler.
   script mentions `settings.json`. The repository README documents both
   status line setups with `refreshInterval` and why, and its appended
   example, run as written, appends the segment (and nothing when there is
-  no run). Its "Who writes the issue body" bullet, joined into one line with
-  whitespace runs collapsed so rewrapping does not matter, describes the
-  same tick rule as `launch.sh`: it names `- [ ]` becomes `- [x]`, `* [ ]`
-  becomes `* [x]`, and `+ [ ]` becomes `+ [x]`, and no longer has the old
-  phrase that named only the `-` marker.
+  no run). `SKILL.md`'s "Who writes the issue body" bullet, joined into one
+  line with whitespace runs collapsed so rewrapping does not matter,
+  describes the same tick rule as `launch.sh`: it says that `- [ ]` becomes
+  `- [x]`, `* [ ]` becomes `* [x]`, and `+ [ ]` becomes `+ [x]`, and no
+  longer has the old phrase that named only the `-` marker.
