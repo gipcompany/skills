@@ -1052,9 +1052,12 @@ echo "done criteria marker wording (SKILL.md, references)"
 
   # done_row <file>: the checklist row whose first cell is **Done criteria**.
   done_row() { grep -F -- '| **Done criteria** |' "$1"; }
-  # phase2_rule <file>: the task-list rule paragraph inside Phase 2 only.
+  # phase2_rule <file>: the task-list rule paragraph inside Phase 2 only,
+  # joined into one line, so wrapping the paragraph over several lines
+  # does not change the result.
   phase2_rule() {
     awk '/^## Phase 2:/ { on = 1; next } /^## / { on = 0 } on' "$1" |
+      awk 'BEGIN { RS = "" } { gsub(/\n/, " "); print }' |
       grep -F -- '**Done criteria are written as task-list items.**'
   }
   # row_ok <file>: exit 0 if the Done criteria row names both markers.
