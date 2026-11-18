@@ -2376,6 +2376,19 @@ echo "SKILL.md"
   assert_has "SKILL.md: a todo change is any change in the todo list (#62)" "A todo change is any change in the todo list (a todo's id," "$skill"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: ended runs show the stopped glyph (#62)" '`failed` or `interrupted` its in-progress todos show ⏸️, also when' "$skill"
+  # The "Who writes the issue body" bullet describes the same tick rule as
+  # launch.sh (#68). It is joined into one line with whitespace runs
+  # collapsed, so rewrapping the bullet does not matter (#70).
+  who_writes="$(awk '/^- \*\*Who writes the issue body\.\*\*/ { on = 1; print; next }
+    on && /^  / { print; next } { on = 0 }' <<<"$skill" | tr -s '[:space:]' ' ')"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: the tick rule keeps the - marker (#70)" '`- [ ]` becomes `- [x]`' "$who_writes"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: ...the * marker (#70)" '`* [ ]` becomes `* [x]`' "$who_writes"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: ...and the + marker (#70)" '`+ [ ]` becomes `+ [x]`' "$who_writes"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_lacks "SKILL.md: ...and no longer names only the - marker (#70)" 'but `- [ ]` to `- [x]`' "$who_writes"
   assert_has "tests/README.md: lists the todo-list tests (#62)" "**\`report.sh\`, the todo list**" "$(cat "$HERE/README.md")"
   # The repository README is there in a checkout of the repo, not in an installed copy.
   if [ -f "$README_MD" ]; then

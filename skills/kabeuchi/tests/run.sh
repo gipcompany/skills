@@ -1052,9 +1052,12 @@ echo "done criteria marker wording (SKILL.md, references)"
 
   # done_row <file>: the checklist row whose first cell is **Done criteria**.
   done_row() { grep -F -- '| **Done criteria** |' "$1"; }
-  # phase2_rule <file>: the task-list rule paragraph inside Phase 2 only.
+  # phase2_rule <file>: the task-list rule paragraph inside Phase 2 only,
+  # joined into one line, so wrapping the paragraph over several lines
+  # does not change the result.
   phase2_rule() {
     awk '/^## Phase 2:/ { on = 1; next } /^## / { on = 0 } on' "$1" |
+      awk 'BEGIN { RS = "" } { gsub(/\n/, " "); print }' |
       grep -F -- '**Done criteria are written as task-list items.**'
   }
   # row_ok <file>: exit 0 if the Done criteria row names both markers.
@@ -1081,6 +1084,14 @@ echo "done criteria marker wording (SKILL.md, references)"
   printf '## Phase 2: y\n\n**Done criteria are written as task-list items.** otherwise `- [ ]`.\n\n## Phase 3: z\n' >"$d/skill.md"
   rc=0; rule_ok "$d/skill.md" || rc=$?
   assert_eq "a Phase 2 rule without the \`* [ ]\` fallback fails the check" "1" "$rc"
+
+  # And they pass on a correct input, including a rule wrapped over lines.
+  printf '| **Done criteria** | a task list (`* [ ]` or `- [ ]`) that can be ticked. |\n' >"$d/ref.md"
+  rc=0; row_ok "$d/ref.md" || rc=$?
+  assert_eq "a Done criteria row naming both \`* [ ]\` and \`- [ ]\` passes the check" "0" "$rc"
+  printf '## Phase 2: y\n\n**Done criteria are written as task-list items.** Pick\nthe marker in this order: (1) one; (2) two;\n(3) otherwise `* [ ]`.\n\n## Phase 3: z\n' >"$d/skill.md"
+  rc=0; rule_ok "$d/skill.md" || rc=$?
+  assert_eq "a Phase 2 rule wrapped over several lines passes the check" "0" "$rc"
   rm -rf "$d"
 }
 

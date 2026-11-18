@@ -154,8 +154,13 @@ Exit status is non-zero if any assertion fails; the last line reports
   criteria as a gap. The **Done criteria** row in
   `references/ready-for-goal.md` must name both `* [ ]` and `- [ ]`, and the
   task-list rule in `SKILL.md`'s Phase 2 section must name `* [ ]` as the
-  fallback marker. The test shows that it fails on a row naming only `- [ ]`,
-  on a rule placed outside Phase 2, and on a rule with another fallback.
+  fallback marker. The rule is matched per paragraph: each
+  blank-line-separated paragraph inside Phase 2 is joined into one line, so
+  wrapping the rule over several lines does not fail the test. The test
+  shows that it fails on a row naming only `- [ ]`, on a rule placed outside
+  Phase 2, and on a rule with another fallback, and passes on positive
+  fixtures: a row naming both `* [ ]` and `- [ ]`, and a Phase 2 rule wrapped
+  over several lines with the fallback on a later line than the bold lead-in.
 - **no temp litter** — running `merge3.sh` from a working directory leaves no
   extra files behind (it does all work under `mktemp -d` and cleans up on exit).
 
