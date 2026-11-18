@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/70
 branch: worktree-jikkyo-70-20261119-030304
-updated: 2026-11-19T03:31:00+09:00
-next: Update both tests READMEs
+updated: 2026-11-19T03:37:00+09:00
+next: Run both test suites
 
 ## Todos
 
@@ -10,7 +10,7 @@ next: Update both tests READMEs
 - [x] kabeuchi: add two positive fixtures (a871040)
 - [x] jikkyo: rewrap "Who writes the issue body" bullet (ff0fd11)
 - [x] jikkyo: wording test for SKILL.md tick rule (4d03636)
-- [ ] Update both tests READMEs
+- [x] Update both tests READMEs (d965cc0)
 - [ ] Run both test suites
 - [ ] Delete progress log and open PR
 
@@ -21,6 +21,7 @@ next: Update both tests READMEs
 - No positive fixture: two fixtures assert rc 0 for row_ok and a wrapped rule_ok; kabeuchi tests pass (235 passed)
 - Uneven line wrapping: bullet refilled greedily, every line at most 79 characters with the two-space indent; whitespace-collapsed file is identical to before; jikkyo tests pass
 - No wording test for the SKILL.md description: four new assertions on the joined bullet pass (845 passed), and the pre-#69 bullet was shown to trip both the assert_has and the assert_lacks
+- Each tests README describes the test it changed or gained: kabeuchi entry names the per-paragraph match and positive fixtures (b007dea), jikkyo SKILL.md entry lists the tick wording check (d965cc0); read back in the diff
 
 ## Dead ends and decisions
 
