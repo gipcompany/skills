@@ -71,10 +71,12 @@ if [ "$*" = "api repos/o/r/issues/12" ]; then
   if [ -n "${GH_ISSUE:-}" ]; then cat "$GH_ISSUE"; else echo '{"title":"An issue","body":"In English."}'; fi
   exit "${GH_ISSUE_RC:-0}"
 fi
+# The count goes up last, and by a rename, so a test that sees count n can
+# already read $n.args and $n.body in full.
 n=$(( $(cat "$GH_LOG/count" 2>/dev/null || echo 0) + 1 ))
-echo "$n" > "$GH_LOG/count"
 printf '%s\n' "$*" > "$GH_LOG/$n.args"
 cat > "$GH_LOG/$n.body"
+echo "$n" > "$GH_LOG/count.tmp" && mv -f "$GH_LOG/count.tmp" "$GH_LOG/count"
 case "$*" in *"-X POST"*) printf '777\thttps://github.com/o/r/issues/12#issuecomment-777\n' ;; esac
 exit 0
 EOF
@@ -122,10 +124,18 @@ tool_result() {  # <tool_use id> <content> [is_error]
   jq -cn --arg id "$1" --arg c "$2" --argjson err "${3:-false}" \
     '{type: "user", message: {content: [{type: "tool_result", tool_use_id: $id, content: $c, is_error: $err}]}}'
 }
-create() {  # <tool_use id> <task id>
-  assistant_tool "$1" TaskCreate '{"subject":"s","description":"d"}'
+create() {  # <tool_use id> <task id> [subject]
+  assistant_tool "$1" TaskCreate "$(jq -cn --arg s "${3-s}" '{subject: $s, description: "d"}')"
   tool_result "$1" "Task #$2 created successfully: s"
 }
+rename() {  # <tool_use id> <task id> <subject> [is_error]
+  assistant_tool "$1" TaskUpdate "$(jq -cn --arg t "$2" --arg s "$3" '{taskId: $t, subject: $s}')"
+  tool_result "$1" "Updated task #$2 subject" "${4:-false}"
+}
+# todo_section <body>: from the first `<details>` line to the end.
+todo_section() { printf '%s\n' "$1" | sed -n '/^<details>/,$p'; }
+# todo_lines <body>: the bullets of the todo section.
+todo_lines() { todo_section "$1" | grep '^- '; }
 update() {  # <tool_use id> <task id> <status>
   assistant_tool "$1" TaskUpdate "$(jq -cn --arg t "$2" --arg s "$3" '{taskId: $t, status: $s}')"
   tool_result "$1" "Updated task #$2 status"
@@ -220,6 +230,283 @@ echo "report.sh: progress"
   { echo 'not json'; echo '[1,2]'; create a 1; update b 1 completed; result_ok; } > "$f"
   run_report "$f"
   assert_eq "lines that are not JSON objects are skipped" "### jikkyo · finished · 100%" "$(heading "$(last_body)")"
+}
+
+# ===========================================================================
+echo "report.sh: the todo list"
+# shellcheck disable=SC2016  # literal backticks: the expected todo lines are code spans
+{
+  # The subject comes from TaskCreate; a successful TaskUpdate with a subject
+  # renames the todo; a failed one changes nothing.
+  f="$TMP/todo-subjects.jsonl"
+  { create a 1 "Write the parser"; create b 2 "Add tests"; create c 3 "Open the PR"
+    rename d 2 "Add the parser tests"
+    rename e 3 "Never applied" true
+    update g 1 completed
+    assistant_tool h TaskUpdate '{"taskId":"3","status":"in_progress","subject":"Open the draft PR"}'
+    tool_result h "Updated task #3 status, subject"
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "todo lines show the TaskCreate subject, renames, and the status glyphs" \
+    "$(printf '%s\n' '- ✅ `Write the parser`' '- ⬜ `Add the parser tests`' '- 🔄 `Open the draft PR`')" "$lines"
+  assert_lacks "a failed TaskUpdate does not rename" "Never applied" "$(last_body)"
+  assert_lacks "the old subject is gone after a rename" '`Add tests`' "$(last_body)"
+  assert_eq "a rename alone keeps the status" "- ⬜ \`Add the parser tests\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
+
+  # Creation order is task id order, compared as numbers: "2" before "10",
+  # whatever order the results arrive in.
+  f="$TMP/todo-order.jsonl"
+  { create a 10 "ten"; create b 2 "two"; create c 9 "nine"; create d 1 "one"; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "todos are listed by id, compared as numbers (2 before 10)" \
+    "$(printf '%s\n' '- ⬜ `one`' '- ⬜ `two`' '- ⬜ `nine`' '- ⬜ `ten`')" "$(todo_lines "$(last_body)")"
+
+  # Over 50 todos, completed ones are hidden first, oldest first, and a last
+  # bullet counts the hidden ones.
+  f="$TMP/todo-cap.jsonl"
+  { for i in $(seq 1 60); do create "c$i" "$i" "todo $i"; done
+    for i in $(seq 1 15); do update "u$i" "$i" completed; done
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "cap: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
+  assert_eq "cap: the oldest completed todos are hidden first" '- ✅ `todo 11`' "$(printf '%s\n' "$lines" | head -n 1)"
+  assert_has "cap: the newest todo is still shown" '- ⬜ `todo 60`' "$lines"
+  assert_eq "cap: the last bullet counts the hidden ones (en)" "- … and 10 more (10 completed)" "$(printf '%s\n' "$lines" | tail -n 1)"
+  jq -cn '{title: "子の todo", body: ""}' > "$TMP/issue-ja-todos.json"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  assert_eq "cap: the last bullet counts the hidden ones (ja)" "- … ほか 10 件（うち完了 10 件）" "$(todo_lines "$(last_body)" | tail -n 1)"
+
+  # When the completed ones are not enough, the newest pending todos are
+  # hidden next; an in-progress todo is kept while pending ones are left.
+  f="$TMP/todo-cap-open.jsonl"
+  { for i in $(seq 1 55); do create "c$i" "$i" "todo $i"; done
+    for i in 1 2 3; do update "u$i" "$i" completed; done
+    update u55 55 in_progress
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "cap, open: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
+  assert_lacks "cap, open: every completed todo is hidden" "✅" "$lines"
+  assert_eq "cap, open: the newest pending todos are hidden" \
+    "$(printf '%s\n' '- ⬜ `todo 51`' '- ⬜ `todo 52`' '- 🔄 `todo 55`' '- … and 5 more (3 completed)')" \
+    "$(printf '%s\n' "$lines" | tail -n 4)"
+  assert_eq "cap, open: the oldest pending todo is kept" '- ⬜ `todo 4`' "$(printf '%s\n' "$lines" | head -n 1)"
+
+  # More than 50 in-progress todos: all the pending ones are hidden, then the
+  # newest in-progress ones, so the cap holds whatever the statuses.
+  f="$TMP/todo-cap-busy.jsonl"
+  { for i in $(seq 1 55); do create "c$i" "$i" "todo $i"; done
+    for i in $(seq 1 52); do update "u$i" "$i" in_progress; done
+    result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "cap, busy: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
+  assert_eq "cap, busy: 50 in-progress todos stay visible" "50" "$(printf '%s\n' "$lines" | grep -c '🔄')"
+  assert_lacks "cap, busy: every pending todo is hidden" "⬜" "$lines"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_eq "cap, busy: the newest in-progress todos are hidden" \
+    "$(printf '%s\n' '- 🔄 `todo 50`' '- … and 5 more (0 completed)')" "$(printf '%s\n' "$lines" | tail -n 2)"
+
+  # The cap bounds the comment: 1000 in-progress todos with long subjects
+  # still give a body far under GitHub's 65,536-character limit.
+  long="$(printf 'x%.0s' $(seq 1 300))"
+  f="$TMP/todo-cap-huge.jsonl"
+  { for i in $(seq 1 1000); do create "c$i" "$i" "$long $i"; update "u$i" "$i" in_progress; done
+    result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "cap, huge: 50 todo lines and one hidden-count line" "51" "$(todo_lines "$b" | wc -l | tr -d ' ')"
+  assert_eq "cap, huge: the last bullet counts the hidden ones" "- … and 950 more (0 completed)" "$(todo_lines "$b" | tail -n 1)"
+  assert_eq "cap, huge: the body is under 10,000 characters" "true" \
+    "$(jq -r '.body | length < 10000' "$GH_LOG/$(calls).body")"
+
+  # A subject over 100 rendered characters is cut to 100, the last one "…".
+  # The length is counted after neutralizing, in characters, not bytes.
+  a100="$(printf 'a%.0s' $(seq 1 100))"
+  ja120="$(printf 'あ%.0s' $(seq 1 120))"
+  f="$TMP/todo-long.jsonl"
+  { create a 1 "${a100}b"; create b 2 "$a100"; create c 3 "$ja120"
+    create d 4 "$(printf 'a   %.0s' $(seq 1 50))"; result_ok; } > "$f"
+  run_report "$f"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "a subject of 101 characters is cut to 99 and …" "- ⬜ \`${a100:0:99}…\`" "$(printf '%s\n' "$lines" | sed -n 1p)"
+  assert_eq "a subject of exactly 100 characters is kept" "- ⬜ \`${a100}\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
+  assert_eq "a long Japanese subject is cut by characters" "- ⬜ \`$(printf 'あ%.0s' $(seq 1 99))…\`" "$(printf '%s\n' "$lines" | sed -n 3p)"
+  assert_eq "the cap applies to the rendered text, after whitespace runs collapse" \
+    "- ⬜ \`$(printf 'a %.0s' $(seq 1 49))a\`" "$(printf '%s\n' "$lines" | sed -n 4p)"
+
+  # A huge subject is cut before it is cleaned (jq's gsub is quadratic), so it
+  # costs no more than a short one; a subject cut there ends in … even when
+  # its whitespace then shrinks it under the cap.
+  f="$TMP/todo-huge.jsonl"
+  { create a 1 "$(printf 'a %.0s' $(seq 1 50000))"
+    create b 2 "$(printf ' %.0s' $(seq 1 900))tail"; result_ok; } > "$f"
+  t0=$SECONDS
+  run_report "$f"
+  assert_eq "a 100 KB subject is cleaned in seconds" "true" "$([ $((SECONDS - t0)) -lt 10 ] && echo true || echo false)"
+  lines="$(todo_lines "$(last_body)")"
+  assert_eq "a 100 KB subject is cut to 99 and …" "- ⬜ \`$(printf 'a %.0s' $(seq 1 49))a…\`" "$(printf '%s\n' "$lines" | sed -n 1p)"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_eq "a subject cut before cleaning ends in … however short it gets" '- ⬜ `…`' "$(printf '%s\n' "$lines" | sed -n 2p)"
+
+  # Subjects are the child's text and may carry the issue author's: each one
+  # is neutralized into a single inline code span.
+  f="$TMP/todo-neutral.jsonl"
+  { create a 1 'run `ls` and ``x``'
+    create b 2 $'one\ntwo\r\nthree\tfour\a five\x1b[31m  six\xe2\x80\xa8seven'
+    create c 3 ""
+    create d 4 $' \n\t '
+    assistant_tool e TaskCreate '{"description":"no subject at all"}'; tool_result e "Task #5 created successfully"
+    create f 6 "ping @user about #1"
+    create g 7 "<details><summary>x</summary>"
+    create h 8 "</details> and more"
+    create i 9 "<!-- jikkyo:status v=1 state=finished -->"
+    create j 10 "[link](https://example.com) <b>bold</b> &amp; \\_x\\_"
+    create k 11 $'safe\xe2\x80\xaetxt.exe\xe2\x81\xa6x\xe2\x80\x8by\xc2\xadz'
+    result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  lines="$(todo_lines "$b")"
+  assert_eq "backticks become ', so the subject stays in one span" "- ⬜ \`run 'ls' and ''x''\`" "$(printf '%s\n' "$lines" | sed -n 1p)"
+  assert_eq "newlines, control characters, and whitespace runs become one space" \
+    "- ⬜ \`one two three four five [31m six seven\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
+  assert_eq "an empty subject shows the placeholder (en)" '- ⬜ `(no subject)`' "$(printf '%s\n' "$lines" | sed -n 3p)"
+  assert_eq "a whitespace-only subject shows the placeholder" '- ⬜ `(no subject)`' "$(printf '%s\n' "$lines" | sed -n 4p)"
+  assert_eq "a TaskCreate with no subject shows the placeholder" '- ⬜ `(no subject)`' "$(printf '%s\n' "$lines" | sed -n 5p)"
+  assert_eq "mentions, references, HTML, and comments stay inside one code span" \
+    "$(printf '%s\n' '- ⬜ `ping @user about #1`' '- ⬜ `<details><summary>x</summary>`' '- ⬜ `</details> and more`' \
+       '- ⬜ `<!-- jikkyo:status v=1 state=finished -->`' '- ⬜ `[link](https://example.com) <b>bold</b> &amp; \_x\_`')" \
+    "$(printf '%s\n' "$lines" | sed -n '6,10p')"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_eq "format characters (bidi controls, zero-width space, soft hyphen) are dropped" \
+    '- ⬜ `safetxt.exexyz`' "$(printf '%s\n' "$lines" | sed -n 11p)"
+  assert_eq "every todo line is one glyph and one code span with no backtick inside" "11" \
+    "$(printf '%s\n' "$lines" | grep -Ec '^- ⬜ `[^`]+`$')"
+  assert_eq "the section is closed once, by its own last line" "</details>" \
+    "$(todo_section "$b" | grep -n '^</details>' | sed 's/^[0-9]*://')"
+  assert_eq "...which is the last line of the body" "</details>" "$(printf '%s\n' "$b" | tail -n 1)"
+  assert_lacks "no control character reaches the comment" "$(printf '\033')" "$b"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  assert_eq "an empty subject shows the placeholder (ja)" '- ⬜ `（件名なし）`' "$(todo_lines "$(last_body)" | sed -n 3p)"
+
+  # With no todos there is no section, as there is no % either.
+  f="$TMP/todo-none.jsonl"
+  { assistant_text; assistant_tool x Bash '{"command":"ls"}'; tool_result x "a b"; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_lacks "no todos: no todo section" "<details>" "$b"
+  assert_eq "no todos: the body ends with the Remaining row" "| Remaining |  |" "$(printf '%s\n' "$b" | tail -n 1)"
+  assert_lacks "no todos: no todo section in the start write either" "<details>" "$(nth_body 1)"
+  f="$TMP/todo-all-deleted.jsonl"
+  { create a 1 "gone"; update b 1 deleted; result_ok; } > "$f"
+  run_report "$f"
+  assert_lacks "every todo deleted: no todo section" "<details>" "$(last_body)"
+
+  # The summary is the label alone: the % stays in the heading and the
+  # Progress row. A blank line follows it, so the list is read as Markdown.
+  f="$TMP/todo-summary.jsonl"
+  { create a 1 "one"; create b 2 "two"; update c 1 completed; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "the summary is the label alone (en), then a blank line" \
+    "$(printf '%s\n' "<details><summary>Child's todos (not the issue's task list)</summary>" '')" \
+    "$(todo_section "$b" | head -n 2)"
+  assert_eq "the section follows the table after a blank line" \
+    "$(printf '%s\n' '| Remaining |  |' '' "<details><summary>Child's todos (not the issue's task list)</summary>")" \
+    "$(printf '%s\n' "$b" | grep -A 2 '^| Remaining')"
+  assert_lacks "the summary carries no count" "%" "$(todo_section "$b")"
+  assert_lacks "no todo line is a task-list item" "- [" "$(todo_section "$b")"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  b="$(last_body)"
+  assert_eq "the summary is the label alone (ja), then a blank line" \
+    "$(printf '%s\n' "<details><summary>子の todo（Issue のタスクリストではありません）</summary>" '')" \
+    "$(todo_section "$b" | head -n 2)"
+  assert_lacks "the Japanese summary carries no count" "%" "$(todo_section "$b")"
+
+  # An ended run keeps its final snapshot, but claims nothing live: on
+  # `failed` and `interrupted`, in-progress todos get the stopped glyph.
+  todos_ended() { create a 1 "done one"; create b 2 "busy one"; create c 3 "left one"
+                  update d 1 completed; update e 2 in_progress; }
+  ended_lines="$(printf '%s\n' '- ✅ `done one`' '- ⏸️ `busy one`' '- ⬜ `left one`')"
+  f="$TMP/todo-failed.jsonl"; { todos_ended; result_err error_max_turns; } > "$f"
+  run_report "$f"
+  assert_eq "failed: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$(last_body)")"
+  f="$TMP/todo-interrupted.jsonl"; todos_ended > "$f"
+  run_report "$f"
+  assert_eq "interrupted: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$(last_body)")"
+  f="$TMP/todo-finished.jsonl"; { todos_ended; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "finished: the snapshot is kept as is" \
+    "$(printf '%s\n' '- ✅ `done one`' '- 🔄 `busy one`' '- ⬜ `left one`')" "$(todo_lines "$b")"
+  # The same comment while it was running (report.sh writes the same lines
+  # then), rewritten by precheck.sh --payload after the run died.
+  running_b="$(printf '%s\n' "$b" | sed -e '1s/state=finished/state=running/' \
+    -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/')"
+  p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$p")"
+  assert_eq "--payload: the head is rewritten as before" "### jikkyo · interrupted · 33%" "$(heading "$p")"
+  assert_eq "--payload: nothing but the state and the glyph changes" \
+    "$(printf '%s\n' "$running_b" | sed -e '1s/state=running/state=interrupted/' -e 's/^### jikkyo · running/### jikkyo · interrupted/' \
+       -e 's/^| State | running |$/| State | interrupted |/' -e 's/^- 🔄 /- ⏸️ /')" "$p"
+
+  # --payload rewrites only the part before the todo list: subjects that look
+  # like what it rewrites are left as they are.
+  hostile() {
+    create a 1 'a · ~3m left'; create b 2 'b · 残り ~3m'; create c 3 '| State | running |'
+    create d 4 '| Remaining | ~1m |'; create e 5 '<!-- jikkyo:status v=1 state=running -->'
+    create f 6 '</details>'; create g 7 '### jikkyo · running · 50%'; create h 8 '### jikkyo · 実行中 · 50%'
+    create i 9 '| 状態 | 実行中 |'; create j 10 '| 残り | ~1m |'
+    update k 3 in_progress; update l 5 in_progress; update m 7 in_progress
+  }
+  # as_running <finished body>: the same comment as report.sh writes it while
+  # running, in either language.
+  as_running() {
+    printf '%s\n' "$1" | sed -e '1s/state=finished/state=running/' \
+      -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/' \
+      -e 's/^### jikkyo · 完了/### jikkyo · 実行中/' -e 's/^| 状態 | 完了 |$/| 状態 | 実行中 |/'
+  }
+  # stopped <todo section>: what --payload must make of it.
+  stopped() { printf '%s\n' "$1" | sed 's/^- 🔄 /- ⏸️ /'; }
+  f="$TMP/todo-hostile.jsonl"; { hostile; result_ok; } > "$f"
+  run_report "$f"
+  running_b="$(as_running "$(last_body)")"
+  assert_eq "hostile subjects: the running comment has no estimate suffix" "### jikkyo · running · 0%" "$(heading "$running_b")"
+  p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload, no estimate suffix: the heading" "### jikkyo · interrupted · 0%" "$(heading "$p")"
+  assert_eq "--payload, no estimate suffix: the State row" "| State | interrupted |" "$(printf '%s\n' "$p" | grep '^| State')"
+  assert_eq "--payload, no estimate suffix: the marker" "<!-- jikkyo:status v=1 state=interrupted -->" "$(printf '%s\n' "$p" | head -n 1)"
+  assert_eq "--payload, no estimate suffix: every hostile subject is left as it is" \
+    "$(stopped "$(todo_section "$running_b")")" "$(todo_section "$p")"
+  assert_has "...including one with ' · ~'" '`a · ~3m left`' "$p"
+  assert_has "...and one with '</details>'" '`</details>`' "$p"
+  # With an estimate suffix in the heading and the Remaining row.
+  with_eta="$(printf '%s\n' "$running_b" | sed -e 's/^\(### jikkyo · running · 0%\)$/\1 · ~7m 30s left/' \
+    -e 's/^| Remaining |  |$/| Remaining | ~7m 30s (estimate) |/')"
+  p="$(jq -cn --arg b "$with_eta" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "--payload, with an estimate: the suffix is dropped" "### jikkyo · interrupted · 0%" "$(heading "$p")"
+  assert_eq "--payload, with an estimate: the Remaining row is emptied" "| Remaining |  |" "$(printf '%s\n' "$p" | grep '^| Remaining')"
+  assert_eq "--payload, with an estimate: every hostile subject is left as it is" \
+    "$(stopped "$(todo_section "$running_b")")" "$(todo_section "$p")"
+  # The Japanese form.
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-ja-todos.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  running_b="$(as_running "$(last_body)")"
+  p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
+  assert_eq "Japanese --payload, hostile subjects: the heading" "### jikkyo · 中断 · 0%" "$(heading "$p")"
+  assert_eq "Japanese --payload, hostile subjects: the State row" "| 状態 | 中断 |" "$(printf '%s\n' "$p" | grep '^| 状態')"
+  assert_eq "Japanese --payload: every hostile subject is left as it is" \
+    "$(stopped "$(todo_section "$running_b")")" "$(todo_section "$p")"
+  # The marker is still read from the start of the body alone.
+  decision="$(jq -cn --arg b "$(printf '%s\n' "$p" | sed '1s/state=interrupted/state=finished/')" \
+    '[{id: 1, html_url: "u1", user: {login: "me"}, body: $b, updated_at: "2025-01-01T00:00:00Z"}]' \
+    | bash "$PRECHECK" --author me --now 1800000000)"
+  assert_eq "a running marker inside a subject does not make a live run" "start" "$decision"
 }
 
 # ===========================================================================
@@ -519,6 +806,14 @@ echo "report.sh: when it writes"
   exec 4> "$fifo"
   at() { echo "$1" > "$clock"; }
   settle() { sleep 0.6; }
+  # settle_write <n>: wait (up to 10 s) for write <n>, then settle, so that
+  # report.sh has recorded the write's clock time before the test moves the
+  # clock again. Used where the next move is a single second.
+  settle_write() {
+    local i=0
+    while [ "$(calls)" -lt "$1" ] && [ "$i" -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+    settle
+  }
 
   settle
   assert_eq "start: written at once, before any event" "1" "$(calls)"
@@ -527,14 +822,14 @@ echo "report.sh: when it writes"
   assert_eq "a todo change inside the 30 s window is held" "1" "$(calls)"
   at 1029; settle
   assert_eq "still held at 29 s" "1" "$(calls)"
-  at 1030; settle
+  at 1030; settle_write 2
   assert_eq "the held change is written at the next slot (30 s)" "2" "$(calls)"
   assert_eq "the held write shows the change" "### jikkyo · running · 0%" "$(heading "$(last_body)")"
 
   at 1031; update u1 1 in_progress >&4; update u2 1 completed >&4; settle
   at 1059; settle
   assert_eq "back-to-back changes are coalesced and held" "2" "$(calls)"
-  at 1060; settle
+  at 1060; settle_write 3
   assert_eq "they are written as one write" "3" "$(calls)"
   assert_eq "that write shows the latest state" "### jikkyo · running · 100% · ~0s left" "$(heading "$(last_body)")"
 
@@ -542,7 +837,7 @@ echo "report.sh: when it writes"
   assert_eq "no change, no write before the heartbeat" "3" "$(calls)"
   at 1359; settle
   assert_eq "no heartbeat at 4 m 59 s" "3" "$(calls)"
-  at 1360; settle
+  at 1360; settle_write 4
   assert_eq "a heartbeat after 5 minutes without a change" "4" "$(calls)"
   assert_has "the heartbeat refreshes the elapsed time" "| Elapsed | 6m 00s |" "$(last_body)"
 
@@ -552,6 +847,42 @@ echo "report.sh: when it writes"
   wait "$rpid"
   assert_eq "end: written at once when the stream ends" "5" "$(calls)"
   assert_eq "the pending change is in the end write" "### jikkyo · interrupted · 50%" "$(heading "$(last_body)")"
+  rm -f "$fifo"
+
+  # A change in the rendered list alone, with the counts unchanged, is a todo
+  # change too: a status change (pending to in progress) and a rename.
+  new_log
+  echo 1000 > "$clock"
+  fifo="$TMP/fifo-key"; rm -f "$fifo"; mkfifo "$fifo"
+  JIKKYO_CLOCK_FILE="$clock" bash "$REPORT" "$URL" < "$fifo" > "$TMP/out" 2>&1 &
+  rpid=$!
+  exec 4> "$fifo"
+  settle
+  at 1005; { create t1 1 "First"; create t2 2 "Second"; } >&4; settle
+  at 1030; settle_write 2
+  assert_eq "list change: the creates are written at the next slot" "2" "$(calls)"
+  at 1031; update u1 1 in_progress >&4; settle
+  at 1059; settle
+  assert_eq "status alone: held inside the 30 s window" "2" "$(calls)"
+  at 1060; settle_write 3
+  assert_eq "status alone (pending to in progress): written at the next slot" "3" "$(calls)"
+  b="$(last_body)"
+  assert_eq "status alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "status alone: the write shows the new status" '- 🔄 `First`' "$b"
+  at 1061; rename r1 2 "Second, renamed" >&4; settle
+  at 1089; settle
+  assert_eq "rename alone: held inside the 30 s window" "3" "$(calls)"
+  at 1090; settle_write 4
+  assert_eq "rename alone: written at the next slot" "4" "$(calls)"
+  b="$(last_body)"
+  assert_eq "rename alone: the counts are unchanged" "### jikkyo · running · 0%" "$(heading "$b")"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "rename alone: the write shows the new subject" '- ⬜ `Second, renamed`' "$b"
+  at 1200; settle
+  assert_eq "no list change, no write before the heartbeat" "4" "$(calls)"
+  exec 4>&-
+  wait "$rpid"
   rm -f "$fifo"
 }
 
@@ -2036,6 +2367,15 @@ echo "SKILL.md"
   assert_has "SKILL.md: the todo order's exception for items with no commits" "draft PR, has no push to wait for and is ticked once verified" "$skill"
   assert_has "SKILL.md: the log may list an item not ticked yet" "so it may list an item whose box is not ticked yet" "$skill"
   assert_lacks "SKILL.md: the log does not list only ticked boxes" "each box ticked on the issue and how it was" "$skill"
+  # The todo section of the status comment (#62).
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: the summary is the label alone (#62)" '`<summary>` is the label alone, `Child'"'"'s todos (not the issue'"'"'s task list)`' "$skill"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: the todo lines are not checkboxes (#62)" 'never `- [ ]`, so GitHub does not count them in' "$skill"
+  assert_has "SKILL.md: a todo change is any change in the todo list (#62)" "A todo change is any change in the todo list (a todo's id," "$skill"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: ended runs show the stopped glyph (#62)" '`failed` or `interrupted` its in-progress todos show ⏸️, also when' "$skill"
+  assert_has "tests/README.md: lists the todo-list tests (#62)" "**\`report.sh\`, the todo list**" "$(cat "$HERE/README.md")"
   # The repository README is there in a checkout of the repo, not in an installed copy.
   if [ -f "$README_MD" ]; then
     readme="$(cat "$README_MD")"
@@ -2057,6 +2397,13 @@ echo "SKILL.md"
     assert_has "README.md: jikkyo does not edit settings" '`jikkyo` does not edit your settings' "$readme_jikkyo"
     assert_has "README.md: only the launching session shows the run" "**Only the session that launched (or resumed) a run shows it.**" "$readme_jikkyo"
     assert_has "README.md: after /clear, the status comment" "After \`/clear\` you are in a new session" "$readme_jikkyo"
+    # The todo section (#62): in the sample, and described.
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: the sample comment ends with the todo section (#62)" \
+      "$(printf '%s\n' "<details><summary>Child's todos (not the issue's task list)</summary>" '' '- ✅ `Parse the todo subjects`')" "$readme_jikkyo"
+    assert_has "README.md: the todo lines are not checkboxes (#62)" "never a \`- [ ]\` checkbox" "$readme_jikkyo"
+    assert_has "README.md: a rename or a status change is a todo change (#62)" "a todo added, deleted, renamed, or changing status" "$readme_jikkyo"
+    assert_has "README.md: in-progress todos of an ended run show the stopped glyph (#62)" "show ⏸️ instead of 🔄" "$readme_jikkyo"
     # The appended example works as written, with its two paths filled in.
     printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
     chmod +x "$TMP/my-statusline.sh"

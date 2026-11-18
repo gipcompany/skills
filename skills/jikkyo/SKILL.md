@@ -431,7 +431,31 @@ needed because this session is idle while the run goes.
   command exits, and a Monitor watch expires after at most 30 minutes.
   `report.sh` writes on its own: the status comment at the start and the end
   at once, todo changes at most once every 30 seconds, and a heartbeat every
-  5 minutes. Progress is completed / non-deleted todos from the child's own
+  5 minutes. A todo change is any change in the todo list (a todo's id,
+  subject as cut for display, or status, also of a todo the cap hides), so
+  a todo moving to in progress or being renamed is written at the next slot
+  even when the counts stay the same.
+  The comment ends with that list, collapsed: a `<details>` section whose
+  `<summary>` is the label alone, `Child's todos (not the issue's task list)`
+  (`子の todo（Issue のタスクリストではありません）`), with no count, and one
+  plain bullet per todo, `- ` + a glyph (✅ completed, 🔄 in progress, ⬜
+  pending) + the subject, never `- [ ]`, so GitHub does not count them in
+  the issue's task progress. Subjects are the child's text and can carry the
+  issue author's, so each one goes inside a single inline code span:
+  format characters (`\p{Cf}`, such as bidi controls) are dropped, control
+  characters and whitespace runs become one space, backticks
+  become `'`, it is cut at 100 characters (ending in `…`), and an empty one
+  shows `(no subject)` (`（件名なし）`). The list is in creation order; over
+  50 todos, completed ones are hidden first (oldest first), then the newest
+  pending ones, then, only when in-progress todos alone are over 50, the
+  newest in-progress ones, so the list never has more than 50 todo
+  bullets, and a last bullet says
+  `… and M more (K completed)` (`… ほか M 件（うち完了 K 件）`). With no
+  todos there is no section. An ended run keeps its last list, but on
+  `failed` or `interrupted` its in-progress todos show ⏸️, also when
+  `precheck.sh --payload` rewrites a stale `running` comment, which changes
+  nothing else from the first `<details>` line on. Progress is completed /
+  non-deleted todos from the child's own
   `TaskCreate` / `TaskUpdate` events; with no todos it shows the turn count,
   never a made-up %. The heading and the `Progress` row show a percentage
   only (`60%`), with no `<completed>/<total>` fraction: the todos are the
