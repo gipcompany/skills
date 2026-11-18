@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/70
 branch: worktree-jikkyo-70-20261119-030304
-updated: 2026-11-19T03:25:00+09:00
-next: jikkyo: wording test for SKILL.md tick rule
+updated: 2026-11-19T03:31:00+09:00
+next: Update both tests READMEs
 
 ## Todos
 
@@ -9,7 +9,7 @@ next: jikkyo: wording test for SKILL.md tick rule
 - [x] kabeuchi: per-paragraph match in wording test (efb90af)
 - [x] kabeuchi: add two positive fixtures (a871040)
 - [x] jikkyo: rewrap "Who writes the issue body" bullet (ff0fd11)
-- [ ] jikkyo: wording test for SKILL.md tick rule
+- [x] jikkyo: wording test for SKILL.md tick rule (4d03636)
 - [ ] Update both tests READMEs
 - [ ] Run both test suites
 - [ ] Delete progress log and open PR
@@ -20,6 +20,7 @@ next: jikkyo: wording test for SKILL.md tick rule
 - The wording test breaks if the rule is wrapped: phase2_rule joins RS="" paragraphs; kabeuchi tests pass, and the old per-line matcher was shown to fail on a wrapped fixture
 - No positive fixture: two fixtures assert rc 0 for row_ok and a wrapped rule_ok; kabeuchi tests pass (235 passed)
 - Uneven line wrapping: bullet refilled greedily, every line at most 79 characters with the two-space indent; whitespace-collapsed file is identical to before; jikkyo tests pass
+- No wording test for the SKILL.md description: four new assertions on the joined bullet pass (845 passed), and the pre-#69 bullet was shown to trip both the assert_has and the assert_lacks
 
 ## Dead ends and decisions
 
