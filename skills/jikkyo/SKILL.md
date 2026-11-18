@@ -414,7 +414,9 @@ needed because this session is idle while the run goes.
   with no commits of its own (for example "a draft PR is open") is ticked as
   soon as it is verified; tick only verified items, never
   untick or reword, change nothing
-  but `- [ ]` to `- [x]` on those lines, and fetch the current body right
+  but `[ ]` to `[x]` in those lines' task-list boxes, keeping each line's own
+  marker (`- [ ]` becomes `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]` becomes
+  `+ [x]`), and fetch the current body right
   before each edit, because `gh issue edit --body` replaces the whole body. The
   instruction is a constant, so nothing from the issue reaches the command
   line beyond the validated URL, and the goal is met only when every box the
