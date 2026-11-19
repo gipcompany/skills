@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/72
 branch: worktree-jikkyo-72-20261120-043310
-updated: 2026-11-20T06:10:00+09:00
-next: AC10, confirm tests/run.sh covers the five listed cases, then run the CI checks, delete this log, and open the PR
+updated: 2026-11-20T06:14:00+09:00
+next: run the two CI checks once more on the tip, delete this log in one commit, push, and open the PR with Closes #72
 
 ## Todos
 - [x] AC1: incomplete state when todos not all completed (299df03)
@@ -13,7 +13,7 @@ next: AC10, confirm tests/run.sh covers the five listed cases, then run the CI c
 - [x] AC7: docs and stopped glyph cover incomplete (b1a6126)
 - [x] AC8: jikkyo: todos line and closing-summary sentence (d10eb30)
 - [x] AC9: statusline.sh shows incomplete (299df03)
-- [ ] AC10: tests/run.sh coverage for new cases
+- [x] AC10: tests/run.sh coverage for new cases (cafbe30)
 - [ ] Run CI checks, delete log, open PR
 
 ## Verified task-list items
@@ -26,6 +26,7 @@ next: AC10, confirm tests/run.sh covers the five listed cases, then run the CI c
 - The tick instruction's marker examples in launch.sh and SKILL.md include an ordered one: the prompt test checks the launch.sh sentence word for word and the SKILL.md "Who writes the issue body" test checks the ordered example; full suite 907/0 and shellcheck clean
 - The todo instruction is unconditional and the resume instruction makes one todo per task-list item, ticked ones included, completed once re-verified: launch.sh prompt tests check both new sentences word for word and that the old conditional and "for what is left" wording are gone; SKILL.md, README, tests/README updated; full suite 910/0 and shellcheck clean
 - precheck.sh refuses an issue with no task-list item via a new --body mode, run by SKILL.md as its own step before the comments check: a new precheck.sh --body test section (bullet and ordered markers, nesting, blockquote, fences, non-items, bad input exit 2, no flag combinations), SKILL.md order test; run by hand on issue 72 (go) and issue 13 (refuse); full suite 955/0 and shellcheck clean
+- tests/run.sh covers all completed finished, some pending incomplete, no todos incomplete, no task-list item refused, statusline incomplete and 未完了 matching report.sh: each named test found passing in the full run at cafbe30; the tests came with the earlier commits, so this item has no commits of its own
 
 ## Dead ends and decisions
 - AC1 and AC9 are one commit: the status-line end-to-end tests run report.sh, so they flip together.
