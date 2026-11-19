@@ -1,12 +1,12 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:13:00Z
-next: code spans sub-item (todo 2), then the remaining LANG_FILTER sub-items
+updated: 2026-11-19T16:18:09Z
+next: tick the "not dropped" sub-item (todo 3)
 
 ## Todos
 
 - [x] Fenced blocks: opener/closer rules, unclosed runs to end (06161ad)
-- [ ] Code spans: matching run length, may span lines, unmatched is literal
+- [x] Code spans: matching run length, may span lines, unmatched is literal (06161ad)
 - [ ] Indented blocks, HTML code, fences in quotes/lists are not dropped
 - [ ] Title and body cleaned separately
 - [ ] LANG_FILTER drops code before testing for Japanese
@@ -33,6 +33,7 @@ next: code spans sub-item (todo 2), then the remaining LANG_FILTER sub-items
 ## Verified task-list items
 
 - Fenced block rules (indent up to 3, 3+ backticks or tildes, closer same char and at least as long, unclosed runs to end): LANG_FILTER extracted from report.sh and run by jq on ad hoc issues (longer/shorter closer, other char, 4-space opener and closer, closer with info, CRLF, unclosed)
+- Code span rules (closed by the next run of the same length, across lines; unmatched run is literal): same ad hoc jq runs (double span holding a single backtick, multi-line span, unmatched run, run-length mismatch, unmatched run followed by a later span) and the run.sh cases
 
 ## Dead ends and decisions
 
