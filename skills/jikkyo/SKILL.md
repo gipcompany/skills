@@ -247,6 +247,8 @@ The background command's output is the hand-over. Read it and pick out:
 - `jikkyo: status comment <URL>` — the status comment.
 - `jikkyo: state finished|incomplete|failed|interrupted` — how the run
   ended (see *How a run ends*).
+- `jikkyo: todos <completed>/<total>` — the child's todos that are not
+  deleted, completed and in all: the counts the state was judged by.
 - `jikkyo: final message:` followed by the child's final message (the `result`
   text on success, the `errors` on an `error_*` subtype), **or**
   `jikkyo: final message is empty …` when the `result` line carried no text
@@ -353,6 +355,12 @@ Then, in this order:
      the goal was met is unknown. **Do not classify why a run stopped**
      (usage limit, crash, error): mention a cause only when the final
      message names it, quoted in at most one sentence.
+   - **For an `incomplete` run**, say which case it is in one sentence,
+     from the `jikkyo: todos <completed>/<total>` line: with a total above
+     0, for `en` `<completed> of <total> todos completed.` and for `ja`
+     `todo は <total> 件中 <completed> 件が完了しました。`; with a total of
+     0, for `en` `The child made no todos.` and for `ja`
+     `子は todo を作りませんでした。`
    - Any PR or branch the final message names, as a link.
    - **When the run is resumable** (step 2), say so and give the exact
      command, with the URL single-quoted as on every command line here:

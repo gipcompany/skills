@@ -52,8 +52,10 @@
 # task-list item, so a run with none has not shown its work done), `failed`
 # (an error result line), or `interrupted` (no result line, or
 # SIGTERM/SIGHUP/SIGINT).
-# After the final write it prints the child's final message for the parent
-# session: the `result` text on success, the `errors` on an error_* subtype.
+# After the final write it prints `jikkyo: state <state>`, then
+# `jikkyo: todos <completed>/<total>` (todos not deleted), then the child's
+# final message for the parent session: the `result` text on success, the
+# `errors` on an error_* subtype.
 #
 # Language: before the first write it reads the issue's title and body with
 # `gh api` and writes the visible text in Japanese (`ja`) if they contain any
@@ -662,6 +664,9 @@ finish() {
   [ -n "$parser_pid" ] && kill "$parser_pid" 2>/dev/null
   _write "$st" "$(now)"
   echo "jikkyo: state ${st}"
+  # Non-deleted todos, the counts final_state judged by: numbers only.
+  jq -r '"jikkyo: todos \(.done)/\(.total)"' "$state_file" 2>/dev/null \
+    || echo "jikkyo: todos 0/0"
   print_final_message
   rm -rf "$work"
 }

@@ -69,7 +69,10 @@ timing and signal tests waiting on a real scheduler.
   or with every todo deleted, in the marker, the heading, the State row,
   and the `jikkyo: state` line, and `未完了` in Japanese; `failed` on
   `error_max_turns`, `error_during_execution`, or `is_error: true`, also
-  with todos left;
+  with todos left; `jikkyo: todos <completed>/<total>` (deleted todos left
+  out, `0/0` with none) right after the `jikkyo: state` line, and SKILL.md's
+  closing-summary sentences for the two `incomplete` cases in both
+  languages;
   `interrupted` when the stream has no `result` line, including an empty
   stream. Start and end times are local time with an explicit UTC offset.
 - **`report.sh`, the final message** — the `result` text on success, the
