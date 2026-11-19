@@ -46,8 +46,10 @@
 # ` · ~<duration> left` heading suffix) gives elapsed / completed * (total -
 # completed), the run-wide rate; otherwise that row is present but empty.
 #
-# The final state is `finished` (a non-error result line), `failed` (an error
-# result line), or `interrupted` (no result line, or SIGTERM/SIGHUP/SIGINT).
+# The final state is `finished` (a non-error result line, and every todo that
+# is not deleted completed), `incomplete` (a non-error result line, but some
+# todo not completed), `failed` (an error result line), or `interrupted` (no
+# result line, or SIGTERM/SIGHUP/SIGINT).
 # After the final write it prints the child's final message for the parent
 # session: the `result` text on success, the `errors` on an error_* subtype.
 #
@@ -278,7 +280,7 @@ set_labels() {
 state_word() {
   if [ "$LANG_CODE" = ja ]; then
     case "$1" in running) echo "実行中" ;; finished) echo "完了" ;; failed) echo "失敗" ;;
-      interrupted) echo "中断" ;; *) echo "$1" ;; esac
+      interrupted) echo "中断" ;; incomplete) echo "未完了" ;; *) echo "$1" ;; esac
   else echo "$1"; fi
 }
 
@@ -640,9 +642,11 @@ print_final_message() {
 }
 
 final_state() {
-  jq -r '.result | if . == null then "interrupted"
-         elif .is_error == true or .subtype != "success" then "failed"
-         else "finished" end' "$state_file"
+  jq -r '.result as $r
+         | if $r == null then "interrupted"
+           elif $r.is_error == true or $r.subtype != "success" then "failed"
+           elif .done < .total then "incomplete"
+           else "finished" end' "$state_file"
 }
 
 parser_pid=""

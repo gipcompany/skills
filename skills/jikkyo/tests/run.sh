@@ -163,7 +163,7 @@ echo "report.sh: progress"
   } > "$f"
   run_report "$f"
   b="$(last_body)"
-  assert_eq "completed / non-deleted tasks, with a deletion and a mid-run add" "### jikkyo · finished · 66%" "$(heading "$b")"
+  assert_eq "completed / non-deleted tasks, with a deletion and a mid-run add" "### jikkyo · incomplete · 66%" "$(heading "$b")"
   assert_has "the table carries the progress row" "| Progress | 66% |" "$b"
 
   # The % can go down when the child adds tasks.
@@ -439,6 +439,15 @@ echo "report.sh: the todo list"
   f="$TMP/todo-interrupted.jsonl"; todos_ended > "$f"
   run_report "$f"
   assert_eq "interrupted: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$(last_body)")"
+  # as_running <ended body>: the same comment as report.sh writes it while
+  # running, in either language (a stopped glyph was 🔄 then).
+  as_running() {
+    printf '%s\n' "$1" | sed -E -e '1s/state=(finished|incomplete|failed|interrupted)/state=running/' \
+      -e 's/^### jikkyo · (finished|incomplete|failed|interrupted)/### jikkyo · running/' \
+      -e 's/^\| State \| (finished|incomplete|failed|interrupted) \|$/| State | running |/' \
+      -e 's/^### jikkyo · (完了|未完了|失敗|中断)/### jikkyo · 実行中/' \
+      -e 's/^\| 状態 \| (完了|未完了|失敗|中断) \|$/| 状態 | 実行中 |/' -e 's/^- ⏸️ /- 🔄 /'
+  }
   f="$TMP/todo-finished.jsonl"; { todos_ended; result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
@@ -446,8 +455,7 @@ echo "report.sh: the todo list"
     "$(printf '%s\n' '- ✅ `done one`' '- 🔄 `busy one`' '- ⬜ `left one`')" "$(todo_lines "$b")"
   # The same comment while it was running (report.sh writes the same lines
   # then), rewritten by precheck.sh --payload after the run died.
-  running_b="$(printf '%s\n' "$b" | sed -e '1s/state=finished/state=running/' \
-    -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/')"
+  running_b="$(as_running "$b")"
   p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
   assert_eq "--payload: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$p")"
   assert_eq "--payload: the head is rewritten as before" "### jikkyo · interrupted · 33%" "$(heading "$p")"
@@ -463,13 +471,6 @@ echo "report.sh: the todo list"
     create f 6 '</details>'; create g 7 '### jikkyo · running · 50%'; create h 8 '### jikkyo · 実行中 · 50%'
     create i 9 '| 状態 | 実行中 |'; create j 10 '| 残り | ~1m |'
     update k 3 in_progress; update l 5 in_progress; update m 7 in_progress
-  }
-  # as_running <finished body>: the same comment as report.sh writes it while
-  # running, in either language.
-  as_running() {
-    printf '%s\n' "$1" | sed -e '1s/state=finished/state=running/' \
-      -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/' \
-      -e 's/^### jikkyo · 完了/### jikkyo · 実行中/' -e 's/^| 状態 | 完了 |$/| 状態 | 実行中 |/'
   }
   # stopped <todo section>: what --payload must make of it.
   stopped() { printf '%s\n' "$1" | sed 's/^- 🔄 /- ⏸️ /'; }
@@ -512,7 +513,7 @@ echo "report.sh: the todo list"
 # ===========================================================================
 echo "report.sh: end states and the final message"
 {
-  f="$TMP/ok.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/ok.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
   assert_eq "a success result gives finished" "finished" "$(marker_state "$b")"
@@ -529,6 +530,34 @@ echo "report.sh: end states and the final message"
   assert_has "prints the status comment URL" "jikkyo: status comment https://github.com/o/r/issues/12#issuecomment-777" "$out"
   assert_has "prints the final state" "jikkyo: state finished" "$out"
   assert_eq "exits 0 at the end of the stream" "0" "$rc"
+
+  # A clean exit counts as finished only with every todo completed (#72).
+  f="$TMP/all-done.jsonl"
+  { create a 1; create b 2; create c 3; update d 1 completed; update e 2 completed
+    update g 3 deleted; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "all non-deleted todos completed: finished" "finished" "$(marker_state "$(last_body)")"
+  f="$TMP/some-left.jsonl"
+  { create a 1; create b 2; create c 3; update d 1 completed; update e 2 in_progress; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "some todos pending or in progress: incomplete" "incomplete" "$(marker_state "$b")"
+  assert_has "incomplete: the table says so" "| State | incomplete |" "$b"
+  assert_eq "incomplete: the heading says so" "### jikkyo · incomplete · 33%" "$(heading "$b")"
+  assert_has "incomplete: prints the final state" "jikkyo: state incomplete" "$(cat "$TMP/out")"
+  assert_has "incomplete: still prints the final message" "$(printf 'jikkyo: final message:\nAll done. Opened PR #99.')" "$(cat "$TMP/out")"
+  assert_eq "incomplete: exits 0" "0" "$rc"
+  jq -cn '{title: "日本語", body: ""}' > "$TMP/issue-inc.json"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-inc.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  b="$(last_body)"
+  assert_eq "incomplete in Japanese: the marker stays English" "incomplete" "$(marker_state "$b")"
+  assert_eq "incomplete in Japanese: 未完了" "### jikkyo · 未完了 · 33%" "$(heading "$b")"
+  assert_has "incomplete in Japanese: the State row" "| 状態 | 未完了 |" "$b"
+  # An error result is still failed, whatever the todos.
+  f="$TMP/err-left.jsonl"; { create a 1; result_err error_max_turns; } > "$f"
+  run_report "$f"
+  assert_eq "an error result with todos left is still failed" "failed" "$(marker_state "$(last_body)")"
 
   f="$TMP/maxturns.jsonl"; { create a 1; result_err error_max_turns; } > "$f"
   run_report "$f"
@@ -567,7 +596,7 @@ echo "report.sh: end states and the final message"
 # ===========================================================================
 echo "report.sh: where it writes"
 {
-  f="$TMP/where.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/where.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   run_report "$f"
   assert_eq "the first write creates a comment on the issue" \
     "api -X POST repos/o/r/issues/12/comments --input - --jq [.id, .html_url] | @tsv" "$(cat "$GH_LOG/1.args")"
@@ -601,7 +630,7 @@ EOF
 echo "report.sh: the branch"
 {
   BR="worktree-jikkyo-12-20261114-132452"
-  f="$TMP/branch.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/branch.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   new_log
   rc=0; bash "$REPORT" "$URL" "$BR" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
   assert_eq "with a branch: exits 0" "0" "$rc"
@@ -661,7 +690,7 @@ x" "worktree-jikkyo-12-20261114-13245a" "worktree-jikkyo-012-20261114-132452" \
 echo "report.sh: a resumed run"
 {
   BR="worktree-jikkyo-12-20261114-132452"
-  f="$TMP/resumed.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/resumed.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   new_log
   rc=0; bash "$REPORT" "$URL" "$BR" 4242 < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
   assert_eq "with a comment id: exits 0" "0" "$rc"
@@ -721,9 +750,9 @@ echo "report.sh: the language of the issue"
   GH_ISSUE="$TMP/issue.json" run_report "$f"
   b="$(last_body)"
   assert_has "English issue: prints the language" "jikkyo: language en" "$(cat "$TMP/out")"
-  assert_eq "English issue: the heading is English" "### jikkyo · finished · 50%" "$(heading "$b")"
+  assert_eq "English issue: the heading is English" "### jikkyo · incomplete · 50%" "$(heading "$b")"
   assert_eq "English issue: the field names are English" \
-    "| Field | Value |,| State | finished |,| Progress | 50% |" \
+    "| Field | Value |,| State | incomplete |,| Progress | 50% |" \
     "$(printf '%s\n' "$b" | grep -E '^\| (Field|State|Progress) ' | paste -sd, -)"
   assert_eq "the issue is read once, with a plain GET" "api repos/o/r/issues/12" "$(cat "$GH_LOG/reads")"
 
@@ -733,14 +762,14 @@ echo "report.sh: the language of the issue"
   b="$(last_body)"
   assert_has "Japanese issue: prints the language" "jikkyo: language ja" "$(cat "$TMP/out")"
   assert_eq "Japanese issue: the marker keeps v=1 and the English state" \
-    "<!-- jikkyo:status v=1 state=finished -->" "$(printf '%s\n' "$b" | head -n 1)"
-  assert_eq "Japanese issue: the heading is Japanese" "### jikkyo · 完了 · 50%" "$(heading "$b")"
-  want="$(printf '%s\n' '| 項目 | 値 |' '| --- | --- |' '| 状態 | 完了 |')"
+    "<!-- jikkyo:status v=1 state=incomplete -->" "$(printf '%s\n' "$b" | head -n 1)"
+  assert_eq "Japanese issue: the heading is Japanese" "### jikkyo · 未完了 · 50%" "$(heading "$b")"
+  want="$(printf '%s\n' '| 項目 | 値 |' '| --- | --- |' '| 状態 | 未完了 |')"
   assert_eq "Japanese issue: the table header and State row are Japanese" "$want" "$(printf '%s\n' "$b" | sed -n '4,6p')"
   for row in '| 開始 | 2' '| 終了 | 2' '| 進捗 | 50% |' '| 経過 | ' '| 残り |  |'; do
     assert_has "Japanese issue: row [$row]" "$row" "$b"
   done
-  for word in Field State Started Ended Progress Elapsed Remaining finished; do
+  for word in Field State Started Ended Progress Elapsed Remaining finished incomplete; do
     assert_lacks "Japanese issue: no English [$word] in the visible text" "$word" "$(printf '%s\n' "$b" | sed '1d')"
   done
   all="$(cat "$GH_LOG"/*.args "$GH_LOG"/*.body)"
@@ -751,7 +780,7 @@ echo "report.sh: the language of the issue"
   # Only the title in Japanese; katakana alone; halfwidth katakana.
   issue "パーサの不具合" "It breaks."
   GH_ISSUE="$TMP/issue.json" run_report "$f"
-  assert_eq "Japanese in the title alone gives ja" "### jikkyo · 完了 · 50%" "$(heading "$(last_body)")"
+  assert_eq "Japanese in the title alone gives ja" "### jikkyo · 未完了 · 50%" "$(heading "$(last_body)")"
   issue "x" "ｴﾗｰ"
   GH_ISSUE="$TMP/issue.json" run_report "$f"
   assert_has "halfwidth katakana gives ja" "jikkyo: language ja" "$(cat "$TMP/out")"
@@ -816,7 +845,7 @@ echo "report.sh: the language of the issue"
   # A failed read, or an answer that is not an issue, falls back to English.
   echo '{"message":"Not Found"}' > "$TMP/issue.json"
   GH_ISSUE="$TMP/issue.json" GH_ISSUE_RC=1 run_report "$f"
-  assert_eq "a failed issue read gives en" "### jikkyo · finished · 50%" "$(heading "$(last_body)")"
+  assert_eq "a failed issue read gives en" "### jikkyo · incomplete · 50%" "$(heading "$(last_body)")"
   echo 'not json' > "$TMP/issue.json"
   GH_ISSUE="$TMP/issue.json" run_report "$f"
   assert_has "an answer that is not JSON gives en" "jikkyo: language en" "$(cat "$TMP/out")"
@@ -978,8 +1007,8 @@ echo "report.sh: estimated time remaining"
   exec 4>&-
   wait "$rpid"
   b="$(last_body)"
-  assert_eq "finished: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
-  assert_eq "finished: no estimate in the heading" "### jikkyo · finished · 25%" "$(heading "$b")"
+  assert_eq "ended: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
+  assert_eq "ended: no estimate in the heading" "### jikkyo · incomplete · 25%" "$(heading "$b")"
   rm -f "$fifo"
 
   # The same estimate in Japanese: the words change, the duration format not.
@@ -1064,7 +1093,7 @@ echo "report.sh: the state file"
     '["comment","done","eta_secs","issue","lang","number","session","started","state","total","turns","updated","v"]' \
     "$(jq -c 'keys' "$STATE" 2>/dev/null)"
   assert_eq "...with the final state, counts, language, session, and URLs" \
-    "$(jq -cn --arg sid "$SID" '{v: 1, issue: "https://github.com/o/r/issues/12", number: 12, state: "finished",
+    "$(jq -cn --arg sid "$SID" '{v: 1, issue: "https://github.com/o/r/issues/12", number: 12, state: "incomplete",
        done: 1, total: 2, eta_secs: null, lang: "en", session: $sid,
        comment: "https://github.com/o/r/issues/12#issuecomment-777"}')" \
     "$(jq -c '{v, issue, number, state, done, total, eta_secs, lang, session, comment}' "$STATE" 2>/dev/null)"
@@ -1751,7 +1780,7 @@ echo "statusline.sh"
   assert_eq "the output is a single line" "0" "$(tr -cd '\n' < "$TMP/sl-out" | wc -c | tr -d ' ')"
   assert_eq "...ending in a newline" "1" "$(sl | wc -l | tr -d ' ')"
 
-  for st in finished failed interrupted; do
+  for st in finished incomplete failed interrupted; do
     put 27 "{\"state\": \"$st\", \"updated\": 9701, \"eta_secs\": null}"
     assert_eq "$st: shown for 5 minutes after updated (4 m 59 s)" "jikkyo #27 · $st" "$(sl)"
     put 27 "{\"state\": \"$st\", \"updated\": 9700, \"eta_secs\": null}"
@@ -1775,7 +1804,7 @@ echo "statusline.sh"
   sl_reset
   put 12 '{"updated": 1}'
   assert_eq "issue 12 left stale" "jikkyo #12 · stale" "$(sl)"
-  { create t1 1; result_ok; } > "$TMP/sl-stale.jsonl"
+  { create t1 1; update u1 1 completed; result_ok; } > "$TMP/sl-stale.jsonl"
   new_log
   (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stale.jsonl" > /dev/null 2>&1)
   assert_eq "...until the next run of issue 12 overwrites its file" \
@@ -1821,7 +1850,7 @@ echo "statusline.sh"
   assert_eq "ja, no todos: <turns> ターン" "jikkyo #27 · 12 ターン" "$(sl)"
   put 27 '{"lang": "ja", "done": 0, "total": 0, "turns": 1, "eta_secs": null}'
   assert_eq "ja, one turn: 1 ターン" "jikkyo #27 · 1 ターン" "$(sl)"
-  for pair in finished:完了 failed:失敗 interrupted:中断; do
+  for pair in finished:完了 incomplete:未完了 failed:失敗 interrupted:中断; do
     put 27 "{\"lang\": \"ja\", \"state\": \"${pair%%:*}\", \"updated\": 9900}"
     assert_eq "ja, ${pair%%:*}: ${pair#*:}" "jikkyo #27 · ${pair#*:}" "$(sl)"
   done
@@ -1842,7 +1871,7 @@ echo "statusline.sh"
     assert_has "report.sh's comment uses [$w] too" "$w" "$report_src"
   done
   eval "$(sed -n '/^state_word() {/,/^}/p' "$REPORT")"
-  for st in finished failed interrupted; do
+  for st in finished incomplete failed interrupted; do
     put 27 "{\"state\": \"$st\", \"updated\": 9900, \"lang\": \"ja\"}"
     assert_eq "ja, $st: the status line's word is the comment's" "jikkyo #27 · $(LANG_CODE=ja state_word "$st")" "$(sl)"
   done
@@ -1850,9 +1879,16 @@ echo "statusline.sh"
   # End to end in Japanese.
   sl_reset
   new_log
-  { create t1 1; result_ok; } > "$TMP/sl-ja-stream.jsonl"
+  { create t1 1; update u1 1 completed; result_ok; } > "$TMP/sl-ja-stream.jsonl"
   (cd "$sl_repo" && GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-ja-stream.jsonl" > /dev/null 2>&1)
   assert_eq "a Japanese issue's run shows in Japanese" "jikkyo #12 · 完了" "$(sl_input | bash "$STATUSLINE")"
+  sl_reset
+  new_log
+  { create t1 1; result_ok; } > "$TMP/sl-ja-stream.jsonl"
+  (cd "$sl_repo" && GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-ja-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a Japanese issue's incomplete run shows 未完了, report.sh's word" \
+    "jikkyo #12 · $(LANG_CODE=ja state_word incomplete)" "$(sl_input | bash "$STATUSLINE")"
+  assert_eq "...which is 未完了" "jikkyo #12 · 未完了" "$(sl_input | bash "$STATUSLINE")"
   sl_reset; put 27
 
   # Quiet and local: any bad input prints nothing, exits 0, and says nothing
@@ -1963,7 +1999,13 @@ echo "statusline.sh"
   { create t1 1; create t2 2; update u1 1 completed; result_ok; } > "$TMP/sl-stream.jsonl"
   new_log
   (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stream.jsonl" > /dev/null 2>&1)
-  assert_eq "a run report.sh just finished shows as finished" "jikkyo #12 · finished" \
+  assert_eq "a run report.sh just ended with 1 of 2 todos completed shows as incomplete" "jikkyo #12 · incomplete" \
+    "$(sl_input | bash "$STATUSLINE")"
+  sl_reset
+  { create t1 1; create t2 2; update u1 1 completed; update u2 2 completed; result_ok; } > "$TMP/sl-stream.jsonl"
+  new_log
+  (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a run report.sh just finished with every todo completed shows as finished" "jikkyo #12 · finished" \
     "$(sl_input | bash "$STATUSLINE")"
 
   # A file from the future (the clock was set back) is skipped, so an ended
