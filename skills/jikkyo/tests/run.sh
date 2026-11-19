@@ -759,6 +759,44 @@ echo "report.sh: the language of the issue"
   GH_ISSUE="$TMP/issue.json" run_report "$f"
   assert_has "other non-ASCII text gives en" "jikkyo: language en" "$(cat "$TMP/out")"
 
+  # Code is dropped before the test: fenced code blocks (from the body) and
+  # code spans (from the title and the body), following CommonMark.
+  lang_case() {  # <want> <name> <title> <body>
+    issue "$3" "$4"
+    GH_ISSUE="$TMP/issue.json" run_report "$f"
+    assert_has "$2 gives $1" "jikkyo: language $1" "$(cat "$TMP/out")"
+  }
+  # The backticks below are Markdown, not command substitution.
+  # shellcheck disable=SC2016
+  lang_case en "English prose with Japanese only in code spans" \
+    "Labels" 'The states are `完了` and `未完了`.'
+  lang_case en "English prose with Japanese only in a fenced block" \
+    "Output" $'It prints:\n\n```text\n完了\n```\n\nand stops.'
+  lang_case ja "Japanese prose" "Parser" "空行で落ちます。"
+  lang_case ja "Japanese prose that also contains code" \
+    "Parser" $'`parse()` が空行で落ちます。\n\n```sh\nparse ""\n```'
+  lang_case en "English prose with Japanese only in a ~~~ fence" \
+    "Output" $'It prints:\n\n~~~\n完了\n~~~\n\nand stops.'
+  lang_case en "English prose followed by an unclosed fence holding Japanese" \
+    "Output" $'It prints:\n\n```\n完了\n未完了'
+  # shellcheck disable=SC2016
+  lang_case en "a double-backtick span that holds a backtick and Japanese" \
+    "Quote" 'Write it as `` `完了` `` in the docs.'
+  lang_case ja "an unmatched backtick followed by Japanese prose" \
+    "Quote" 'A lone ` then 空行で落ちます。'
+  # shellcheck disable=SC2016
+  lang_case en "a title whose Japanese is only in a code span, with an English body" \
+    'Rename `完了`' "In English."
+  lang_case ja "a title that starts with \`\`\` and a Japanese body" \
+    '```' "空行で落ちます。"
+  # The documented limit: these are not dropped, so their text is prose.
+  lang_case ja "Japanese only in an indented (4-space) block" \
+    "Output" $'It prints:\n\n    完了\n\nand stops.'
+  lang_case ja "Japanese only in a fence inside a blockquote" \
+    "Output" $'It prints:\n\n> ```\n> 完了\n> ```\n\nand stops.'
+  lang_case ja "Japanese only in HTML <code>" \
+    "Output" 'It prints <code>完了</code> and stops.'
+
   # A failed read, or an answer that is not an issue, falls back to English.
   echo '{"message":"Not Found"}' > "$TMP/issue.json"
   GH_ISSUE="$TMP/issue.json" GH_ISSUE_RC=1 run_report "$f"
