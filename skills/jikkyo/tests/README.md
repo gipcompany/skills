@@ -284,6 +284,19 @@ timing and signal tests waiting on a real scheduler.
   call a `running` file stale at the same age, longer than `report.sh`'s
   heartbeat; `launch.sh`, `report.sh`, and `statusline.sh` check the session
   id with the same pattern.
+- **`precheck.sh --body`** — `go` for an issue body with a task-list item:
+  `-`, `*`, `+`, `1.`, or `12)` markers, ticked with `x` or `X` or not,
+  nested at any depth, in a blockquote, after a closed fence, with CRLF line
+  ends, or a tab after the box. `refuse` with a fixed one-line reason, and
+  nothing from the body, for prose only, an empty or null body, and items
+  only inside a backtick or tilde fence (also one never closed, one a
+  shorter run does not close, and one opened on a list line), and for lines
+  that are not task-list items (no whitespace after the box, `[y]`, no list
+  marker, no space after the marker, a code span, mid-line, a heading).
+  Exit 2 and no decision for an error object, empty input, text that is not
+  JSON, an array, a number that is a string, or a body that is not a
+  string; `--body` combines with no other flag. `SKILL.md` runs it as step
+  3, before every comments check, for fresh runs and resumes alike.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
   or more; `--force` rewriting even a live one; `finished`, `failed`, and
@@ -371,7 +384,7 @@ timing and signal tests waiting on a real scheduler.
   `launch.sh --resume` with the branch, comment id, and
   `${CLAUDE_SESSION_ID}`; a fresh launch passes `${CLAUDE_SESSION_ID}` too.
   Before launching, the parent checks that value's shape itself and, if it
-  is not a UUID, tells the user in step 5 the run will not show in the
+  is not a UUID, tells the user in step 6 the run will not show in the
   status line; the example of a bad value does not spell the variable.
   It has a Status line section saying the skill edits no settings, and no
   script mentions `settings.json`. The repository README documents both

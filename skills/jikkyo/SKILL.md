@@ -69,10 +69,10 @@ The arguments are: $ARGUMENTS
   exactly as written. That is what the `allowed-tools` rules match; a relative
   path or a wrapper (`bash …`, `cd … &&`) falls back to a permission prompt.
 - **Carry out the decisions the scripts print.** `precheck.sh` and
-  `cleanup.sh` print decisions (`start`, `rewrite`, `resume`, `remove`, …);
+  `cleanup.sh` print decisions (`go`, `start`, `rewrite`, `resume`, `remove`, …);
   carry them out, and do not second-guess them or substitute your own. A
   refusal from `launch.sh` is not a decision to carry out: report it and
-  stop (Phase 1, step 4).
+  stop (Phase 1, step 5).
 
 ## Phase 1: Check, then launch
 
@@ -80,7 +80,7 @@ The arguments are: $ARGUMENTS
    `--resume` (not both), and exactly one URL
    matching `^https://github\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+/issues/[1-9][0-9]*$`.
    Otherwise print the usage line and stop. Take `<owner>`, `<repo>`, and `<N>`
-   from it. With `--resume`, do step 3 the resume way (3r below) instead.
+   from it. With `--resume`, do step 4 the resume way (4r below) instead.
 
 2. **Find the expected author** — the account `report.sh` will post as:
 
@@ -90,7 +90,30 @@ The arguments are: $ARGUMENTS
 
    If `gh` is not authenticated, tell the user to run `gh auth login` and stop.
 
-3. **Decide whether to start.** List the comments and hand them to `precheck.sh`
+3. **Check that the issue has a task list** — for a fresh run and a resume
+   alike, before the comments are read. Hand the issue itself to
+   `precheck.sh`:
+
+   ```
+   gh api 'repos/<owner>/<repo>/issues/<N>' | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --body
+   ```
+
+   It prints one line:
+
+   - `go` — the body has at least one task-list item (a `- [ ]`, `* [ ]`,
+     `+ [ ]`, or `1. [ ]` line, ticked or not, outside code blocks). Go to
+     step 4.
+   - `refuse <reason>` — it has none. A run is `finished` only when every
+     one of the child's todos is completed, and the child makes one todo per
+     task-list item, so jikkyo needs at least one item as a done criterion.
+     Tell the user the reason, suggest adding the issue's done criteria as
+     task-list items (for example under "Acceptance criteria"), and
+     **stop**. `--force` does not skip this check.
+
+   If the read fails, `precheck.sh` exits 2 instead of deciding: report the
+   `gh` error and stop.
+
+4. **Decide whether to start.** List the comments and hand them to `precheck.sh`
    (add `--force` only if the user passed it):
 
    ```
@@ -99,7 +122,7 @@ The arguments are: $ARGUMENTS
 
    It prints one line. Do what it says:
 
-   - `start` — go to step 4.
+   - `start` — go to step 5.
    - `refuse <comment URL>` — a live run is reporting there. Tell the user,
      link the comment, mention `--force` (which marks that comment
      `interrupted` and starts anyway), and **stop**.
@@ -115,12 +138,12 @@ The arguments are: $ARGUMENTS
      run took it over, or it finished since the listing), or, with
      `--author`, when another account wrote it. The PATCH after it
      then fails on empty input and changes nothing; move on to the next id.
-     When every id is done, go to step 4.
+     When every id is done, go to step 5.
 
    If the listing in this step fails, `precheck.sh` exits 2 instead of
    guessing: report the `gh` error and stop.
 
-   **3r. With `--resume`**, the run may have been started by another
+   **4r. With `--resume`**, the run may have been started by another
    account (one that hit its usage limit, say), so first find which other
    accounts' status comments to trust. List the other accounts that wrote
    one:
@@ -156,15 +179,15 @@ The arguments are: $ARGUMENTS
      race it. Tell the user, link the comment, and **stop** (`--force` does
      not combine with `--resume`).
    - `rewrite <id> [<id> …]` — these are this account's own comments only.
-     Rewrite each to `interrupted` with the same command as in step 3, whose
+     Rewrite each to `interrupted` with the same command as in step 4, whose
      `--author` keeps a comment by another account from ever being edited
      (moving on to the next id the same way), then run the
      last `precheck.sh --resume` command of this step **once more**, with the
      same `--trusted` accounts: the rewritten run is now a candidate to
-     resume. Do not go to step 4 from here. If the second check prints
+     resume. Do not go to step 5 from here. If the second check prints
      `rewrite` again, a rewrite did not take: tell the user which comments
      are still `running`, and **stop** rather than loop.
-   - `resume <branch> <comment id>` — go to step 4 the resume way. The
+   - `resume <branch> <comment id>` — go to step 5 the resume way. The
      branch is `worktree-jikkyo-<N>-<timestamp>` and the id is all digits;
      `precheck.sh` has validated both, and they are the only things taken
      from the comments onto a command line.
@@ -181,16 +204,16 @@ The arguments are: $ARGUMENTS
      Never pick a branch any other way (from the remote, the log, or the
      user).
 
-   As in step 3, a failed listing makes `precheck.sh` exit 2: report the
+   As in step 4, a failed listing makes `precheck.sh` exit 2: report the
    `gh` error and stop.
 
-4. **Launch** with the Bash tool's `run_in_background: true`:
+5. **Launch** with the Bash tool's `run_in_background: true`:
 
    ```
    ${CLAUDE_SKILL_DIR}/scripts/launch.sh '${CLAUDE_SESSION_ID}' '<URL>'
    ```
 
-   On resume, pass the branch and the comment id from step 3r before the
+   On resume, pass the branch and the comment id from step 4r before the
    session id:
 
    ```
@@ -203,7 +226,7 @@ The arguments are: $ARGUMENTS
    Before launching, look at the value you are about to pass: if it is not
    a UUID (8-4-4-4-12 hex digits), for example a placeholder left as written
    (it starts with `$`) by a Claude Code that does not fill it in, launch
-   anyway and say in step 5 that this run will not show in the status line,
+   anyway and say in step 6 that this run will not show in the status line,
    only in the status comment. You will not see `launch.sh`'s
    own `jikkyo: status line off: …` warning in time, since you do not watch
    the background output; it is there for the record.
@@ -221,11 +244,11 @@ The arguments are: $ARGUMENTS
    for the user to do: never do it yourself, never edit, merge into, or
    rebase the branch, and do not offer a way around the refusal.
 
-5. **Tell the user** the run has started, in two or three lines: the issue,
+6. **Tell the user** the run has started, in two or three lines: the issue,
    that progress appears in a status comment on it (on resume, a new one,
    with a `Resumed from` row), that the child works in its own worktree so
    they can keep using their checkout, and that the run cannot be steered
-   from here; and, only when step 4 found the session id not a UUID, that
+   from here; and, only when step 5 found the session id not a UUID, that
    this run will not show in the status line. Then **end the
    turn**. Do not poll or watch
    the output: you are notified when the background command exits, and
@@ -437,8 +460,10 @@ needed because this session is idle while the run goes.
   the `/goal` evaluator judges, so "only verified" is asked, not enforced; a
   human editing the body at the same moment can still race the child, and
   ticking as it goes means more edits and more chances of that; no script
-  checks that a ticked box has a pushed commit behind it; and an issue without
-  a task list is unaffected. The push comes before the tick so that a run
+  checks that a ticked box has a pushed commit behind it. An issue without a
+  task list never gets this far: Phase 1, step 3 refuses it, since a run's
+  end state is judged by one todo per task-list item. The push comes before
+  the tick so that a run
   stopped between the two leaves an unticked box with its work on the remote,
   not a ticked box with nothing behind it.
 - **Why scripts report, not you.** You get a turn only when the background

@@ -70,8 +70,24 @@
 # depends on the shape report.sh writes (see TODOS there): change them
 # together.
 #
+#   gh api repos/<o>/<r>/issues/<N> | precheck.sh --body
+#
+# decides from the issue itself whether a run may start at all, fresh or
+# resumed, and prints one decision line:
+#
+#   go                     the body has at least one task-list item.
+#   refuse <reason>        it has none: jikkyo judges a run done by the
+#                          child's todos, one per task-list item, so it does
+#                          not start (the reason is a fixed sentence).
+#
+# A task-list item is a GFM list item outside fenced code blocks, bullet
+# (`-`, `*`, `+`) or ordered (`1.`, `1)`), at any nesting depth, whose
+# paragraph starts with `[ ]`, `[x]`, or `[X]` and whitespace; ticked and
+# unticked items both count. Nothing from the body is printed.
+#
 # Exit status: 0 with a decision, 1 as above, 2 on bad input, including
-# empty input or anything that is not a list of comment arrays.
+# empty input or anything that is not a list of comment arrays (with --body,
+# not an issue object).
 #
 set -uo pipefail
 
@@ -81,13 +97,14 @@ usage() {
   echo "usage: precheck.sh --author <login> [--now <epoch>] [--force | --resume <N> [--trusted <login>]...] < comments.json" >&2
   echo "       precheck.sh --author <login> --authors < comments.json" >&2
   echo "       precheck.sh --payload [--author <login>] < comment.json" >&2
+  echo "       precheck.sh --body < issue.json" >&2
   exit 2
 }
 
 command -v jq >/dev/null 2>&1 || { echo "precheck.sh: jq is required" >&2; exit 2; }
 
 author="" now="" force=false payload=false resume_num="" resuming=false
-authors=false trusted=()
+authors=false trusted=() body_mode=false
 # The shape of a GitHub login. Nothing else is trusted or printed.
 LOGIN_RE='^[A-Za-z0-9][A-Za-z0-9-]{0,38}$'
 while [ "$#" -gt 0 ]; do
@@ -99,6 +116,7 @@ while [ "$#" -gt 0 ]; do
     --resume) [ "$#" -ge 2 ] || usage; resume_num="$2"; resuming=true; shift 2 ;;
     --trusted) [ "$#" -ge 2 ] || usage; trusted+=("$2"); shift 2 ;;
     --authors) authors=true; shift ;;
+    --body) body_mode=true; shift ;;
     *) usage ;;
   esac
 done
@@ -109,8 +127,52 @@ done
 # before that have no `branch=` field. Both forms are read.
 MARKER_RE='^<!-- jikkyo:status v=1 state=(?<state>[a-z]+)(?: branch=(?<branch>worktree-jikkyo-[0-9]+-[0-9]{8}-[0-9]{6}))? -->'
 
+if [ "$body_mode" = true ]; then
+  if [ -n "$author" ] || [ -n "$now" ] || [ "$force" = true ] || [ "$payload" = true ] \
+     || [ "$resuming" = true ] || [ "$authors" = true ] || [ "${#trusted[@]}" -gt 0 ]; then usage; fi
+  # One issue object, as `gh api repos/<o>/<r>/issues/<N>` prints it. A failed
+  # call prints an error object (no number) or nothing, and must not read as
+  # "no task list": that is a gh error to report, so exit 2.
+  # Fenced code blocks are dropped first: a fence opens on a line that is
+  # only indent, `>`, and list markers before a run of 3 or more backticks
+  # (with no backtick after it on the line) or tildes, and closes on a line
+  # of the same character, at least as long, after indent and `>` only. A
+  # fence never closed runs to the end. Then a task-list item is a line of
+  # indent and `>`, one or more list markers (`-`, `*`, `+`, `1.`, `1)`)
+  # each followed by whitespace, then `[ ]`, `[x]`, or `[X]` and whitespace.
+  # Indented (4-space) code blocks and HTML are not dropped.
+  # shellcheck disable=SC2016  # jq program
+  out="$(jq -r '
+    def opener: capture("^[ \t]*(?:(?:>|[-+*]|[0-9]{1,9}[.)])[ \t]*)*(?<f>`{3,}|~{3,})(?<i>.*)$") // null
+      | if . != null and (.f[0:1] == "~" or (.i | test("`") | not)) then .f else null end;
+    def closes($f): test("^[ \t]*(?:>[ \t]*)*" + $f[0:1] + "{" + ($f | length | tostring) + ",}[ \t]*$");
+    def prose_lines:
+      reduce (split("\r") | join("") | split("\n"))[] as $l ({out: [], f: null};
+        .f as $open
+        | if $open != null then (if ($l | closes($open)) then .f = null else . end)
+        else ($l | opener) as $f
+          | if $f != null then .f = $f else .out[.out | length] = $l end
+        end)
+      | .out[];
+    if type == "object" and (.number | type) == "number" and ((.body | type) == "string" or .body == null)
+    then
+      if any((.body // "") | prose_lines;
+             test("^[ \t]*(?:>[ \t]*)*(?:(?:[-+*]|[0-9]{1,9}[.)])[ \t]+)+\\[[ xX]\\][ \t]"))
+      then "go"
+      else "refuse the issue body has no task-list item (such as \"- [ ] ...\" outside code blocks); jikkyo needs at least one, as a done criterion the child makes a todo for"
+      end
+    else error("not an issue") end' 2>/dev/null)" || {
+    echo "precheck.sh: expected the issue as a JSON object (did the gh call fail?)" >&2
+    exit 2
+  }
+  [ -n "$out" ] || { echo "precheck.sh: expected the issue as a JSON object (did the gh call fail?)" >&2; exit 2; }
+  printf '%s\n' "$out"
+  exit 0
+fi
+
 if [ "$payload" = true ]; then
-  if [ -n "$now" ] || [ "$force" = true ] || [ "$resuming" = true ] || [ "$authors" = true ] || [ "${#trusted[@]}" -gt 0 ]; then usage; fi
+  if [ -n "$now" ] || [ "$force" = true ] || [ "$resuming" = true ] || [ "$authors" = true ] || [ "${#trusted[@]}" -gt 0 ] \
+     || [ "$body_mode" = true ]; then usage; fi
   out="$(jq -c --arg re "$MARKER_RE" --arg author "$author" '
     if type == "array" then .[0] else . end
     | (.body // "") as $b

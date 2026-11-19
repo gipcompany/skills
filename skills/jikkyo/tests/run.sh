@@ -2390,6 +2390,62 @@ echo "precheck.sh"
 }
 
 # ===========================================================================
+echo "precheck.sh --body"
+# shellcheck disable=SC2016  # literal backticks in issue bodies
+{
+  # body_decision <body>: the first word of precheck.sh --body's line.
+  body_decision() { jq -cn --arg b "$1" '{number: 72, title: "t", body: $b}' | bash "$PRECHECK" --body | cut -d' ' -f1; }
+  body_case() {  # <go|refuse> <name> <body>
+    assert_eq "--body: $2" "$1" "$(body_decision "$3")"
+  }
+  body_case refuse "prose only: refuse" "Fix the parser. It breaks on a blank line."
+  body_case refuse "an empty body: refuse" ""
+  body_case go "a - item: go" $'Intro\n\n- [ ] one'
+  body_case go "a * item, ticked: go" '* [x] done'
+  body_case go "a + item, ticked with X: go" '+ [X] done'
+  body_case go "an ordered 1. item: go" '1. [ ] one'
+  body_case go "an ordered 12) item: go" '12) [ ] one'
+  body_case go "a nested item: go" $'- parent\n  - [ ] child'
+  body_case go "a deeply nested ordered item: go" $'1. a\n   - b\n     1. [ ] c'
+  body_case go "an item in a blockquote: go" '> - [ ] quoted'
+  body_case go "an item after a closed fence: go" $'```\ncode\n```\n- [ ] real'
+  body_case go "CRLF line ends: go" $'Intro\r\n\r\n- [ ] one\r\n'
+  body_case go "a tab after the box: go" $'- [ ]\tone'
+  body_case refuse "an item only inside a backtick fence: refuse" $'```\n- [ ] in code\n```'
+  body_case refuse "an item only inside a tilde fence with info: refuse" $'~~~md\n- [ ] in code\n~~~\nprose'
+  body_case refuse "an item inside a fence that is never closed: refuse" $'```\n- [ ] x'
+  body_case refuse "an item inside a longer fence a shorter run does not close: refuse" $'````\n```\n- [ ] x\n````'
+  body_case refuse "an item inside a fence on a list line: refuse" $'- ```\n  - [ ] in\n  ```'
+  body_case refuse "no whitespace after the box: refuse" '- [ ]x'
+  body_case refuse "a box with another letter: refuse" '- [y] no'
+  body_case refuse "a box with no list marker: refuse" '[ ] no'
+  body_case refuse "no space after the list marker: refuse" '-[ ] no'
+  body_case refuse "a box in an inline code span: refuse" 'Write `- [ ] x` to add one.'
+  body_case refuse "a box mid-line: refuse" 'text - [ ] x'
+  body_case refuse "a heading, not a list item: refuse" '# [ ] no'
+  # The decision line itself.
+  out="$(jq -cn '{number: 72, body: "- [ ] one"}' | bash "$PRECHECK" --body)"
+  assert_eq "--body: go is the whole line" "go" "$out"
+  out="$(jq -cn '{number: 72, body: "SECRET-BODY-TEXT $(id)"}' | bash "$PRECHECK" --body)"
+  assert_eq "--body: refuse says why, in one line" \
+    'refuse the issue body has no task-list item (such as "- [ ] ..." outside code blocks); jikkyo needs at least one, as a done criterion the child makes a todo for' "$out"
+  assert_lacks "--body: nothing from the body is printed" "SECRET-BODY-TEXT" "$out"
+  out="$(jq -cn '{number: 72, body: null}' | bash "$PRECHECK" --body | cut -d' ' -f1)"
+  assert_eq "--body: a null body: refuse" "refuse" "$out"
+  # Bad input is exit 2, never a decision.
+  for bad_input in '{"message":"Not Found"}' '' 'not json' '[{"number":1,"body":"- [ ] x"}]' '{"number":"1","body":"- [ ] x"}' '{"number":1,"body":5}'; do
+    rc=0; out="$(printf '%s' "$bad_input" | bash "$PRECHECK" --body 2>/dev/null)" || rc=$?
+    assert_eq "--body: exit 2 and no decision for [$bad_input]" "2:" "$rc:$out"
+  done
+  for flags in "--author me" "--force" "--resume 72" "--authors" "--payload" "--now 1"; do
+    rc=0
+    # shellcheck disable=SC2086  # the flags are split on purpose
+    jq -cn '{number: 72, body: "- [ ] x"}' | bash "$PRECHECK" --body $flags >/dev/null 2>&1 || rc=$?
+    assert_eq "--body does not combine with $flags" "2" "$rc"
+  done
+}
+
+# ===========================================================================
 echo "cleanup.sh"
 {
   base="$TMP/cleanup"
@@ -2525,6 +2581,20 @@ echo "SKILL.md"
   # collapsed, so rewrapping the bullet does not matter (#70).
   who_writes="$(awk '/^- \*\*Who writes the issue body\.\*\*/ { on = 1; print; next }
     on && /^  / { print; next } { on = 0 }' <<<"$skill" | tr -s '[:space:]' ' ')"
+  # The task-list check is its own step, run on the issue itself, before the
+  # comments check, for fresh runs and resumes alike (#72).
+  body_line="$(grep -n -F "gh api 'repos/<owner>/<repo>/issues/<N>' | \${CLAUDE_SKILL_DIR}/scripts/precheck.sh --body" "$SKILL_MD" | cut -d: -f1)"
+  step3_line="$(grep -n '^3\. \*\*Check that the issue has a task list\*\*' "$SKILL_MD" | cut -d: -f1)"
+  step4_line="$(grep -n '^4\. \*\*Decide whether to start\.\*\*' "$SKILL_MD" | cut -d: -f1)"
+  first_comments="$(grep -n -F "issues/<N>/comments' | \${CLAUDE_SKILL_DIR}/scripts/precheck.sh" "$SKILL_MD" | head -n 1 | cut -d: -f1)"
+  if [ -n "$body_line" ] && [ -n "$step3_line" ] && [ -n "$step4_line" ] && [ -n "$first_comments" ] \
+     && [ "$step3_line" -lt "$body_line" ] && [ "$body_line" -lt "$step4_line" ] && [ "$body_line" -lt "$first_comments" ]; then
+    ok "SKILL.md: precheck.sh --body is step 3, before every comments check (#72)"
+  else bad "SKILL.md: precheck.sh --body is step 3, before every comments check (#72) ($step3_line $body_line $step4_line $first_comments)"; fi
+  assert_has "SKILL.md: ...for fresh runs and resumes alike (#72)" "for a fresh run and a resume
+   alike, before the comments are read." "$skill"
+  assert_has "SKILL.md: ...and the resume path goes through it (#72)" "With \`--resume\`, do step 4 the resume way (4r below) instead." "$skill"
+  assert_has "SKILL.md: ...a refusal stops the run (#72)" "**stop**. \`--force\` does not skip this check." "$skill"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: the tick rule keeps the - marker (#70)" '`- [ ]` becomes `- [x]`' "$who_writes"
   # shellcheck disable=SC2016  # literal backticks
@@ -2599,14 +2669,14 @@ echo "SKILL.md"
   # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
   assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   assert_has "SKILL.md: the parent checks the session id's shape itself before launching" "Before launching, look at the value you are about to pass" "$skill"
-  assert_has "...and tells the user the run will not show in the status line" "say in step 5 that this run will not show in the" "$skill"
+  assert_has "...and tells the user the run will not show in the status line" "say in step 6 that this run will not show in the" "$skill"
   # Matched with runs of spaces and newlines squeezed to one space, so a
-  # rewrap of step 4 does not break it.
+  # rewrap of step 5 does not break it.
   # shellcheck disable=SC2016  # a literal backtick and $
   assert_has "...naming a placeholder by its \$, not by the variable's name" \
     'for example a placeholder left as written (it starts with `$`)' \
     "$(tr -s ' \n' '  ' <<<"$skill")"
-  assert_has "...which step 5 says too, in the same words" "only when step 4 found the session id not a UUID" "$skill"
+  assert_has "...which step 6 says too, in the same words" "only when step 5 found the session id not a UUID" "$skill"
   # Claude Code fills in the variable everywhere in the skill text, so it is
   # named on exactly these three lines (the two launch lines and the Status
   # line section) and nowhere else, in any spelling.
