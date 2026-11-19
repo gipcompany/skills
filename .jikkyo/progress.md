@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:18:46Z
-next: tick the LANG_FILTER parent item (todo 5)
+updated: 2026-11-19T16:19:09Z
+next: tick the "still runs entirely inside jq" item (todo 6)
 
 ## Todos
 
@@ -9,7 +9,7 @@ next: tick the LANG_FILTER parent item (todo 5)
 - [x] Code spans: matching run length, may span lines, unmatched is literal (06161ad)
 - [x] Indented blocks, HTML code, fences in quotes/lists are not dropped (06161ad)
 - [x] Title and body cleaned separately (06161ad)
-- [ ] LANG_FILTER drops code before testing for Japanese
+- [x] LANG_FILTER drops code before testing for Japanese (06161ad)
 - [ ] Check still runs entirely inside jq
 - [ ] Test: Japanese only in code spans gives en
 - [ ] Test: Japanese only in a fenced block gives en
@@ -36,6 +36,7 @@ next: tick the LANG_FILTER parent item (todo 5)
 - Code span rules (closed by the next run of the same length, across lines; unmatched run is literal): same ad hoc jq runs (double span holding a single backtick, multi-line span, unmatched run, run-length mismatch, unmatched run followed by a later span) and the run.sh cases
 - Not dropped (indented blocks, HTML pre/code, fences in blockquotes or list items): ad hoc jq runs on each (indented block with and without backtick lines, blockquote fence, list-item fence, HTML code) all gave ja, and the run.sh limit cases pass
 - Title and body cleaned separately (spans only from the title, fences then spans from the body, ja if either keeps Japanese): run.sh cases "title Japanese only in a code span" (en), "title that starts with a fence over a Japanese body" (ja), and "Japanese in the title alone" (ja) pass
+- LANG_FILTER drops fenced blocks and code spans before the Japanese test: all four sub-items above verified; full run.sh passed (0 failed) and shellcheck is clean; the report.sh diff against main is two hunks, the header Language paragraph and the LANG_FILTER block with its comment
 
 ## Dead ends and decisions
 
