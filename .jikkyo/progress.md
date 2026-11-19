@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/72
 branch: worktree-jikkyo-72-20261120-043310
-updated: 2026-11-20T04:58:00+09:00
-next: AC6, make incomplete resumable (precheck.sh --resume candidates, SKILL.md closing summary)
+updated: 2026-11-20T05:06:00+09:00
+next: AC7, the stopped glyph and the docs for incomplete (report.sh glyph, SKILL.md, README, tests/README)
 
 ## Todos
 - [x] AC1: incomplete state when todos not all completed (299df03)
@@ -9,7 +9,7 @@ next: AC6, make incomplete resumable (precheck.sh --resume candidates, SKILL.md 
 - [ ] AC3: ordered marker example in tick instruction
 - [ ] AC4: unconditional todo instruction, resume todos per item
 - [x] AC5: no todos ends incomplete (6defc94)
-- [ ] AC6: incomplete is resumable
+- [x] AC6: incomplete is resumable (5e49d9b)
 - [ ] AC7: docs and stopped glyph cover incomplete
 - [ ] AC8: jikkyo: todos line and closing-summary sentence
 - [x] AC9: statusline.sh shows incomplete (299df03)
@@ -20,6 +20,7 @@ next: AC6, make incomplete resumable (precheck.sh --resume candidates, SKILL.md 
 - A run whose stream ends with a non-error result line but whose non-deleted todos are not all completed ends incomplete: new end-state tests in tests/run.sh (some pending, in progress, deleted ignored, Japanese 未完了); full suite 883/0 and shellcheck clean
 - statusline.sh shows an incomplete run like the other ended states: state-file loops for incomplete in en and ja (5-minute window), end-to-end runs through report.sh showing incomplete and 未完了; full suite 883/0
 - A run that still ends with no todos ends incomplete: new tests for no todos and for every todo deleted, plus the no-todo turn-count tests in en and ja; full suite 886/0 and shellcheck clean
+- incomplete is resumable like interrupted and failed: precheck --resume tests (own, trusted, untrusted, latest wins, later finished takes it out, never blocks a start, --payload refuses it); SKILL.md Phase 3 resumable rule and README updated; full suite 893/0 and shellcheck clean
 
 ## Dead ends and decisions
 - AC1 and AC9 are one commit: the status-line end-to-end tests run report.sh, so they flip together.
