@@ -5,7 +5,7 @@ description: "Use when you want to run /goal on a GitHub issue and have the run
   estimate of the time remaining in one status comment edited in place, plus a
   closing summary comment. Invoked explicitly as /jikkyo [--force |
   --resume] <GitHub issue URL>; the user never types a /goal line. --resume
-  continues an interrupted or failed run from its pushed branch, also one
+  continues an interrupted, failed, or incomplete run from its pushed branch, also one
   started by another account with write access. Starts /goal in a headless `claude -p` child in its
   own git worktree, so the user cannot steer the run while it is in
   progress. Requires gh and jq. Not for targets other than a GitHub issue
@@ -42,7 +42,7 @@ The arguments are: $ARGUMENTS
   else (a PR, a comment link, `owner/repo#N`, a bare number) is out of scope:
   say so and stop.
 - `--force` starts the run even when another run looks active on the issue.
-- `--resume` continues the latest `interrupted` or `failed` run on the issue
+- `--resume` continues the latest `interrupted`, `failed`, or `incomplete` run on the issue
   from its pushed branch, instead of starting from scratch, also a run
   started by another account with `admin` or `write` permission on the
   repository. Without it,
@@ -168,8 +168,9 @@ The arguments are: $ARGUMENTS
      branch is `worktree-jikkyo-<N>-<timestamp>` and the id is all digits;
      `precheck.sh` has validated both, and they are the only things taken
      from the comments onto a command line.
-   - `none` — there is no run to resume: no `interrupted` or `failed` status
-     comment (or stale `running` one of a trusted account) by this account
+   - `none` — there is no run to resume: no `interrupted`, `failed`, or
+     `incomplete` status comment (or stale `running` one of a trusted
+     account) by this account
      or a trusted one (a branch with a later `finished` comment does
      not count: that run was resumed and completed), or the latest one names
      no branch (it predates branch recording) or a branch of another issue.
@@ -313,8 +314,8 @@ Then, in this order:
      fails, say in the summary that whether a PR exists is unknown, and
      still name the branch if it is on the remote.
 
-   The run is **resumable** when its state is `interrupted` or `failed`
-   and the branch is on the remote. If step 1 left the worktree or the
+   The run is **resumable** when its state is `interrupted`, `failed`, or
+   `incomplete` and the branch is on the remote. If step 1 left the worktree or the
    local branch in place (`cleanup.sh` printed `keep`, or a git step
    refused), the resume command may be refused until a person deals with
    it: `launch.sh --resume` will not start on a branch that is checked out
@@ -551,9 +552,10 @@ needed because this session is idle while the run goes.
   number, and exits 2 before any write otherwise. `precheck.sh` reads markers
   with or without `branch=` (comments written before it have none), and
   `--payload` keeps the field when it rewrites the state.
-- **Resuming a run.** `/jikkyo --resume <URL>` continues an interrupted or
-  failed run from its pushed branch, so another machine can pick it up.
-  The branch comes only from the latest `interrupted` or `failed` status
+- **Resuming a run.** `/jikkyo --resume <URL>` continues an interrupted,
+  failed, or incomplete run from its pushed branch, so another machine can
+  pick it up. The branch comes only from the latest `interrupted`,
+  `failed`, or `incomplete` status
   comment `precheck.sh` counts (jikkyo's marker, by this account or a
   trusted one, see "Takeover by another account" below), leaving
   out a branch that a later `finished` comment names (earlier comments are
@@ -651,8 +653,8 @@ needed because this session is idle while the run goes.
 - **How a run ends.** `finished` (a non-error `result` line), `failed` (an
   error `result` line), or `interrupted` (no `result` line, or `report.sh` was
   sent SIGTERM, SIGHUP, or SIGINT — it writes `interrupted` before it exits).
-- **How a stop is reported as resumable.** A run that ends `interrupted` or
-  `failed`, whose marker carries `branch=`, and whose branch is on the
+- **How a stop is reported as resumable.** A run that ends `interrupted`,
+  `failed`, or `incomplete`, whose marker carries `branch=`, and whose branch is on the
   remote is resumable, and the closing summary gives
   `/jikkyo --resume '<URL>'` in the status comment's language (Phase 3).
   jikkyo does not try to tell why a run stopped, and mentions a cause only

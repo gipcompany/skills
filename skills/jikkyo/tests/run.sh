@@ -2185,6 +2185,18 @@ echo "precheck.sh"
   assert_eq "--resume: no comments: none" "none" "$(echo '[]' | bash "$PRECHECK" --author me --now "$NOW" --resume 12)"
   assert_eq "--resume: an interrupted comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me interrupted 60 | decide_resume)"
   assert_eq "--resume: a failed comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me failed 60 | decide_resume)"
+  assert_eq "--resume: an incomplete comment with a branch: resume it (#72)" "resume $BR 1" "$(br_comment 1 me incomplete 60 | decide_resume)"
+  assert_eq "--resume: the latest of interrupted, failed, and incomplete wins (#72)" "resume $BR2 4" \
+    "$( { br_comment 1 me interrupted 9000; br2_comment 4 me incomplete 100; br_comment 3 me failed 10; } | decide_resume)"
+  assert_eq "--resume: an incomplete run that was resumed and then finished is not resumed again (#72)" "none" \
+    "$( { br_comment 1 me incomplete 9000; br_comment 2 me finished 60; } | decide_resume)"
+  assert_eq "--resume: a trusted account's incomplete comment is resumed (#72)" "resume $BR 1" \
+    "$(br_comment 1 alice incomplete 60 | decide --resume 12 --trusted alice)"
+  assert_eq "--resume: an untrusted account's incomplete comment is not (#72)" "none" \
+    "$(br_comment 1 alice incomplete 60 | decide_resume)"
+  assert_eq "an incomplete comment never blocks a new run (#72)" "start" "$(comment 1 me incomplete 10 | decide)"
+  rc=0; br_comment 1 me incomplete 10 | bash "$PRECHECK" --payload >/dev/null 2>&1 || rc=$?
+  assert_eq "--payload refuses an incomplete comment, which is not running (#72)" "1" "$rc"
   assert_eq "--resume: the latest interrupted or failed one wins" "resume $BR2 5" \
     "$( { br_comment 1 me failed 9000; br2_comment 5 me interrupted 8000; br_comment 3 me interrupted 10; } | decide_resume)"
   assert_eq "--resume: a finished run is not resumed" "none" "$(br_comment 1 me finished 60 | decide_resume)"

@@ -296,9 +296,13 @@ timing and signal tests waiting on a real scheduler.
   - `none` with no comments, for a `finished` run, another author, a latest
     run without a branch, a branch of another issue (also `jikkyo-123-`
     for 12), or a malformed one.
-  - `resume <branch> <id>` for the latest `interrupted` or `failed`
-    comment, by id, in English or Japanese, and nothing but that shape on
-    the line. A later `finished` run of another branch does not hide it.
+  - `resume <branch> <id>` for the latest `interrupted`, `failed`, or
+    `incomplete` comment, by id, in English or Japanese, and nothing but
+    that shape on the line. A later `finished` run of another branch does
+    not hide it; a later `finished` one on the same branch takes an
+    `incomplete` run out too. A trusted account's `incomplete` comment is
+    resumed, an untrusted one's is not. An `incomplete` comment never
+    blocks a new run, and `--payload` refuses it.
   - `none` once a later `finished` comment names the same branch, but that
     branch again if it was then interrupted once more. A `finished` comment
     by another author does not count, nor does a comment whose id is not a

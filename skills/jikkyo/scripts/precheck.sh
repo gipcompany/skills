@@ -22,8 +22,9 @@
 #                          again, so a run that died at `running` can be the
 #                          one resumed.
 #   resume <branch> <id>   resume the branch named in status comment <id>:
-#                          the latest `interrupted` or `failed` one counted,
-#                          leaving out a branch with a later `finished` one.
+#                          the latest `interrupted`, `failed`, or
+#                          `incomplete` one counted, leaving out a branch
+#                          with a later `finished` one.
 #   none                   nothing to resume: no such comment, or the latest
 #                          one names no branch, or a branch of another issue.
 #
@@ -216,7 +217,8 @@ jq -r -s --arg re "$MARKER_RE" --arg author "$author" --argjson now "$now" \
         # Another account'"'"'s `running` comment, stale since no live one is
         # left here, is a run that died without saying so: it counts like
         # `interrupted`, and is left as it is.
-        | ([ $counted[] | select(.state == "interrupted" or .state == "failed" or (.state == "running" and (.own | not)))
+        | ([ $counted[] | select(.state == "interrupted" or .state == "failed" or .state == "incomplete"
+                                  or (.state == "running" and (.own | not)))
            | select((.id | type) == "number")
            | . as $c | select(all($done[]; .branch != $c.branch or .id < $c.id)) ] | max_by(.id)) as $last
         | if $last == null then "none"
