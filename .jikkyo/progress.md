@@ -1,14 +1,14 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:18:31Z
-next: tick the "title and body cleaned separately" sub-item (todo 4)
+updated: 2026-11-19T16:18:46Z
+next: tick the LANG_FILTER parent item (todo 5)
 
 ## Todos
 
 - [x] Fenced blocks: opener/closer rules, unclosed runs to end (06161ad)
 - [x] Code spans: matching run length, may span lines, unmatched is literal (06161ad)
 - [x] Indented blocks, HTML code, fences in quotes/lists are not dropped (06161ad)
-- [ ] Title and body cleaned separately
+- [x] Title and body cleaned separately (06161ad)
 - [ ] LANG_FILTER drops code before testing for Japanese
 - [ ] Check still runs entirely inside jq
 - [ ] Test: Japanese only in code spans gives en
@@ -35,6 +35,7 @@ next: tick the "title and body cleaned separately" sub-item (todo 4)
 - Fenced block rules (indent up to 3, 3+ backticks or tildes, closer same char and at least as long, unclosed runs to end): LANG_FILTER extracted from report.sh and run by jq on ad hoc issues (longer/shorter closer, other char, 4-space opener and closer, closer with info, CRLF, unclosed)
 - Code span rules (closed by the next run of the same length, across lines; unmatched run is literal): same ad hoc jq runs (double span holding a single backtick, multi-line span, unmatched run, run-length mismatch, unmatched run followed by a later span) and the run.sh cases
 - Not dropped (indented blocks, HTML pre/code, fences in blockquotes or list items): ad hoc jq runs on each (indented block with and without backtick lines, blockquote fence, list-item fence, HTML code) all gave ja, and the run.sh limit cases pass
+- Title and body cleaned separately (spans only from the title, fences then spans from the body, ja if either keeps Japanese): run.sh cases "title Japanese only in a code span" (en), "title that starts with a fence over a Japanese body" (ja), and "Japanese in the title alone" (ja) pass
 
 ## Dead ends and decisions
 
