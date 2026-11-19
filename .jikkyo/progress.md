@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:20:51Z
-next: tick the unmatched backtick test case (todo 14)
+updated: 2026-11-19T16:20:59Z
+next: tick the title code span test case (todo 15)
 
 ## Todos
 
@@ -18,7 +18,7 @@ next: tick the unmatched backtick test case (todo 14)
 - [x] Test: Japanese only in a ~~~ fence gives en (6075189)
 - [x] Test: unclosed fence holding Japanese gives en (6075189)
 - [x] Test: double-backtick span with a backtick and Japanese gives en (6075189)
-- [ ] Test: unmatched backtick then Japanese prose gives ja
+- [x] Test: unmatched backtick then Japanese prose gives ja (6075189)
 - [ ] Test: title Japanese only in a code span gives en
 - [ ] Test: title starting with ``` does not hide Japanese body
 - [ ] Test: indented block, blockquote fence, HTML code give ja
@@ -45,6 +45,7 @@ next: tick the unmatched backtick test case (todo 14)
 - run.sh case, Japanese only in a ~~~ fence gives en: passes in the full run.sh run
 - run.sh case, English prose followed by an unclosed fence holding Japanese gives en: passes in the full run.sh run
 - run.sh case, a double-backtick span holding a single backtick and Japanese gives en: passes in the full run.sh run
+- run.sh case, an unmatched backtick followed by Japanese prose gives ja: passes in the full run.sh run
 
 ## Dead ends and decisions
 
