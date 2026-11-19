@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:21:27Z
-next: tick the run.sh parent item (todo 18)
+updated: 2026-11-19T16:21:36Z
+next: tick the end-to-end en/ja item (todo 19)
 
 ## Todos
 
@@ -22,7 +22,7 @@ next: tick the run.sh parent item (todo 18)
 - [x] Test: title Japanese only in a code span gives en (6075189)
 - [x] Test: title starting with ``` does not hide Japanese body (6075189)
 - [x] Test: indented block, blockquote fence, HTML code give ja (6075189)
-- [ ] run.sh covers each rule (parent item)
+- [x] run.sh covers each rule (parent item) (6075189)
 - [ ] Code-only Japanese gives en, prose gives ja (end to end)
 - [ ] SKILL.md "Which language" describes new rule and limit
 - [ ] README.md jikkyo language paragraph updated
@@ -49,6 +49,7 @@ next: tick the run.sh parent item (todo 18)
 - run.sh case, a title whose Japanese is only in a code span, with an English body, gives en: passes in the full run.sh run
 - run.sh case, a title that starts with a backtick fence over a Japanese body gives ja: passes in the full run.sh run
 - run.sh cases, Japanese only in an indented block, a blockquote fence, or HTML code gives ja: all three pass in the full run.sh run
+- run.sh covers each rule, one case each: all 11 sub-items verified; the full run passed with 0 failed and shellcheck on scripts and tests is clean
 
 ## Dead ends and decisions
 
