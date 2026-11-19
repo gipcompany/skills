@@ -513,18 +513,32 @@ needed because this session is idle while the run goes.
 - **Which language.** `report.sh` decides once, at the start, before its
   first write: it reads the issue's title and body with `gh api` and pipes
   them to `jq`, which answers `ja` if they contain any hiragana, katakana, or
-  kanji, else `en`. Nothing from the issue reaches a command line or the
-  comment; only `ja` or `en` comes back, and a failed read gives `en`. For
-  `ja` the heading, the field names, the state words (`実行中`, `完了`,
-  `失敗`, `中断`), the turn count, and the estimate labels are Japanese; the
-  number and duration formats are the same as in English, and so is the
-  hidden marker, state values included, so `precheck.sh` reads a run's state
-  the same way in either language. `precheck.sh --payload` rewrites the
-  visible text of either form, including comments written before there was a
-  Japanese form. Limits: only `ja` or `en` (any other language gets English);
-  an English issue that quotes any Japanese text is classed as `ja`; and
-  editing the issue mid-run does not change the language. You write the
-  closing summary in that language too (Phase 3).
+  kanji outside code, else `en`. Code is dropped first, following the
+  CommonMark rules for two constructs: fenced code blocks (a fence of 3 or
+  more backticks or tildes, with up to 3 spaces of indent, closed by the same
+  character in a run at least as long; a fence never closed runs to the end)
+  from the body, then code spans (a backtick run closed by the next run of
+  the same length, across lines but not across a blank line; a run with no
+  closer, or a backslash-escaped backtick, is literal text) from the title
+  and from each paragraph of the body, the title and the body each cleaned on
+  its own. So an English issue that quotes Japanese labels or output in code
+  gets `en`, and a Japanese issue, whose prose is Japanese, still gets `ja`.
+  Nothing from the issue reaches a command line or the comment; only `ja` or
+  `en` comes back, and a failed read gives `en`. For `ja` the heading, the
+  field names, the state words (`実行中`, `完了`, `失敗`, `中断`), the turn
+  count, and the estimate labels are Japanese; the number and duration
+  formats are the same as in English, and so is the hidden marker, state
+  values included, so `precheck.sh` reads a run's state the same way in
+  either language. `precheck.sh --payload` rewrites the visible text of
+  either form, including comments written before there was a Japanese form.
+  Limits: only `ja` or `en` (any other language gets English); an English
+  issue that quotes Japanese outside code is classed as `ja`, and so is one
+  whose Japanese is only in an indented (4-space) code block, in HTML `<pre>`
+  or `<code>`, or in a fence that opens on a blockquote or list-marker line
+  (`> ```` or `- ````), since those are not dropped and count as prose (a
+  fence on a list item's continuation line, indented by up to 3 spaces, is
+  dropped like any other); and editing the issue mid-run does not change the
+  language. You write the closing summary in that language too (Phase 3).
 - **Concurrent runs.** One run per issue, judged from the issue itself, so it
   works across terminals and machines: a `running` status comment by the same
   account that was updated within 15 minutes blocks a new run. The state lives

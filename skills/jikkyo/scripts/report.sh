@@ -53,7 +53,8 @@
 #
 # Language: before the first write it reads the issue's title and body with
 # `gh api` and writes the visible text in Japanese (`ja`) if they contain any
-# hiragana, katakana, or kanji, else in English (`en`). The issue's text goes
+# hiragana, katakana, or kanji outside code (fenced code blocks and code
+# spans, see LANG_FILTER), else in English (`en`). The issue's text goes
 # from gh to jq on a pipe and only `ja` or `en` comes back: none of it reaches
 # a command line or the comment. A failed fetch gives `en`. The choice is made
 # once and printed as `jikkyo: language <ja|en>`. The hidden marker, the state
@@ -154,13 +155,96 @@ fmt_duration() {
   else printf '%ds' "$s"; fi
 }
 
-# Hiragana, katakana (with the phonetic extensions and the halfwidth forms),
-# and kanji (CJK unified ideographs, extension A, compatibility ideographs).
+# The issue is `ja` if Japanese is left in its title or body once code is
+# dropped, else `en`. Japanese is hiragana, katakana (with the phonetic
+# extensions and the halfwidth forms), and kanji (CJK unified ideographs,
+# extension A, compatibility ideographs). Code is dropped following the
+# CommonMark rules for two constructs, so an English issue that quotes
+# Japanese labels or output in code stays `en`:
+#   - fenced code blocks, from the body only: a fence opens on a line with up
+#     to 3 spaces of indent and a run of 3 or more backticks (with no backtick
+#     after it on the line) or 3 or more tildes, and closes on a line with up
+#     to 3 spaces of indent, a run of the same character at least as long, and
+#     nothing after it but spaces or tabs. A fence that is never closed runs
+#     to the end of the body. The fence lines go too.
+#   - code spans, from the title and from each paragraph of what is left of
+#     the body: a run of backticks closed by the next run of the same length,
+#     across lines but not across a blank line. A run with no matching closer
+#     is literal text, and so is a backtick after an odd number of
+#     backslashes (an escaped one).
+# Indented (4-space) code blocks, HTML <pre>/<code>, and fences that open on a
+# blockquote or list-marker line (`> ```` or `- ````) are not dropped: their
+# text counts as prose. Such a fence is followed to its closing line, so an
+# indented closing line is not taken for a new fence that would run to the
+# end of the body. So that a fence's backtick run does
+# not pair with a later one as a code span, a line that is only a backtick
+# fence after indent, `>`, or list markers loses that run first (unfence). A
+# fence on a list item's continuation line, indented by up to 3 spaces, is a
+# fence like any other and is dropped. The title and the body are cleaned
+# apart, so a title that starts with ``` does not hide the body. Tokens are
+# built with split and appended by index, never with scan, gsub, or +=,
+# which jq 1.7 runs in quadratic time on a long body.
 # shellcheck disable=SC2016  # jq program
 LANG_FILTER='
-  ((.title // "") + "\n" + (.body // "")) as $t
-  | if ($t | type) == "string"
-       and ($t | test("[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]"))
+  def jp: test("[぀-ヿㇰ-ㇿ㐀-䶿一-鿿豈-﫿ｦ-ﾟ]");
+  def lines: split("\r") | join("") | split("\n");
+  def oddbs:
+    (split("\\") | reverse) as $r
+    | ((first($r | to_entries[] | select(.value != "") | .key)) // ($r | length - 1)) % 2 == 1;
+  def unfence:
+    ((capture("^(?<p>[ \t]*(?:(?:>|[-+*]|[0-9]{1,9}[.)])[ \t]*)*)`{3,}(?<i>[^`]*)$")) // null) as $m
+    | if $m == null then . else $m.p + $m.i end;
+  def opener($m): $m != null and ($m.f[0:1] == "~" or ($m.i | test("`") | not));
+  def closes($f): test("^[ \t]*(?:>[ \t]*)*" + $f[0:1] + "{" + ($f | length | tostring) + ",}[ \t]*$");
+  def drop_fences:
+    reduce lines[] as $l ({out: [], f: null, c: null};
+      .f as $f | .c as $c
+      | if $f != null then
+        if ($l | test("^ {0,3}" + $f[0:1] + "{" + ($f | length | tostring) + ",}[ \t]*$"))
+        then .f = null else . end
+      elif $c != null then
+        if ($l | closes($c)) then .c = null else .out[.out | length] = ($l | unfence) end
+      else
+        (($l | capture("^ {0,3}(?<f>`{3,}|~{3,})(?<i>.*)$")) // null) as $m
+        | if opener($m) then .f = $m.f
+          else
+            (($l | capture("^(?<p>[ \t]*(?:(?:>|[-+*]|[0-9]{1,9}[.)])[ \t]*)+)(?<f>`{3,}|~{3,})(?<i>.*)$")) // null) as $n
+            | if opener($n) then .c = $n.f | .out[.out | length] = $n.p + $n.i
+              else .out[.out | length] = ($l | unfence) end
+          end
+      end)
+    | .out;
+  def paragraphs:
+    reduce (.[], "") as $l ({ps: [], cur: []};
+      if ($l | test("^[ \t]*$")) then
+        (if (.cur | length) > 0 then .ps[.ps | length] = (.cur | join("\n")) else . end) | .cur = []
+      else .cur[.cur | length] = $l end)
+    | .ps[];
+  def drop_spans:
+    (split("`") as $p
+     | reduce $p[1:][] as $s ({t: (if $p[0] == "" then [] else [$p[0]] end), r: 0};
+         .r += 1
+         | if $s == "" then .
+           else
+             (if .r > 0 and (.t | length) > 0 and (.t[-1] | startswith("`") | not) and (.t[-1] | endswith("\\") and oddbs)
+              then .t[-1] += "`" | .r -= 1 else . end)
+             | (if .r > 0 then .t[.t | length] = ("`" * .r) else . end)
+             | .t[.t | length] = $s | .r = 0
+           end)
+     | if .r > 0 then .t[.t | length] = ("`" * .r) else . end
+     | .t) as $t
+    | {i: 0, out: []}
+    | until(.i >= ($t | length);
+        $t[.i] as $x
+        | if ($x | startswith("`")) then
+            (first(range(.i + 1; $t | length) as $j | select($t[$j] == $x) | $j) // null) as $j
+            | if $j == null then .out[.out | length] = $x | .i += 1 else .i = $j + 1 end
+          else .out[.out | length] = $x | .i += 1 end)
+    | .out | join("");
+  (.title // "") as $title | (.body // "") as $body
+  | if ($title | type) == "string" and ($body | type) == "string"
+       and (($title | drop_spans | jp)
+            or any($body | drop_fences | paragraphs; drop_spans | jp))
     then "ja" else "en" end
 '
 
