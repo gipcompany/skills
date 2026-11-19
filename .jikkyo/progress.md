@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:20:05Z
-next: tick the Japanese prose test case (todo 9)
+updated: 2026-11-19T16:20:15Z
+next: tick the Japanese-prose-with-code test case (todo 10)
 
 ## Todos
 
@@ -13,7 +13,7 @@ next: tick the Japanese prose test case (todo 9)
 - [x] Check still runs entirely inside jq (06161ad)
 - [x] Test: Japanese only in code spans gives en (6075189)
 - [x] Test: Japanese only in a fenced block gives en (6075189)
-- [ ] Test: Japanese prose gives ja
+- [x] Test: Japanese prose gives ja (6075189)
 - [ ] Test: Japanese prose with code gives ja
 - [ ] Test: Japanese only in a ~~~ fence gives en
 - [ ] Test: unclosed fence holding Japanese gives en
@@ -40,6 +40,7 @@ next: tick the Japanese prose test case (todo 9)
 - Check still runs entirely inside jq: detect_lang is unchanged (gh api piped to jq, case on ja/en); the run.sh tests that no issue text reaches a gh argument, the comment, or the output, and that a $(...) in the issue is never run, pass
 - run.sh case, Japanese only in code spans gives en: passes in the full run.sh run
 - run.sh case, Japanese only in a fenced block gives en: passes in the full run.sh run
+- run.sh case, Japanese prose gives ja: passes in the full run.sh run
 
 ## Dead ends and decisions
 
