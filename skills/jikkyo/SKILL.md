@@ -521,8 +521,9 @@ needed because this session is idle while the run goes.
   same length, across lines too; a run with no closer is literal text) from
   the title and the body, each cleaned on its own. So an English issue that
   quotes Japanese labels or output in code gets `en`, and a Japanese issue,
-  whose prose is Japanese, still gets `ja`. Nothing from the issue reaches a command line or the
-  comment; only `ja` or `en` comes back, and a failed read gives `en`. For
+  whose prose is Japanese, still gets `ja`. Nothing from the issue reaches a
+  command line or the comment; only `ja` or `en` comes back, and a failed
+  read gives `en`. For
   `ja` the heading, the field names, the state words (`実行中`, `完了`,
   `失敗`, `中断`), the turn count, and the estimate labels are Japanese; the
   number and duration formats are the same as in English, and so is the
@@ -533,8 +534,8 @@ needed because this session is idle while the run goes.
   an English issue that quotes Japanese outside code is classed as `ja`, and
   so is one whose Japanese is only in an indented (4-space) code block, in
   HTML `<pre>` or `<code>`, or in a fence inside a blockquote or list item,
-  since those are not dropped and count as prose; and
-  editing the issue mid-run does not change the language. You write the
+  since those are not dropped and count as prose; and editing the issue
+  mid-run does not change the language. You write the
   closing summary in that language too (Phase 3).
 - **Concurrent runs.** One run per issue, judged from the issue itself, so it
   works across terminals and machines: a `running` status comment by the same
