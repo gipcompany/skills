@@ -427,7 +427,8 @@ needed because this session is idle while the run goes.
   it is verified; tick only verified items, never untick or reword, change
   nothing but `[ ]` to `[x]` in those lines' task-list boxes, keeping each
   line's own marker (`- [ ]` becomes `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]`
-  becomes `+ [x]`), and fetch the current body right before each edit, because
+  becomes `+ [x]`, `1. [ ]` becomes `1. [x]`), and fetch the current body
+  right before each edit, because
   `gh issue edit --body` replaces the whole body. The instruction is a
   constant, so nothing from the issue reaches the command line beyond the
   validated URL, and the goal is met only when every box the child could verify

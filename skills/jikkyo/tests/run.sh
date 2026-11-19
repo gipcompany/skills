@@ -1319,7 +1319,7 @@ echo "launch.sh"
   assert_has "...an item with no commits is ticked once verified" 'An item with no commits of its own (for example "a draft PR is open") is ticked as soon as it is verified.' "$prompt"
   assert_has "...before moving on, not saved for the end" "before you move on to the next item; do not save the ticks for one edit at the end" "$prompt"
   assert_has "...only verified ones, never untick or reword" "Tick only items you have verified, and never untick or reword anything." "$prompt"
-  assert_has "...changing only [ ] to [x] in the box, keeping any marker (#68)" 'Change nothing in the body but "[ ]" to "[x]" in those lines'"'"' task-list boxes, keeping each line'"'"'s own marker ("- [ ]" becomes "- [x]", "* [ ]" becomes "* [x]", "+ [ ]" becomes "+ [x]"):' "$prompt"
+  assert_has "...changing only [ ] to [x] in the box, keeping any marker (#68)" 'Change nothing in the body but "[ ]" to "[x]" in those lines'"'"' task-list boxes, keeping each line'"'"'s own marker ("- [ ]" becomes "- [x]", "* [ ]" becomes "* [x]", "+ [ ]" becomes "+ [x]", "1. [ ]" becomes "1. [x]"):' "$prompt"
   assert_lacks "...and no longer names only the - marker (#68)" 'Change nothing in the body but "- [ ]" to "- [x]"' "$prompt"
   assert_has "...fetching the body right before each edit" "fetch the current body right before each edit" "$prompt"
   assert_has "...and the goal includes the ticks" "every box you could verify is ticked" "$prompt"
@@ -2526,6 +2526,8 @@ echo "SKILL.md"
   assert_has "SKILL.md: ...the * marker (#70)" '`* [ ]` becomes `* [x]`' "$who_writes"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: ...and the + marker (#70)" '`+ [ ]` becomes `+ [x]`' "$who_writes"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: ...and an ordered one (#72)" '`1. [ ]` becomes `1. [x]`' "$who_writes"
   # shellcheck disable=SC2016  # literal backticks
   assert_lacks "SKILL.md: ...and no longer names only the - marker (#70)" 'but `- [ ]` to `- [x]`' "$who_writes"
   assert_has "tests/README.md: lists the todo-list tests (#62)" "**\`report.sh\`, the todo list**" "$(cat "$HERE/README.md")"

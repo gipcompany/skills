@@ -374,5 +374,6 @@ timing and signal tests waiting on a real scheduler.
   no run). `SKILL.md`'s "Who writes the issue body" bullet, joined into one
   line with whitespace runs collapsed so rewrapping does not matter,
   describes the same tick rule as `launch.sh`: it says that `- [ ]` becomes
-  `- [x]`, `* [ ]` becomes `* [x]`, and `+ [ ]` becomes `+ [x]`, and no
+  `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]` becomes `+ [x]`, and
+  `1. [ ]` becomes `1. [x]`, and no
   longer has the old phrase that named only the `-` marker.
