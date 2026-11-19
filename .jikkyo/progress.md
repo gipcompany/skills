@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:21:36Z
-next: tick the end-to-end en/ja item (todo 19)
+updated: 2026-11-19T16:21:46Z
+next: tick the SKILL.md item (todo 20)
 
 ## Todos
 
@@ -23,7 +23,7 @@ next: tick the end-to-end en/ja item (todo 19)
 - [x] Test: title starting with ``` does not hide Japanese body (6075189)
 - [x] Test: indented block, blockquote fence, HTML code give ja (6075189)
 - [x] run.sh covers each rule (parent item) (6075189)
-- [ ] Code-only Japanese gives en, prose gives ja (end to end)
+- [x] Code-only Japanese gives en, prose gives ja (end to end) (6075189)
 - [ ] SKILL.md "Which language" describes new rule and limit
 - [ ] README.md jikkyo language paragraph updated
 - [ ] tests/README.md language entry lists new cases
@@ -50,6 +50,7 @@ next: tick the end-to-end en/ja item (todo 19)
 - run.sh case, a title that starts with a backtick fence over a Japanese body gives ja: passes in the full run.sh run
 - run.sh cases, Japanese only in an indented block, a blockquote fence, or HTML code gives ja: all three pass in the full run.sh run
 - run.sh covers each rule, one case each: all 11 sub-items verified; the full run passed with 0 failed and shellcheck on scripts and tests is clean
+- Code-only Japanese gives en and Japanese prose gives ja: end to end through report.sh with the gh stub answering the issue read (run.sh), the printed language line checked
 
 ## Dead ends and decisions
 
