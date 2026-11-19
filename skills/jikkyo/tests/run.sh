@@ -796,6 +796,22 @@ echo "report.sh: the language of the issue"
     "Output" $'It prints:\n\n> ```\n> 完了\n> ```\n\nand stops.'
   lang_case ja "Japanese only in HTML <code>" \
     "Output" 'It prints <code>完了</code> and stops.'
+  lang_case ja "Japanese only in a fence on a list marker line" \
+    "Output" $'It prints:\n\n- ```\n  完了\n  ```\n\nand stops.'
+  # From the review of PR #74: none of these may hide Japanese prose.
+  lang_case ja "Japanese prose after a fence on a list marker line" \
+    "Steps" $'- ```sh\n  ls\n  ```\n\n空行で落ちます。'
+  lang_case ja "Japanese prose after a ~~~ fence on a numbered list line" \
+    "Steps" $'1. ~~~\n   ls\n   ~~~\n\n空行で落ちます。'
+  # shellcheck disable=SC2016
+  lang_case ja "a lone backtick and a later span in another paragraph" \
+    "Quote" $'A lone ` here.\n\n空行で落ちます。 and `code`'
+  # shellcheck disable=SC2016
+  lang_case ja "a backslash-escaped backtick before Japanese prose" \
+    "Quote" 'Escaped \` then 空行で落ちます。 and `code`'
+  # shellcheck disable=SC2016
+  lang_case en "an escaped backslash before a span" \
+    "Quote" 'Write \\`完了` with two backslashes.'
 
   # A failed read, or an answer that is not an issue, falls back to English.
   echo '{"message":"Not Found"}' > "$TMP/issue.json"

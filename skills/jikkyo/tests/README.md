@@ -105,8 +105,12 @@ timing and signal tests waiting on a real scheduler.
   only in a code span (with an English body); Japanese prose, Japanese prose
   that also contains code, an unmatched backtick followed by Japanese prose,
   and a title that starts with ```` ``` ```` over a Japanese body give
-  Japanese. The documented limit: Japanese only in an indented (4-space)
-  block, in a fence inside a blockquote, or in HTML `<code>` gives Japanese.
+  Japanese, and so do Japanese prose after a fence that opens on a list
+  marker line (its indented closing line does not open a new fence), a lone
+  backtick that a blank line separates from a later span, and a
+  backslash-escaped backtick before Japanese prose. The documented limit:
+  Japanese only in an indented (4-space) block, in a fence inside a
+  blockquote or on a list marker line, or in HTML `<code>` gives Japanese.
   The issue's text never appears in a `gh` argument, the comment,
   or the output, and a `$(…)` in it is never run. The hand-over lines stay
   English apart from `jikkyo: language <ja|en>`.
