@@ -204,7 +204,7 @@ echo "report.sh: progress"
     assistant_text; result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
-  assert_eq "no todos: the heading shows the turn count" "### jikkyo · finished · 3 turns" "$(heading "$b")"
+  assert_eq "no todos: the heading shows the turn count" "### jikkyo · incomplete · 3 turns" "$(heading "$b")"
   assert_has "no todos: the table shows the turn count" "| Turns | 3 |" "$b"
   assert_lacks "no todos: no % anywhere" "%" "$b"
 
@@ -554,6 +554,15 @@ echo "report.sh: end states and the final message"
   assert_eq "incomplete in Japanese: the marker stays English" "incomplete" "$(marker_state "$b")"
   assert_eq "incomplete in Japanese: 未完了" "### jikkyo · 未完了 · 33%" "$(heading "$b")"
   assert_has "incomplete in Japanese: the State row" "| 状態 | 未完了 |" "$b"
+  # A clean exit with no todos at all is incomplete too: the guard for a
+  # child that ignored the todo instruction (#72).
+  f="$TMP/no-todos.jsonl"; { assistant_text; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "no todos: incomplete" "incomplete" "$(marker_state "$(last_body)")"
+  assert_has "no todos: prints the final state" "jikkyo: state incomplete" "$(cat "$TMP/out")"
+  f="$TMP/all-deleted.jsonl"; { create a 1; update b 1 deleted; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "every todo deleted: incomplete" "incomplete" "$(marker_state "$(last_body)")"
   # An error result is still failed, whatever the todos.
   f="$TMP/err-left.jsonl"; { create a 1; result_err error_max_turns; } > "$f"
   run_report "$f"
@@ -868,11 +877,11 @@ echo "report.sh: the language of the issue"
   assert_has "Japanese: the Turns row" "| ターン数 | 2 |" "$b"
   f="$TMP/lang-one.jsonl"; { assistant_text; result_ok; } > "$f"
   run_report "$f"
-  assert_eq "Japanese: one turn" "### jikkyo · 完了 · 1 ターン" "$(heading "$(last_body)")"
+  assert_eq "Japanese: one turn, no todos: 未完了" "### jikkyo · 未完了 · 1 ターン" "$(heading "$(last_body)")"
   assert_eq "Japanese: the first write says running" "### jikkyo · 実行中 · 0 ターン" "$(heading "$(nth_body 1)")"
   assert_eq "Japanese: running keeps the English marker" "running" "$(marker_state "$(nth_body 1)")"
   assert_has "the final message is passed on unchanged" "All done. Opened PR #99." "$(cat "$TMP/out")"
-  assert_has "the hand-over state stays English" "jikkyo: state finished" "$(cat "$TMP/out")"
+  assert_has "the hand-over state stays English" "jikkyo: state incomplete" "$(cat "$TMP/out")"
   unset GH_ISSUE
 }
 
@@ -1117,7 +1126,7 @@ EOF2
   rm -f "$STATE"
   PATH="$TMP/stubs-odd:$PATH" bash "$REPORT" "$URL" < "$f" > /dev/null 2>&1
   assert_eq "without --session, session is null; a comment id that is not a number gives no URL" \
-    '{"session":null,"comment":null,"turns":1,"state":"finished"}' \
+    '{"session":null,"comment":null,"turns":1,"state":"incomplete"}' \
     "$(jq -c '{session, comment, turns, state}' "$STATE" 2>/dev/null)"
   assert_lacks "...and nothing from the issue, the result, or gh's answer is in it" "pwned" "$(cat "$STATE")"
   assert_lacks "...no escape character either" "$(printf '\033')" "$(cat "$STATE")"

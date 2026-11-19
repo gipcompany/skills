@@ -48,8 +48,10 @@
 #
 # The final state is `finished` (a non-error result line, and every todo that
 # is not deleted completed), `incomplete` (a non-error result line, but some
-# todo not completed), `failed` (an error result line), or `interrupted` (no
-# result line, or SIGTERM/SIGHUP/SIGINT).
+# todo not completed, or no todos at all: the child is asked to make one per
+# task-list item, so a run with none has not shown its work done), `failed`
+# (an error result line), or `interrupted` (no result line, or
+# SIGTERM/SIGHUP/SIGINT).
 # After the final write it prints the child's final message for the parent
 # session: the `result` text on success, the `errors` on an error_* subtype.
 #
@@ -645,7 +647,7 @@ final_state() {
   jq -r '.result as $r
          | if $r == null then "interrupted"
            elif $r.is_error == true or $r.subtype != "success" then "failed"
-           elif .done < .total then "incomplete"
+           elif .total == 0 or .done < .total then "incomplete"
            else "finished" end' "$state_file"
 }
 
