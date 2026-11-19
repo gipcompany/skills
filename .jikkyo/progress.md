@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:19:57Z
-next: tick the fenced-block test case (todo 8)
+updated: 2026-11-19T16:20:05Z
+next: tick the Japanese prose test case (todo 9)
 
 ## Todos
 
@@ -12,7 +12,7 @@ next: tick the fenced-block test case (todo 8)
 - [x] LANG_FILTER drops code before testing for Japanese (06161ad)
 - [x] Check still runs entirely inside jq (06161ad)
 - [x] Test: Japanese only in code spans gives en (6075189)
-- [ ] Test: Japanese only in a fenced block gives en
+- [x] Test: Japanese only in a fenced block gives en (6075189)
 - [ ] Test: Japanese prose gives ja
 - [ ] Test: Japanese prose with code gives ja
 - [ ] Test: Japanese only in a ~~~ fence gives en
@@ -39,6 +39,7 @@ next: tick the fenced-block test case (todo 8)
 - LANG_FILTER drops fenced blocks and code spans before the Japanese test: all four sub-items above verified; full run.sh passed (0 failed) and shellcheck is clean; the report.sh diff against main is two hunks, the header Language paragraph and the LANG_FILTER block with its comment
 - Check still runs entirely inside jq: detect_lang is unchanged (gh api piped to jq, case on ja/en); the run.sh tests that no issue text reaches a gh argument, the comment, or the output, and that a $(...) in the issue is never run, pass
 - run.sh case, Japanese only in code spans gives en: passes in the full run.sh run
+- run.sh case, Japanese only in a fenced block gives en: passes in the full run.sh run
 
 ## Dead ends and decisions
 
