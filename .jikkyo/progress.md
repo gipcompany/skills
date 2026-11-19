@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:20:23Z
-next: tick the ~~~ fence test case (todo 11)
+updated: 2026-11-19T16:20:32Z
+next: tick the unclosed fence test case (todo 12)
 
 ## Todos
 
@@ -15,7 +15,7 @@ next: tick the ~~~ fence test case (todo 11)
 - [x] Test: Japanese only in a fenced block gives en (6075189)
 - [x] Test: Japanese prose gives ja (6075189)
 - [x] Test: Japanese prose with code gives ja (6075189)
-- [ ] Test: Japanese only in a ~~~ fence gives en
+- [x] Test: Japanese only in a ~~~ fence gives en (6075189)
 - [ ] Test: unclosed fence holding Japanese gives en
 - [ ] Test: double-backtick span with a backtick and Japanese gives en
 - [ ] Test: unmatched backtick then Japanese prose gives ja
@@ -42,6 +42,7 @@ next: tick the ~~~ fence test case (todo 11)
 - run.sh case, Japanese only in a fenced block gives en: passes in the full run.sh run
 - run.sh case, Japanese prose gives ja: passes in the full run.sh run
 - run.sh case, Japanese prose that also contains code gives ja: passes in the full run.sh run
+- run.sh case, Japanese only in a ~~~ fence gives en: passes in the full run.sh run
 
 ## Dead ends and decisions
 
