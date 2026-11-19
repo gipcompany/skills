@@ -484,16 +484,21 @@ needed because this session is idle while the run goes.
   none, so `launch.sh` appends a fixed todo instruction right after the URL,
   before the tick instruction: break the work into small `TaskCreate` todos of
   a few minutes each before starting, mark each completed with `TaskUpdate` as
-  soon as it is done, add todos as new steps come up, and, when the issue has
-  a task list, make one todo per task-list item and tick its box right after
+  soon as it is done, add todos as new steps come up, and always make one
+  todo per task-list item (plus one per other step, so there is at least
+  one) and tick its box right after
   the push for that todo, in the order complete the todo, update and push
   the log, then tick (an item with no commits of its own, such as an open
   draft PR, has no push to wait for and is ticked once verified), because
   progress and the
-  remaining time are computed from them. Like the tick instruction it is a
+  remaining time are computed from them, and so is the end state: a run is
+  `finished` only when every todo is completed (see *How a run ends*). The
+  instruction is unconditional because Phase 1 has checked that the issue
+  has a task-list item. Like the tick instruction it is a
   constant, and since the `/goal` evaluator judges it too, it is worded as a
   way of working, not as a condition for the goal. It is asked, not enforced:
-  the child may still make no todos, or a few large ones.
+  the child may still make no todos, or a few large ones; a run with none
+  ends `incomplete`.
 - **The progress log.** So that an interrupted run leaves a record a later
   run can resume from, `launch.sh` appends a third fixed instruction after
   the todo and tick instructions, the log instruction: keep a progress log
@@ -654,8 +659,11 @@ needed because this session is idle while the run goes.
   `/goal` evaluator judges only what the conversation shows); a box that is
   ticked with no work behind it on the branch (ticked before its work was
   pushed) is done again, and the conversation says the box was ticked
-  without the work, since unticking stays forbidden; recreate
-  todos for what is left, continue from `next`, and keep updating the log.
+  without the work, since unticking stays forbidden; make todos as on a
+  fresh run, one per task-list item, already-ticked items included, plus
+  one per other step that is left, and complete the todo for an item done
+  in an earlier run once it is re-verified, so a resume with nothing left
+  can still end `finished`; continue from `next`, and keep updating the log.
   Nothing from the log or the branch reaches a command line beyond the
   validated branch name, and no script reads the log. `report.sh` writes a
   new status comment, carrying the same branch, with a `Resumed from` row

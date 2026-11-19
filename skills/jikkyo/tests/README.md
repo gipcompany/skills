@@ -168,10 +168,13 @@ timing and signal tests waiting on a real scheduler.
   or a run outside a git repository. The child
   gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`
   (one argument: the URL, then the fixed instruction to make `TaskCreate`
-  todos up front, one per task-list item when there is one, and complete them
+  todos up front, always one per task-list item (the old wording, which
+  asked for that only when the issue had a task list, fails the run), and
+  complete them
   with `TaskUpdate`, then the fixed instruction to tick each box as soon as
   it is verified, not all at the end, tick only verified boxes, change only
-  `[ ]` to `[x]` in the box and keep each line's own marker (`-`, `*` or `+`;
+  `[ ]` to `[x]` in the box and keep each line's own marker (`-`, `*`, `+`,
+  or an ordered `1.`;
   the old wording that named only `- [ ]` fails the run), and fetch the body
   before each edit, then, last, the fixed instruction to
   keep `.jikkyo/progress.md` in its fixed shape, updating, committing, and
@@ -198,8 +201,11 @@ timing and signal tests waiting on a real scheduler.
     branch at the pushed tip, tracking `origin/<branch>`, prints the
     worktree lines (naming the resumed branch) first, and runs the child
     inside it without `--worktree`, with the same flags and deny list and
-    the resume instruction last. The status comment is a new one with the
-    same branch and a `Resumed from` row.
+    the resume instruction last, which has the child make one todo per
+    task-list item again, ticked ones included, and complete those it has
+    re-verified (the old "for what is left" wording fails the run). The
+    status comment is a new one with the same branch and a `Resumed from`
+    row.
   - A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and backticks never
     reaches the child's or any git command line and is never run. Leaving
     out `rev-parse`, the git command lines are exactly these five:
