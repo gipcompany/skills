@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:25:22Z
-next: tick the README item (todo 21)
+updated: 2026-11-19T16:25:32Z
+next: tick the tests README item (todo 22)
 
 ## Todos
 
@@ -25,7 +25,7 @@ next: tick the README item (todo 21)
 - [x] run.sh covers each rule (parent item) (6075189)
 - [x] Code-only Japanese gives en, prose gives ja (end to end) (6075189)
 - [x] SKILL.md "Which language" describes new rule and limit (ad6316f)
-- [ ] README.md jikkyo language paragraph updated
+- [x] README.md jikkyo language paragraph updated (5bbb556)
 - [ ] tests/README.md language entry lists new cases
 - [ ] Delete progress log and push
 - [ ] Open PR with Closes #73
@@ -52,6 +52,7 @@ next: tick the README item (todo 21)
 - run.sh covers each rule, one case each: all 11 sub-items verified; the full run passed with 0 failed and shellcheck on scripts and tests is clean
 - Code-only Japanese gives en and Japanese prose gives ja: end to end through report.sh with the gh stub answering the issue read (run.sh), the printed language line checked
 - SKILL.md Which language: re-read after the edit; it gives the fence and span rules, title and body cleaned apart, and the updated limit (Japanese outside code, and the constructs not dropped count as prose); run.sh, which reads SKILL.md, passed with 0 failed
+- README.md jikkyo language paragraph: re-read after the edit; it says Japanese outside code decides, defines code as fenced blocks and code spans per CommonMark, and gives the updated limit; run.sh, which reads the README jikkyo section, passed with 0 failed
 
 ## Dead ends and decisions
 
