@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/72
 branch: worktree-jikkyo-72-20261120-043310
-updated: 2026-11-20T05:20:00+09:00
-next: AC8, print jikkyo: todos <completed>/<total> at exit and the closing-summary sentence for incomplete
+updated: 2026-11-20T05:30:00+09:00
+next: AC3, add the ordered-list marker example to the tick instruction in launch.sh and SKILL.md
 
 ## Todos
 - [x] AC1: incomplete state when todos not all completed (299df03)
@@ -11,7 +11,7 @@ next: AC8, print jikkyo: todos <completed>/<total> at exit and the closing-summa
 - [x] AC5: no todos ends incomplete (6defc94)
 - [x] AC6: incomplete is resumable (5e49d9b)
 - [x] AC7: docs and stopped glyph cover incomplete (b1a6126)
-- [ ] AC8: jikkyo: todos line and closing-summary sentence
+- [x] AC8: jikkyo: todos line and closing-summary sentence (d10eb30)
 - [x] AC9: statusline.sh shows incomplete (299df03)
 - [ ] AC10: tests/run.sh coverage for new cases
 - [ ] Run CI checks, delete log, open PR
@@ -22,6 +22,7 @@ next: AC8, print jikkyo: todos <completed>/<total> at exit and the closing-summa
 - A run that still ends with no todos ends incomplete: new tests for no todos and for every todo deleted, plus the no-todo turn-count tests in en and ja; full suite 886/0 and shellcheck clean
 - incomplete is resumable like interrupted and failed: precheck --resume tests (own, trusted, untrusted, latest wins, later finished takes it out, never blocks a start, --payload refuses it); SKILL.md Phase 3 resumable rule and README updated; full suite 893/0 and shellcheck clean
 - The status comment, state line, SKILL.md, and stopped-glyph rule cover incomplete: glyph in report.sh and its TODOS comment, SKILL.md sentence, README sentence, tests/README, and the glyph tests (incomplete shows the stopped glyph, finished keeps an all-completed snapshot, SKILL.md and README sentences checked word for word); full suite 896/0 and shellcheck clean
+- report.sh prints jikkyo: todos completed/total next to jikkyo: state, and the incomplete closing summary says which case: tests check the line right after the state line (deleted todos left out, 0/0 with none, failed too) and the SKILL.md sentences in en and ja; full suite 906/0 and shellcheck clean
 
 ## Dead ends and decisions
 - AC1 and AC9 are one commit: the status-line end-to-end tests run report.sh, so they flip together.
