@@ -249,7 +249,7 @@ echo "report.sh: the todo list"
   run_report "$f"
   lines="$(todo_lines "$(last_body)")"
   assert_eq "todo lines show the TaskCreate subject, renames, and the status glyphs" \
-    "$(printf '%s\n' '- ✅ `Write the parser`' '- ⬜ `Add the parser tests`' '- 🔄 `Open the draft PR`')" "$lines"
+    "$(printf '%s\n' '- ✅ `Write the parser`' '- ⬜ `Add the parser tests`' '- ⏸️ `Open the draft PR`')" "$lines"
   assert_lacks "a failed TaskUpdate does not rename" "Never applied" "$(last_body)"
   assert_lacks "the old subject is gone after a rename" '`Add tests`' "$(last_body)"
   assert_eq "a rename alone keeps the status" "- ⬜ \`Add the parser tests\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
@@ -291,7 +291,7 @@ echo "report.sh: the todo list"
   assert_eq "cap, open: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
   assert_lacks "cap, open: every completed todo is hidden" "✅" "$lines"
   assert_eq "cap, open: the newest pending todos are hidden" \
-    "$(printf '%s\n' '- ⬜ `todo 51`' '- ⬜ `todo 52`' '- 🔄 `todo 55`' '- … and 5 more (3 completed)')" \
+    "$(printf '%s\n' '- ⬜ `todo 51`' '- ⬜ `todo 52`' '- ⏸️ `todo 55`' '- … and 5 more (3 completed)')" \
     "$(printf '%s\n' "$lines" | tail -n 4)"
   assert_eq "cap, open: the oldest pending todo is kept" '- ⬜ `todo 4`' "$(printf '%s\n' "$lines" | head -n 1)"
 
@@ -304,11 +304,11 @@ echo "report.sh: the todo list"
   run_report "$f"
   lines="$(todo_lines "$(last_body)")"
   assert_eq "cap, busy: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
-  assert_eq "cap, busy: 50 in-progress todos stay visible" "50" "$(printf '%s\n' "$lines" | grep -c '🔄')"
+  assert_eq "cap, busy: 50 in-progress todos stay visible" "50" "$(printf '%s\n' "$lines" | grep -c '⏸️')"
   assert_lacks "cap, busy: every pending todo is hidden" "⬜" "$lines"
   # shellcheck disable=SC2016  # literal backticks
   assert_eq "cap, busy: the newest in-progress todos are hidden" \
-    "$(printf '%s\n' '- 🔄 `todo 50`' '- … and 5 more (0 completed)')" "$(printf '%s\n' "$lines" | tail -n 2)"
+    "$(printf '%s\n' '- ⏸️ `todo 50`' '- … and 5 more (0 completed)')" "$(printf '%s\n' "$lines" | tail -n 2)"
 
   # The cap bounds the comment: 1000 in-progress todos with long subjects
   # still give a body far under GitHub's 65,536-character limit.
@@ -429,7 +429,8 @@ echo "report.sh: the todo list"
   assert_lacks "the Japanese summary carries no count" "%" "$(todo_section "$b")"
 
   # An ended run keeps its final snapshot, but claims nothing live: on
-  # `failed` and `interrupted`, in-progress todos get the stopped glyph.
+  # `failed`, `interrupted`, and `incomplete`, in-progress todos get the
+  # stopped glyph.
   todos_ended() { create a 1 "done one"; create b 2 "busy one"; create c 3 "left one"
                   update d 1 completed; update e 2 in_progress; }
   ended_lines="$(printf '%s\n' '- ✅ `done one`' '- ⏸️ `busy one`' '- ⬜ `left one`')"
@@ -448,11 +449,15 @@ echo "report.sh: the todo list"
       -e 's/^### jikkyo · (完了|未完了|失敗|中断)/### jikkyo · 実行中/' \
       -e 's/^\| 状態 \| (完了|未完了|失敗|中断) \|$/| 状態 | 実行中 |/' -e 's/^- ⏸️ /- 🔄 /'
   }
-  f="$TMP/todo-finished.jsonl"; { todos_ended; result_ok; } > "$f"
+  f="$TMP/todo-incomplete.jsonl"; { todos_ended; result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
-  assert_eq "finished: the snapshot is kept as is" \
-    "$(printf '%s\n' '- ✅ `done one`' '- 🔄 `busy one`' '- ⬜ `left one`')" "$(todo_lines "$b")"
+  assert_eq "incomplete: the in-progress todo shows the stopped glyph (#72)" "$ended_lines" "$(todo_lines "$b")"
+  f="$TMP/todo-finished.jsonl"
+  { todos_ended; update f 2 completed; update g 3 completed; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "finished: the snapshot is kept as is, every todo completed" \
+    "$(printf '%s\n' '- ✅ `done one`' '- ✅ `busy one`' '- ✅ `left one`')" "$(todo_lines "$(last_body)")"
   # The same comment while it was running (report.sh writes the same lines
   # then), rewritten by precheck.sh --payload after the run died.
   running_b="$(as_running "$b")"
@@ -2492,7 +2497,7 @@ echo "SKILL.md"
   assert_has "SKILL.md: the todo lines are not checkboxes (#62)" 'never `- [ ]`, so GitHub does not count them in' "$skill"
   assert_has "SKILL.md: a todo change is any change in the todo list (#62)" "A todo change is any change in the todo list (a todo's id," "$skill"
   # shellcheck disable=SC2016  # literal backticks
-  assert_has "SKILL.md: ended runs show the stopped glyph (#62)" '`failed` or `interrupted` its in-progress todos show ⏸️, also when' "$skill"
+  assert_has "SKILL.md: ended runs show the stopped glyph (#62, #72)" '`failed`, `interrupted`, or `incomplete` its in-progress todos show ⏸️, also when' "$skill"
   # The "Who writes the issue body" bullet describes the same tick rule as
   # launch.sh (#68). It is joined into one line with whitespace runs
   # collapsed, so rewrapping the bullet does not matter (#70).
@@ -2535,6 +2540,11 @@ echo "SKILL.md"
     assert_has "README.md: the todo lines are not checkboxes (#62)" "never a \`- [ ]\` checkbox" "$readme_jikkyo"
     assert_has "README.md: a rename or a status change is a todo change (#62)" "a todo added, deleted, renamed, or changing status" "$readme_jikkyo"
     assert_has "README.md: in-progress todos of an ended run show the stopped glyph (#62)" "show ⏸️ instead of 🔄" "$readme_jikkyo"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: ...also for incomplete (#72)" \
+      'When the run ends `failed`, `interrupted`, or `incomplete`, todos that were in progress show ⏸️ instead of 🔄.' "$readme_jikkyo"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: the four end states (#72)" 'The run ends in one of four states: `finished` (the child exited cleanly with every one of its todos completed' "$readme_jikkyo"
     # The appended example works as written, with its two paths filled in.
     printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
     chmod +x "$TMP/my-statusline.sh"

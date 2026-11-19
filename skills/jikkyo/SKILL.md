@@ -245,7 +245,8 @@ The background command's output is the hand-over. Read it and pick out:
   before the child started.
 - `jikkyo: language ja|en` — the language the status comment is written in.
 - `jikkyo: status comment <URL>` — the status comment.
-- `jikkyo: state finished|failed|interrupted` — how the stream ended.
+- `jikkyo: state finished|incomplete|failed|interrupted` — how the run
+  ended (see *How a run ends*).
 - `jikkyo: final message:` followed by the child's final message (the `result`
   text on success, the `errors` on an `error_*` subtype), **or**
   `jikkyo: final message is empty …` when the `result` line carried no text
@@ -341,11 +342,13 @@ Then, in this order:
 
    - First line: `jikkyo · <state>` and a link to the status comment. For
      `ja` the state is the word the status comment uses: `完了` (finished),
-     `失敗` (failed), or `中断` (interrupted).
+     `未完了` (incomplete), `失敗` (failed), or `中断` (interrupted).
    - **Whether the goal was met**, and why, in one or two sentences based on
-     the final message. `finished` only means the child exited cleanly: the
-     `/goal` evaluator may have ruled the goal impossible, or the no-progress
-     guard may have stopped the loop. Say which, if the final message says. If
+     the final message. `finished` only means the child exited cleanly with
+     every todo completed, and `incomplete` that it exited cleanly with
+     todos left: in either, the `/goal` evaluator may have ruled the goal
+     impossible, or the no-progress guard may have stopped the loop. Say
+     which, if the final message says. If
      there is no final message, say the run ended without one and that whether
      the goal was met is unknown. **Do not classify why a run stopped**
      (usage limit, crash, error): mention a cause only when the final
@@ -454,7 +457,7 @@ needed because this session is idle while the run goes.
   bullets, and a last bullet says
   `… and M more (K completed)` (`… ほか M 件（うち完了 K 件）`). With no
   todos there is no section. An ended run keeps its last list, but on
-  `failed` or `interrupted` its in-progress todos show ⏸️, also when
+  `failed`, `interrupted`, or `incomplete` its in-progress todos show ⏸️, also when
   `precheck.sh --payload` rewrites a stale `running` comment, which changes
   nothing else from the first `<details>` line on. Progress is completed /
   non-deleted todos from the child's own
@@ -526,7 +529,7 @@ needed because this session is idle while the run goes.
   gets `en`, and a Japanese issue, whose prose is Japanese, still gets `ja`.
   Nothing from the issue reaches a command line or the comment; only `ja` or
   `en` comes back, and a failed read gives `en`. For `ja` the heading, the
-  field names, the state words (`実行中`, `完了`, `失敗`, `中断`), the turn
+  field names, the state words (`実行中`, `完了`, `未完了`, `失敗`, `中断`), the turn
   count, and the estimate labels are Japanese; the number and duration
   formats are the same as in English, and so is the hidden marker, state
   values included, so `precheck.sh` reads a run's state the same way in
@@ -650,9 +653,17 @@ needed because this session is idle while the run goes.
   (`再開元` in Japanese) linking the earlier status comment, built from the
   validated owner, repository, issue number, and numeric comment id. The
   earlier comment is not edited.
-- **How a run ends.** `finished` (a non-error `result` line), `failed` (an
-  error `result` line), or `interrupted` (no `result` line, or `report.sh` was
-  sent SIGTERM, SIGHUP, or SIGINT — it writes `interrupted` before it exits).
+- **How a run ends.** `finished` (a non-error `result` line, and every
+  non-deleted todo of the child completed), `incomplete` (`未完了`: a
+  non-error `result` line, but some todo pending or in progress, or no
+  todos at all), `failed` (an error `result` line), or `interrupted` (no
+  `result` line, or `report.sh` was sent SIGTERM, SIGHUP, or SIGINT — it
+  writes `interrupted` before it exits). `failed` and `interrupted` do not
+  depend on the todos. The todos are the child's, from its own `TaskCreate`
+  / `TaskUpdate` events, not the issue's boxes: the child is told to make
+  one per task-list item, so with none it has not shown its work done.
+  Status comments written before `incomplete` existed are left as they
+  are: an old `finished` stays `finished` and is not resumable.
 - **How a stop is reported as resumable.** A run that ends `interrupted`,
   `failed`, or `incomplete`, whose marker carries `branch=`, and whose branch is on the
   remote is resumable, and the closing summary gives

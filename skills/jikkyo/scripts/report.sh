@@ -376,8 +376,9 @@ foreach (inputs | fromjson? // empty | select(type == "object")) as $e
 # in-progress todos alone are over the cap, the newest in-progress ones, and a
 # last bullet says how many are hidden. So the section has at most MAX_TODOS +
 # 1 bullets of bounded length, and the comment stays far under GitHub's
-# 65,536-character limit. An ended `failed` or `interrupted` run claims
-# nothing live: its in-progress todos get the stopped glyph.
+# 65,536-character limit. An ended `failed`, `interrupted`, or `incomplete`
+# run claims nothing live: its in-progress todos get the stopped glyph. (A
+# `finished` run has none: all its todos are completed.)
 #
 # precheck.sh --payload depends on this shape: the section starts at the
 # body's first line that starts with `<details>`, and an in-progress line
@@ -392,7 +393,7 @@ def neutral:
   | "`" + . + "`";
 def glyph:
   if .status == "completed" then "✅"
-  elif .status == "in_progress" then (if $st == "failed" or $st == "interrupted" then "⏸️" else "🔄" end)
+  elif .status == "in_progress" then (if $st == "failed" or $st == "interrupted" or $st == "incomplete" then "⏸️" else "🔄" end)
   else "⬜" end;
 [ (.tasks // {}) | objects | to_entries[]
   | {id: .key, n: (.key | try tonumber catch null), status: (.value.status? // null),

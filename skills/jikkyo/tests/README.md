@@ -56,15 +56,20 @@ timing and signal tests waiting on a real scheduler.
   (also when all are deleted, and in the start write); the summary being the
   label alone, with no count, in English and in Japanese, after the table and
   a blank line, with no `- [` line; the stopped glyph ⏸️ for in-progress
-  todos on `failed` and `interrupted` (also after `precheck.sh --payload`,
-  where nothing else in the list changes) and the snapshot kept on
-  `finished`; `--payload` leaving untouched subjects containing ` · ~`,
+  todos on `failed`, `interrupted`, and `incomplete` (also after
+  `precheck.sh --payload`, where nothing else in the list changes) and the
+  snapshot kept on `finished`, where every todo is completed; `--payload` leaving untouched subjects containing ` · ~`,
   ` · 残り ~`, `| State | running |`, `| Remaining |`, the running marker,
   `</details>`, and running headings in both languages, with and without the
   estimate suffix, in English and in Japanese; and a running marker inside a
   subject not making a live run for `precheck.sh`.
-- **`report.sh`, end states** — `finished` on a success `result`; `failed` on
-  `error_max_turns`, `error_during_execution`, or `is_error: true`;
+- **`report.sh`, end states** — `finished` on a success `result` with every
+  non-deleted todo completed (a deleted one does not count); `incomplete`
+  on a success `result` with a todo pending or in progress, with no todos,
+  or with every todo deleted, in the marker, the heading, the State row,
+  and the `jikkyo: state` line, and `未完了` in Japanese; `failed` on
+  `error_max_turns`, `error_during_execution`, or `is_error: true`, also
+  with todos left;
   `interrupted` when the stream has no `result` line, including an empty
   stream. Start and end times are local time with an explicit UTC offset.
 - **`report.sh`, the final message** — the `result` text on success, the
@@ -94,8 +99,8 @@ timing and signal tests waiting on a real scheduler.
   issue read (`gh api repos/o/r/issues/12`, logged apart from the writes) with
   `$GH_ISSUE`. An English issue gives today's English text; Japanese in the
   body, in the title alone, or as halfwidth katakana gives a Japanese heading,
-  table header, field names, and state words (running, finished, failed,
-  interrupted, and the turn count), with the marker still `v=1` and the
+  table header, field names, and state words (running, finished,
+  incomplete, failed, interrupted, and the turn count), with the marker still `v=1` and the
   English state; other non-ASCII text (accented Latin, Korean), a failed
   read, an answer that is not JSON, and an issue with no title or body give
   English. Code is dropped first, one case per rule: English prose with
@@ -235,8 +240,8 @@ timing and signal tests waiting on a real scheduler.
     `jikkyo #27 · 60% · ~12m left`, `0%` with no estimate yet, estimates in
     seconds, minutes, and hours, and `12 turns` / `1 turn` with no todos; one
     line ending in a newline.
-  - `finished`, `failed`, `interrupted` shown 4 m 59 s after `updated`, gone
-    at 5 minutes. `stale` for a `running` file 15 minutes old (not at
+  - `finished`, `incomplete`, `failed`, `interrupted` shown 4 m 59 s after
+    `updated`, gone at 5 minutes. `stale` for a `running` file 15 minutes old (not at
     14 m 59 s), however old, also with no todos, cleared by the next write,
     and replaced when `report.sh` runs that issue again.
   - Several runs on one line by issue number, joined with ` | `, an expired
@@ -244,7 +249,7 @@ timing and signal tests waiting on a real scheduler.
     while the other session sees its own; found from a linked worktree's
     subdirectory with only `current_dir` or `cwd`, and from `current_dir` or
     `cwd` when `project_dir` is outside any git checkout.
-  - Japanese: `残り ~12m`, `12 ターン`, `1 ターン`, `完了`, `失敗`, `中断`,
+  - Japanese: `残り ~12m`, `12 ターン`, `1 ターン`, `完了`, `未完了`, `失敗`, `中断`,
     `応答なし`, mixed languages on one line, an unknown or missing `lang`
     skipped, and each ended state's word checked against what `report.sh`'s
     `state_word` gives for that state.
@@ -264,7 +269,8 @@ timing and signal tests waiting on a real scheduler.
     as on macOS, a line with two runs (English and Japanese) comes out the
     same; the rest of the suite runs scripts with the `bash` on `PATH`.
   - End to end, what `report.sh` writes (English and Japanese) is what it
-    shows.
+    shows: `incomplete` for a run with 1 of 2 todos completed, `finished`
+    with both, and `完了` and `未完了` (`report.sh`'s own word) in Japanese.
 - **Constants shared by the scripts** — `statusline.sh` and `precheck.sh`
   call a `running` file stale at the same age, longer than `report.sh`'s
   heartbeat; `launch.sh`, `report.sh`, and `statusline.sh` check the session
