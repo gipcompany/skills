@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/73
 branch: worktree-jikkyo-73-20261120-010725
-updated: 2026-11-19T16:21:09Z
-next: tick the title-fence test case (todo 16)
+updated: 2026-11-19T16:21:18Z
+next: tick the documented-limit test case (todo 17)
 
 ## Todos
 
@@ -20,7 +20,7 @@ next: tick the title-fence test case (todo 16)
 - [x] Test: double-backtick span with a backtick and Japanese gives en (6075189)
 - [x] Test: unmatched backtick then Japanese prose gives ja (6075189)
 - [x] Test: title Japanese only in a code span gives en (6075189)
-- [ ] Test: title starting with ``` does not hide Japanese body
+- [x] Test: title starting with ``` does not hide Japanese body (6075189)
 - [ ] Test: indented block, blockquote fence, HTML code give ja
 - [ ] run.sh covers each rule (parent item)
 - [ ] Code-only Japanese gives en, prose gives ja (end to end)
@@ -47,6 +47,7 @@ next: tick the title-fence test case (todo 16)
 - run.sh case, a double-backtick span holding a single backtick and Japanese gives en: passes in the full run.sh run
 - run.sh case, an unmatched backtick followed by Japanese prose gives ja: passes in the full run.sh run
 - run.sh case, a title whose Japanese is only in a code span, with an English body, gives en: passes in the full run.sh run
+- run.sh case, a title that starts with a backtick fence over a Japanese body gives ja: passes in the full run.sh run
 
 ## Dead ends and decisions
 
