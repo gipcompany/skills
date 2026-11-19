@@ -53,7 +53,8 @@
 #
 # Language: before the first write it reads the issue's title and body with
 # `gh api` and writes the visible text in Japanese (`ja`) if they contain any
-# hiragana, katakana, or kanji, else in English (`en`). The issue's text goes
+# hiragana, katakana, or kanji outside code (fenced code blocks and code
+# spans, see LANG_FILTER), else in English (`en`). The issue's text goes
 # from gh to jq on a pipe and only `ja` or `en` comes back: none of it reaches
 # a command line or the comment. A failed fetch gives `en`. The choice is made
 # once and printed as `jikkyo: language <ja|en>`. The hidden marker, the state
@@ -154,13 +155,57 @@ fmt_duration() {
   else printf '%ds' "$s"; fi
 }
 
-# Hiragana, katakana (with the phonetic extensions and the halfwidth forms),
-# and kanji (CJK unified ideographs, extension A, compatibility ideographs).
+# The issue is `ja` if Japanese is left in its title or body once code is
+# dropped, else `en`. Japanese is hiragana, katakana (with the phonetic
+# extensions and the halfwidth forms), and kanji (CJK unified ideographs,
+# extension A, compatibility ideographs). Code is dropped following the
+# CommonMark rules for two constructs, so an English issue that quotes
+# Japanese labels or output in code stays `en`:
+#   - fenced code blocks, from the body only: a fence opens on a line with up
+#     to 3 spaces of indent and a run of 3 or more backticks (with no backtick
+#     after it on the line) or 3 or more tildes, and closes on a line with up
+#     to 3 spaces of indent, a run of the same character at least as long, and
+#     nothing after it but spaces or tabs. A fence that is never closed runs
+#     to the end of the body. The fence lines go too.
+#   - code spans, from the title and from what is left of the body: a run of
+#     backticks closed by the next run of the same length, across lines too.
+#     A run with no matching closer is literal text.
+# Indented (4-space) code blocks, HTML <pre>/<code>, and fences inside
+# blockquotes or list items are not dropped: their text counts as prose. So
+# that such a fence's backtick run does not pair with a later one as a code
+# span, a line that is only a backtick fence after indent, `>`, or list
+# markers loses that run first (unfence). The title and the body are cleaned
+# apart, so a title that starts with ``` does not hide the body.
 # shellcheck disable=SC2016  # jq program
 LANG_FILTER='
-  ((.title // "") + "\n" + (.body // "")) as $t
-  | if ($t | type) == "string"
-       and ($t | test("[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]"))
+  def jp: test("[\u3040-\u30ff\u31f0-\u31ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff66-\uff9f]");
+  def unfence:
+    ((capture("^(?<p>[ \t]*(?:(?:>|[-+*]|[0-9]{1,9}[.)])[ \t]*)*)`{3,}(?<i>[^`]*)$")) // null) as $m
+    | if $m == null then . else $m.p + $m.i end;
+  def drop_fences:
+    reduce (gsub("\r"; "") | split("\n")[]) as $l ({out: [], f: null};
+      .f as $f
+      | if $f == null then
+          (($l | capture("^ {0,3}(?<f>`{3,}|~{3,})(?<i>.*)$")) // null) as $m
+          | if $m != null and ($m.f[0:1] == "~" or ($m.i | test("`") | not))
+            then .f = $m.f else .out += [$l | unfence] end
+        elif ($l | test("^ {0,3}" + $f[0:1] + "{" + ($f | length | tostring) + ",}[ \t]*$"))
+        then .f = null
+        else . end)
+    | .out | join("\n");
+  def drop_spans:
+    [scan("`+|[^`]+")] as $t
+    | {i: 0, out: ""}
+    | until(.i >= ($t | length);
+        $t[.i] as $x
+        | if ($x | startswith("`")) then
+            (first(range(.i + 1; $t | length) as $j | select($t[$j] == $x) | $j) // null) as $j
+            | if $j == null then .out += $x | .i += 1 else .i = $j + 1 end
+          else .out += $x | .i += 1 end)
+    | .out;
+  (.title // "") as $title | (.body // "") as $body
+  | if ($title | type) == "string" and ($body | type) == "string"
+       and (($title | drop_spans | jp) or ($body | drop_fences | drop_spans | jp))
     then "ja" else "en" end
 '
 
