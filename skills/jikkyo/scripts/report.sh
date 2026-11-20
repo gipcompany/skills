@@ -4,7 +4,15 @@
 # and keep one status comment on the GitHub issue up to date while it runs.
 #
 #   claude -p ... --output-format stream-json --verbose \
-#     | report.sh [--session <session id>] '<issue URL>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]
+#     | report.sh [--watch <child PID file>] [--session <session id>] '<issue URL>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]
+#
+# --watch (launch.sh passes it when the child has Claude in Chrome) names the
+# file holding the child's PID, and turns on the watcher (see watch_issue
+# below): every 30 seconds (JIKKYO_WATCH_INTERVAL) it checks the accounts
+# that commented on the issue or edited its body, and stops the child with
+# SIGTERM when one is not trusted; the run then ends `interrupted`, with a
+# `Stopped` row in the comment and `jikkyo: stopped by <login> (comment|edit)`
+# after the state line.
 #
 # --session gives the id of the session that launched (or resumed) the run
 # (launch.sh passes it). It must have the exact shape of a Claude Code session
@@ -104,21 +112,32 @@ HEARTBEAT_INTERVAL="${JIKKYO_HEARTBEAT_INTERVAL:-300}"
 TICK="${JIKKYO_TICK:-1}"
 MIN_GAP="${JIKKYO_MIN_GAP:-1}"
 
+WATCH_INTERVAL="${JIKKYO_WATCH_INTERVAL:-30}"
+
 usage() {
-  echo "usage: ... | report.sh [--session <session id>] '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
+  echo "usage: ... | report.sh [--watch <child PID file>] [--session <session id>] '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
   exit 2
 }
 session=""
-if [ "$#" -ge 1 ] && [ "$1" = --session ]; then
-  [ "$#" -ge 2 ] || usage
-  session="$2"
-  sid_re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-  if ! [[ "$session" =~ $sid_re ]]; then
-    echo "report.sh: not a session id: $session" >&2
-    usage
-  fi
-  shift 2
-fi
+watch_file=""
+while [ "$#" -ge 1 ]; do
+  case "$1" in
+    --session)
+      [ "$#" -ge 2 ] && [ -z "$session" ] || usage
+      session="$2"
+      sid_re='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+      if ! [[ "$session" =~ $sid_re ]]; then
+        echo "report.sh: not a session id: $session" >&2
+        usage
+      fi
+      shift 2 ;;
+    --watch)
+      [ "$#" -ge 2 ] && [ -n "$2" ] && [ -z "$watch_file" ] || usage
+      watch_file="$2"
+      shift 2 ;;
+    *) break ;;
+  esac
+done
 if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then usage; fi
 re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)$'
 [[ "$1" =~ $re ]] || usage
@@ -271,19 +290,37 @@ detect_lang() {
 # The visible text in each language. The marker always uses the English state.
 set_labels() {
   if [ "$1" = ja ]; then
-    L_FIELD="項目" L_VALUE="値" L_STATE="状態" L_STARTED="開始" L_ENDED="終了"
+    L_FIELD="項目" L_VALUE="値" L_STATE="状態" L_STOPPED="停止理由" L_STARTED="開始" L_ENDED="終了"
     L_BRANCH="ブランチ" L_RESUMED="再開元" L_RESUMED_TEXT="前回の実行" L_PROGRESS="進捗" L_TURNS="ターン数" L_ELAPSED="経過" L_REMAINING="残り"
     L_ESTIMATE="（推定）" L_LEFT_PRE=" · 残り ~" L_LEFT_POST=""
     L_TURN_ONE="1 ターン" L_TURN_MANY=" ターン"
     L_TODOS="子の todo（Issue のタスクリストではありません）" L_NO_SUBJECT="（件名なし）"
     L_MORE_1="… ほか " L_MORE_2=" 件（うち完了 " L_MORE_3=" 件）"
   else
-    L_FIELD="Field" L_VALUE="Value" L_STATE="State" L_STARTED="Started" L_ENDED="Ended"
+    L_FIELD="Field" L_VALUE="Value" L_STATE="State" L_STOPPED="Stopped" L_STARTED="Started" L_ENDED="Ended"
     L_BRANCH="Branch" L_RESUMED="Resumed from" L_RESUMED_TEXT="earlier run" L_PROGRESS="Progress" L_TURNS="Turns" L_ELAPSED="Elapsed" L_REMAINING="Remaining"
     L_ESTIMATE=" (estimate)" L_LEFT_PRE=" · ~" L_LEFT_POST=" left"
     L_TURN_ONE="1 turn" L_TURN_MANY=" turns"
     L_TODOS="Child's todos (not the issue's task list)" L_NO_SUBJECT="(no subject)"
     L_MORE_1="… and " L_MORE_2=" more (" L_MORE_3=" completed)"
+  fi
+}
+# stop_text <login> <comment|edit>: the `Stopped` row's value, when the
+# watcher stopped the run. The login has the shape precheck.sh --people
+# lets through (a GitHub login, an app's bot, or `ghost`), so it holds no
+# backtick and goes into a code span as it is.
+# shellcheck disable=SC2016  # literal backticks: a Markdown code span
+stop_text() {
+  if [ "$LANG_CODE" = ja ]; then
+    if [ "$2" = comment ]; then
+      printf '監視が実行を止めました: `%s` が実行中に Issue にコメントしました。このアカウントは信頼されていません（起動したアカウントではなく、admin も write の権限もありません）。' "$1"
+    else
+      printf '監視が実行を止めました: `%s` が実行中に Issue の本文を編集しました。このアカウントは信頼されていません（起動したアカウントではなく、admin も write の権限もありません）。' "$1"
+    fi
+  elif [ "$2" = comment ]; then
+    printf 'The watcher stopped the run: `%s` commented on the issue during the run and is not trusted (not the launching account, and no admin or write permission).' "$1"
+  else
+    printf 'The watcher stopped the run: `%s` edited the issue body during the run and is not trusted (not the launching account, and no admin or write permission).' "$1"
   fi
 }
 state_word() {
@@ -572,6 +609,9 @@ body() {
   printf '### jikkyo · %s · %s%s\n\n' "$word" "$heading" "$eta_suffix"
   printf '| %s | %s |\n| --- | --- |\n' "$L_FIELD" "$L_VALUE"
   printf '| %s | %s |\n' "$L_STATE" "$word"
+  if [ -n "$stopped_by" ]; then
+    printf '| %s | %s |\n' "$L_STOPPED" "$(stop_text "$stopped_by" "$stopped_kind")"
+  fi
   printf '| %s | %s |\n' "$L_BRANCH" "${branch:+\`$branch\`}"
   if [ -n "$resumed_from" ]; then
     printf '| %s | [%s](https://github.com/%s/%s/issues/%s#issuecomment-%s) |\n' \
@@ -647,6 +687,10 @@ print_final_message() {
     echo "jikkyo: final message is empty (the result line carried no text)"
     return
   fi
+  # The fixed message a child with Claude in Chrome ends with when its first
+  # browser call fails (launch.sh's BROWSER_INSTRUCTION): said on its own line
+  # too, so the closing summary does not have to read it out of the child's text.
+  case "$msg" in *"$NOT_REACHABLE"*) echo "jikkyo: browser not reachable" ;; esac
   echo "jikkyo: final message:"
   printf '%s\n' "$msg"
 }
@@ -669,11 +713,91 @@ finish() {
   [ -n "$parser_pid" ] && kill "$parser_pid" 2>/dev/null
   _write "$st" "$(now)"
   echo "jikkyo: state ${st}"
+  [ -z "$stopped_by" ] || echo "jikkyo: stopped by ${stopped_by} (${stopped_kind})"
   # Non-deleted todos, the counts final_state judged by: numbers only.
   jq -r '"jikkyo: todos \(.done)/\(.total)"' "$state_file" 2>/dev/null \
     || echo "jikkyo: todos 0/0"
   print_final_message
   rm -rf "$work"
+}
+
+# ---------------------------------------------------------------------------
+# The watcher (--watch, only when the child has Claude in Chrome). The parent
+# checked, at launch, that every author of the issue body and its comments
+# and every editor of the body is trusted; this covers what comes after.
+# Every WATCH_INTERVAL seconds it reads the comments and the body's whole
+# edit history, lists their accounts with precheck.sh --people, and checks
+# each one it has not yet found trusted the way the parent does: the
+# launching account (the one this script posts as), or exactly `admin` or
+# `write` from the collaborators permission API. An account that is not
+# trusted, a 404, or any error in that permission check stops the run: the
+# child gets SIGTERM (by the PID launch.sh wrote to the --watch file), and
+# the run ends `interrupted` through finish, with a `Stopped` row naming the
+# account and a `jikkyo: stopped by <login> <comment|edit>` hand-over line.
+# A failed read of the comments or the edits (or of this account) is not a
+# finding: that poll is skipped, and the next one reads again. Trusted
+# accounts are remembered for the run; an untrusted one ends it.
+# ---------------------------------------------------------------------------
+NOT_REACHABLE='Claude in Chrome is not reachable, so this run stopped before doing any work.'
+# The body's whole edit history, paged with gh's --paginate ($endCursor).
+# SKILL.md (Phase 1, step 4c) gives the parent the same query.
+# shellcheck disable=SC2016  # GraphQL variables, not shell ones
+EDITS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){issue(number:$number){userContentEdits(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{editor{login}}}}}}'
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+stopped_by=""
+stopped_kind=""
+own_login=""
+trusted_logins=" "
+last_watch=""
+
+# trusted <login>: 0 when the account has exactly admin or write.
+trusted() {
+  local p
+  p="$(gh api "repos/${owner}/${repo}/collaborators/$1/permission" --jq .permission 2>/dev/null)" || return 1
+  [ "$p" = admin ] || [ "$p" = write ]
+}
+
+watch_issue() {
+  local comments edits kind login people
+  if [ -z "$own_login" ]; then
+    own_login="$(gh api user --jq .login 2>/dev/null)" || own_login=""
+    [[ "$own_login" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ ]] || { own_login=""; return 0; }
+  fi
+  comments="$(gh api --paginate "repos/${owner}/${repo}/issues/${num}/comments" 2>/dev/null)" || return 0
+  edits="$(gh api graphql --paginate -f owner="$owner" -f name="$repo" -F number="$num" \
+             -f query="$EDITS_QUERY" 2>/dev/null)" || return 0
+  for kind in comment edit; do
+    if [ "$kind" = comment ]; then
+      people="$("$HERE/precheck.sh" --author "$own_login" --people <<<"$comments" 2>/dev/null)" || return 0
+    else
+      people="$("$HERE/precheck.sh" --author "$own_login" --people <<<"$edits" 2>/dev/null)" || return 0
+    fi
+    while IFS= read -r login; do
+      [ -n "$login" ] || continue
+      case "$trusted_logins" in *" $login "*) continue ;; esac
+      if trusted "$login"; then
+        trusted_logins="${trusted_logins}${login} "
+      else
+        stop_run "$login" "$kind"
+      fi
+    done <<<"$people"
+  done
+}
+
+# stop_run <login> <comment|edit>: SIGTERM the child, end the run
+# `interrupted`, and exit.
+stop_run() {
+  local pid
+  stopped_by="$1"
+  stopped_kind="$2"
+  pid="$(cat "$watch_file" 2>/dev/null)"
+  if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
+    kill -TERM "$pid" 2>/dev/null
+  else
+    echo "jikkyo: no child PID to stop; the child ends when it next writes to the stream" >&2
+  fi
+  finish interrupted
+  exit 0
 }
 
 on_signal() {
@@ -715,6 +839,13 @@ while [ ! -e "$work/eof" ]; do
     write running
   elif [ $((t - last_write)) -ge "$HEARTBEAT_INTERVAL" ]; then
     write running
+  fi
+  if [ -n "$watch_file" ]; then
+    [ -n "$last_watch" ] || last_watch="$start_ts"
+    if [ $((t - last_watch)) -ge "$WATCH_INTERVAL" ]; then
+      last_watch="$t"
+      watch_issue
+    fi
   fi
 done
 wait "$parser_pid" 2>/dev/null
