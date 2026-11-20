@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:36:32+09:00
-next: item 11: decisions in SKILL.md
+updated: 2026-11-20T19:36:42+09:00
+next: item 12: tests
 
 ## Todos
 
@@ -15,7 +15,7 @@ next: item 11: decisions in SKILL.md
 - [x] Item 8: comments instruction and report.sh watcher that SIGTERMs the child on an untrusted comment or edit (d274d6d)
 - [x] Item 9: own-tabs instruction; browser-choice prompt at first step counts as not reachable (d274d6d)
 - [x] Item 10: fixed login instruction (d274d6d)
-- [ ] Item 11: decisions on login, shared browser, comments during a run, body edits, resumed runs in SKILL.md
+- [x] Item 11: decisions on login, shared browser, comments during a run, body edits, resumed runs in SKILL.md (6c3e678)
 - [ ] Item 12: tests/run.sh covers the decision, child command line, watcher
 - [ ] Item 13: README jikkyo section describes the behavior
 - [ ] Item 14: tests/run.sh and shellcheck pass
@@ -32,6 +32,7 @@ next: item 11: decisions in SKILL.md
 - Comments instruction and the watcher: tests/run.sh checks COMMENTS_INSTRUCTION in the Chrome-on prompt only, report.sh --watch stopping a stand-in child with SIGTERM on an untrusted comment and an untrusted body edit (and read permission, a permission error, a deleted account), ending interrupted with the Stopped row and the jikkyo: stopped by hand-over, and the real launch.sh --chrome with report.sh stopping a silent child by its PID within seconds; SKILL.md Phase 3 puts the account and reason in the closing summary
 - Own-tabs instruction and browser-choice prompt as not reachable: tests/run.sh checks TABS_INSTRUCTION (only tabs it opened itself, never any other tab) in the Chrome-on prompt, and BROWSER_INSTRUCTION ending the run with the fixed message when the first call asks which browser to use
 - Login instruction: tests/run.sh checks LOGIN_INSTRUCTION in the Chrome-on prompt (never sign in, no credentials, login, OAuth consent, or CAPTCHA; leave the item unticked, go on, name the page in the final message)
+- Decisions written in SKILL.md: tests/run.sh checks the Claude in Chrome bullet's sub-items (Who is checked, All or nothing, When the browser is not reachable, Sharing the browser, Login, Comments and body edits during a run, Resumed runs) and the exception in How a stop is reported as resumable
 
 ## Dead ends and decisions
 
