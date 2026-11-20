@@ -1,14 +1,14 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:40:45+09:00
-next: item 4: live check of an interactive session and a child sharing the browser
+updated: 2026-11-20T19:44:22+09:00
+next: last step: delete the progress log and open the PR
 
 ## Todos
 
 - [x] Item 1: Phase 1 trust check of body author, comment authors, body editors; launch.sh --chrome only when all trusted (d274d6d)
 - [x] Item 2: same check on --resume; resumed child with --chrome --setting-sources user loads Claude in Chrome (live) (d274d6d)
 - [x] Item 3: live check headless claude -p --chrome child connects, opens tab, navigates, reads (log-only commit)
-- [ ] Item 4: live check interactive session and jikkyo child keep to own tabs
+- [x] Item 4: live check interactive session and jikkyo child keep to own tabs (d274d6d)
 - [x] Item 5: --no-chrome flag, usage line and argument validation in SKILL.md (6c3e678)
 - [x] Item 6: start message says Chrome on/off and why, warns about logged-in browser (6c3e678)
 - [x] Item 7: first-step tab-listing instruction and fixed not-reachable message passed to the summary (d274d6d)
@@ -36,6 +36,7 @@ next: item 4: live check of an interactive session and a child sharing the brows
 - tests/run.sh covers the decision, the child command line, and the watcher: new sections for precheck.sh --people/--chrome (all trusted, untrusted body author, comment author, editor, permission error, --no-chrome), launch.sh with and without --chrome fresh and resumed (the comments instruction included), and report.sh --watch stopping on an untrusted comment and edit; all pass
 - README.md's jikkyo section describes the behavior: new Usage line with --no-chrome, a Claude in Chrome section (who is checked, the start message, the child's instructions, the watcher, resumed runs), the watcher's interrupted state, and the logged-in browser in What it runs on your machine; tests/run.sh checks it
 - bash skills/jikkyo/tests/run.sh (1099 passed, 0 failed) and shellcheck on skills/jikkyo/scripts/*.sh and skills/jikkyo/tests/*.sh (no findings) pass
+- An interactive session and a child keep to their own tabs: live, with Claude Code 2.1.329, an interactive claude --chrome session in tmux opened its own tab on https://example.org and kept it; meanwhile a background claude -p --chrome child given launch.sh's browser, tabs, login, and comments instructions made its own group, navigated its own tab to https://example.com, read and closed it, and reported seeing and acting on only its own tab ID; the interactive session then listed only its own tab, still on example.org
 
 ## Dead ends and decisions
 
