@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:36:03+09:00
-next: item 8: comments instruction and watcher
+updated: 2026-11-20T19:36:13+09:00
+next: item 9: own-tabs instruction
 
 ## Todos
 
@@ -12,7 +12,7 @@ next: item 8: comments instruction and watcher
 - [x] Item 5: --no-chrome flag, usage line and argument validation in SKILL.md (6c3e678)
 - [x] Item 6: start message says Chrome on/off and why, warns about logged-in browser (6c3e678)
 - [x] Item 7: first-step tab-listing instruction and fixed not-reachable message passed to the summary (d274d6d)
-- [ ] Item 8: comments instruction and report.sh watcher that SIGTERMs the child on an untrusted comment or edit
+- [x] Item 8: comments instruction and report.sh watcher that SIGTERMs the child on an untrusted comment or edit (d274d6d)
 - [ ] Item 9: own-tabs instruction; browser-choice prompt at first step counts as not reachable
 - [ ] Item 10: fixed login instruction
 - [ ] Item 11: decisions on login, shared browser, comments during a run, body edits, resumed runs in SKILL.md
@@ -29,6 +29,7 @@ next: item 8: comments instruction and watcher
 - --no-chrome for one run, usage line, and argument validation: tests/run.sh checks SKILL.md's usage line, the rule that flags go before the URL in any order with at most one of --force or --resume and at most one --no-chrome, the usage-and-stop for a repeated or unknown flag, that it is recorded nowhere, and precheck.sh --chrome --no-chrome printing chrome off no-chrome; launch.sh rejects --no-chrome
 - The start message says Chrome on or off and why: tests/run.sh checks SKILL.md step 6's three lines (on, with the logged-in browser warning; off naming the untrusted accounts from the decision line; off for --no-chrome)
 - First step is the tab listing, and an unavailable browser ends at once with the fixed message the summary shows: tests/run.sh checks BROWSER_INSTRUCTION (tab listing first, without createIfEmpty; missing tool or any error ends at once) ending in report.sh's NOT_REACHABLE text, report.sh printing jikkyo: browser not reachable for it and not for other messages, and SKILL.md Phase 3 reading that line into the summary
+- Comments instruction and the watcher: tests/run.sh checks COMMENTS_INSTRUCTION in the Chrome-on prompt only, report.sh --watch stopping a stand-in child with SIGTERM on an untrusted comment and an untrusted body edit (and read permission, a permission error, a deleted account), ending interrupted with the Stopped row and the jikkyo: stopped by hand-over, and the real launch.sh --chrome with report.sh stopping a silent child by its PID within seconds; SKILL.md Phase 3 puts the account and reason in the closing summary
 
 ## Dead ends and decisions
 
