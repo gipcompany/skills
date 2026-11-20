@@ -847,7 +847,9 @@ needed because this session is idle while the run goes.
     on as a boundary: the tabs instruction tells the child to make its own
     group when it first needs a tab, work only in tabs it opened itself,
     never read or act on any other tab, and close its tabs when done. It is
-    a prompt, not enforcement.
+    a prompt, not enforcement. In a live check (Claude Code 2.1.329), an
+    interactive session and a child each listed only their own group's
+    tabs; the instruction stays, since the docs do not promise that.
   - *Login.* The child uses the browser's existing login state and never
     signs in: it types no credentials and completes no login, OAuth
     consent, or CAPTCHA (Claude in Chrome hands those to the user, and a
