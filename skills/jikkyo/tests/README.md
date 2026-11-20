@@ -296,7 +296,10 @@ timing and signal tests waiting on a real scheduler.
   box, nothing after the box, `[y]`, no list marker, no space after the
   marker, a code span, mid-line, a heading). `go` for an item after a closed
   comment, on the line a comment closes, with a comment after it, between
-  two comments, or after a fence that holds a lone `<!--`.
+  two comments, or after a fence that holds a lone `<!--`, and for a `<!--`
+  mid-line or in a code span (left as text), and after a comment holding a
+  fence opener (it opens no fence). `refuse` for an item in a comment
+  inside a blockquote.
   Exit 2 and no decision for an error object, empty input, text that is not
   JSON, an array, a number that is a string, or a body that is not a
   string; `--body` combines with no other flag. `SKILL.md` runs it as step

@@ -371,7 +371,7 @@ Then, in this order:
    - **Whether the goal was met**, and why, in one or two sentences based on
      the final message. `finished` only means the child exited cleanly with
      every todo completed, and `incomplete` that it exited cleanly with
-     todos left: in either, the `/goal` evaluator may have ruled the goal
+     todos left or with none at all: in either, the `/goal` evaluator may have ruled the goal
      impossible, or the no-progress guard may have stopped the loop. Say
      which, if the final message says. If
      there is no final message, say the run ended without one and that whether

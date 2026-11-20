@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # precheck.sh — decide whether a new jikkyo run may start on an issue, or which
-# earlier run to resume, from the issue's comments alone, so the answer is the
-# same on every machine.
+# earlier run to resume, from the issue and its comments alone (`--body` reads
+# the issue, every other mode its comments), so the answer is the same on
+# every machine.
 #
 #   gh api --paginate repos/<o>/<r>/issues/<N>/comments \
 #     | precheck.sh --author <login> [--now <epoch>] [--force | --resume <N> [--trusted <login>]…]
@@ -137,9 +138,13 @@ if [ "$body_mode" = true ]; then
   # only indent, `>`, and list markers before a run of 3 or more backticks
   # (with no backtick after it on the line) or tildes, and closes on a line
   # of the same character, at least as long, after indent and `>` only. A
-  # fence never closed runs to the end. Then HTML comments are dropped
-  # (`<!--` to the next `-->`, or to the end when never closed), so the
-  # commented-out example of an issue template does not count. Then a
+  # fence never closed runs to the end. An HTML comment block is dropped the
+  # same way: it opens on a line that is only indent and `>` before `<!--`,
+  # and runs to the end of the first line holding `-->` (the opening line
+  # itself, if it has one), or to the end when never closed. So the
+  # commented-out example of an issue template does not count, while a
+  # `<!--` in the middle of a line or in a code span is left as text, as
+  # GitHub shows it. Then a
   # task-list item is a line of indent and `>`, one or more list markers
   # (`-`, `*`, `+`, `1.`, `1)`) each followed by whitespace, then `[ ]`,
   # `[x]`, or `[X]` and whitespace. Indented (4-space) code blocks and other
@@ -155,15 +160,16 @@ if [ "$body_mode" = true ]; then
       | if . != null and (.f[0:1] == "~" or (.i | test("`") | not)) then .f else null end;
     def closes($f): test("^[ \t]*(?:>[ \t]*)*" + $f[0:1] + "{" + ($f | length | tostring) + ",}[ \t]*$");
     def prose_lines:
-      reduce (split("\r") | join("") | split("\n"))[] as $l ({out: [], f: null};
+      reduce (split("\r") | join("") | split("\n"))[] as $l ({out: [], f: null, c: false};
         .f as $open
-        | if $open != null then (if ($l | closes($open)) then .f = null else . end)
+        | if .c then (if ($l | test("-->")) then .c = false else . end)
+        elif $open != null then (if ($l | closes($open)) then .f = null else . end)
+        elif ($l | test("^[ \t]*(?:>[ \t]*)*<!--")) then
+          .c = ($l | sub("^[ \t]*(?:>[ \t]*)*<!--"; "") | test("-->") | not)
         else ($l | opener) as $f
           | if $f != null then .f = $f else .out[.out | length] = $l end
         end)
-      | .out | join("\n")
-      | gsub("<!--(?:[^-]|-(?!->))*(?:-->|$)"; "")
-      | split("\n")[];
+      | .out[];
     if type == "object" and (.number | type) == "number" and ((.body | type) == "string" or .body == null)
     then
       if any((.body // "") | prose_lines;
