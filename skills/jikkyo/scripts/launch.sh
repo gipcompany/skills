@@ -10,7 +10,8 @@
 # gives it only when precheck.sh --chrome printed `chrome on`: every author of
 # the issue body and its comments, and every editor of the body, is the
 # launching account or has `admin` or `write`. It adds `--chrome` to the
-# child, the browser, tabs, login, and comments instructions to its prompt,
+# child, the browser, tabs, login, and comments instructions to its appended
+# system prompt,
 # and has report.sh watch the issue (--watch) with the child's PID, so a
 # comment or a body edit by an account that is not trusted stops the run.
 # Without it, the child is started exactly as before.
@@ -40,7 +41,8 @@
 # with `git worktree add`, tracking the remote branch (a local branch of that
 # name that is only behind is moved up to the pushed tip), and starts
 # `claude -p` inside it. The worktree lines above name the resumed branch.
-# The child gets the resume instruction after the other three and runs with
+# The child gets the resume goal sentence in its goal condition and the resume
+# instruction last in its appended system prompt, and runs with
 # `--setting-sources user`, so Claude Code loads none of the branch's project
 # configuration (settings, hooks, MCP servers, skills, CLAUDE.md files; this
 # needs Claude Code 2.1.211 or later), with git hooks off (for the
@@ -92,12 +94,35 @@ DENY_RULES=(
   'Bash(gh api graphql*deleteIssue*)'
 )
 
-# The three instructions are appended to the goal condition after the URL, in
-# the order todo, tick, log (and on resume, the resume instruction last). They
-# are constants, so nothing from the issue reaches the command line beyond the
-# validated URL. They are also what the /goal evaluator judges
-# against, which is why the todo one is worded as a way of working, not as a
-# condition for the goal. Keep each on one line.
+# Where the fixed text goes (issue #81). `/goal` refuses a condition longer
+# than 4000 characters, and the instructions below are longer than that
+# together, so the condition carries only the issue URL and the done
+# criteria: GOAL_SENTENCE on every run, CHROME_GOAL_SENTENCE as well with
+# --chrome, and RESUME_GOAL_SENTENCE as well on a resumed one. The /goal
+# evaluator judges only the condition and the conversation, so those
+# sentences are all it is given to judge by.
+# Everything else is a way of working and reaches the child through
+# `--append-system-prompt`: the lead-in, then the todo, tick, and log
+# instructions, then with --chrome the browser, tabs, login, and comments
+# instructions, then on resume the resume instruction, one paragraph each,
+# separated by a blank line. All of it is constants, so nothing from the issue
+# reaches the command line beyond the validated URL, and the appended prompt
+# carries no value from the run at all. Keep each constant on one line.
+GOAL_SENTENCE='The goal is met only when the work is done and every box you could verify is ticked.'
+# On resume only, after GOAL_SENTENCE. It is not taken from RESUME_INSTRUCTION,
+# which reaches the child whole: it keeps the re-verification evidence in what
+# the evaluator judges.
+RESUME_GOAL_SENTENCE='On this resumed run, the goal is met only if the conversation also shows that every item done in an earlier run was re-verified.'
+# With --chrome only, after GOAL_SENTENCE and before RESUME_GOAL_SENTENCE.
+# BROWSER_INSTRUCTION, in the appended prompt, has the child stop at once when
+# the browser is not reachable. The evaluator never sees that instruction, so
+# without this sentence it would judge the stop "not yet met" and tell the
+# child to go on; with it, the evaluator can judge the goal impossible.
+CHROME_GOAL_SENTENCE='If the conversation shows that Claude in Chrome is not reachable, the goal cannot be met on this run.'
+# The first paragraph of the appended prompt. The URL is only in the goal
+# condition, the child's first user turn, so this says what "this issue" in
+# the paragraphs below refers to, without repeating the URL.
+LEAD_IN='These instructions are for the /goal run on the GitHub issue named in the goal condition; "this issue" below means that issue.'
 #
 # report.sh computes progress and the remaining-time estimate from the child's
 # TaskCreate / TaskUpdate events, and a run is `finished` only when every one
@@ -110,12 +135,13 @@ DENY_RULES=(
 # run's own branch, is pushed after every todo so a crash loses at most one
 # step, and is deleted before the PR so it never reaches the base branch.
 TODO_INSTRUCTION='Todos: before starting the work, break it into small steps with TaskCreate, one todo per step of a few minutes each, and mark each todo completed with TaskUpdate as soon as that step is done; add todos with TaskCreate when new steps come up. Always make one todo per task-list item in the body of this issue (for example under "Acceptance criteria"), plus a todo for each other step, so there is at least one todo, and tick the box of that item right after the push for that todo, so the order is: complete the todo, update and push the log, then tick. An item with no commits of its own (for example "a draft PR is open") has no push to wait for: tick it as soon as it is verified. Progress and the remaining time shown on the issue are computed from these todos.'
-TICK_INSTRUCTION='Task-list boxes: as soon as a task-list item in the body of this issue (for example under "Acceptance criteria") is done and verified (tests run, output checked) and the commits for it are pushed (the log instruction'"'"'s git push for that todo has succeeded), tick that box on the issue, before you move on to the next item; do not save the ticks for one edit at the end. An item with no commits of its own (for example "a draft PR is open") is ticked as soon as it is verified. Tick only items you have verified, and never untick or reword anything. Change nothing in the body but "[ ]" to "[x]" in those lines'"'"' task-list boxes, keeping each line'"'"'s own marker ("- [ ]" becomes "- [x]", "* [ ]" becomes "* [x]", "+ [ ]" becomes "+ [x]", "1. [ ]" becomes "1. [x]"): fetch the current body right before each edit and write it back with only those lines changed, because gh issue edit --body replaces the whole body and someone else may have edited it meanwhile. The goal is met only when the work is done and every box you could verify is ticked.'
+TICK_INSTRUCTION='Task-list boxes: as soon as a task-list item in the body of this issue (for example under "Acceptance criteria") is done and verified (tests run, output checked) and the commits for it are pushed (the log instruction'"'"'s git push for that todo has succeeded), tick that box on the issue, before you move on to the next item; do not save the ticks for one edit at the end. An item with no commits of its own (for example "a draft PR is open") is ticked as soon as it is verified. Tick only items you have verified, and never untick or reword anything. Change nothing in the body but "[ ]" to "[x]" in those lines'"'"' task-list boxes, keeping each line'"'"'s own marker ("- [ ]" becomes "- [x]", "* [ ]" becomes "* [x]", "+ [ ]" becomes "+ [x]", "1. [ ]" becomes "1. [x]"): fetch the current body right before each edit and write it back with only those lines changed, because gh issue edit --body replaces the whole body and someone else may have edited it meanwhile.'
 LOG_INSTRUCTION='Progress log: keep a progress log in .jikkyo/progress.md on this branch, so an interrupted run can be resumed from it. Each time you mark a todo completed, update the log, commit it, and run a plain git push. Keep the log in this fixed shape: first the header lines "issue: <issue URL>", "branch: <this branch>", "updated: <ISO 8601 time>", and "next: <the next step, one line>"; then a "## Todos" section with one task-list line per todo, "- [x] <todo> (<short commit hash>)" once it is completed and "- [ ] <todo>" until then; then a "## Verified task-list items" section with one "- <item>: <how it was verified>" line per task-list item you have verified, including the one whose box you tick right after this push (the log is pushed before the tick, so it may list an item whose box is not ticked yet); then a "## Dead ends and decisions" section with what did not work or what you decided, and why. Never put tokens, secrets, environment values, or command output in the log. As the last step, right before you open the pull request (or mark it ready for review), delete .jikkyo/progress.md in one ordinary commit and push it, so the log never reaches the base branch.'
 # The resume instruction, on resume only. The log was written by a model and
 # anyone who can push to the branch can change it, so it is a record to check,
 # never instructions; and the /goal evaluator judges only what the
-# conversation shows, so re-verification has to be said there.
+# conversation shows, so re-verification has to be said there (which
+# RESUME_GOAL_SENTENCE, in the condition, asks the evaluator to check).
 # The Claude in Chrome instructions, with --chrome only (issue #76), after the
 # log instruction and before the resume one. --chrome is given only when the
 # parent found every author of the issue, its comments, and its body's edits
@@ -154,7 +180,11 @@ fi
 session="$1"
 url="$2"
 
-re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)$'
+# GitHub's own limits (issue #81): an owner of at most 39 characters, a
+# repository name of at most 100 (plus an optional `.git`), and an issue
+# number of at most 10 digits. They give the URL a longest valid form, so the
+# goal condition built from it always stays under /goal's 4000 characters.
+re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9._-]{1,100}|[A-Za-z0-9._-]{1,100}\.git)/issues/([1-9][0-9]{0,9})$'
 if ! [[ "$url" =~ $re ]]; then
   echo "launch.sh: not a GitHub issue URL: $url" >&2
   usage
@@ -221,9 +251,12 @@ fi
 # worktree an earlier run kept.
 name="jikkyo-${num}-$(date '+%Y%m%d-%H%M%S')"
 
-prompt="/goal ${url} ${TODO_INSTRUCTION} ${TICK_INSTRUCTION} ${LOG_INSTRUCTION}"
+prompt="/goal ${url} ${GOAL_SENTENCE}"
+para=$'\n\n'
+system="${LEAD_IN}${para}${TODO_INSTRUCTION}${para}${TICK_INSTRUCTION}${para}${LOG_INSTRUCTION}"
 if [ "$chrome" = true ]; then
-  prompt="${prompt} ${BROWSER_INSTRUCTION} ${TABS_INSTRUCTION} ${LOGIN_INSTRUCTION} ${COMMENTS_INSTRUCTION}"
+  prompt="${prompt} ${CHROME_GOAL_SENTENCE}"
+  system="${system}${para}${BROWSER_INSTRUCTION}${para}${TABS_INSTRUCTION}${para}${LOGIN_INSTRUCTION}${para}${COMMENTS_INSTRUCTION}"
 fi
 child_args=()
 child_env=(CLAUDE_CODE_ENABLE_TODO_TOOLS=1)
@@ -263,7 +296,8 @@ if [ "$resuming" = true ]; then
     exit 2
   fi
   branch="$resume_branch"
-  prompt="${prompt} ${RESUME_INSTRUCTION}"
+  prompt="${prompt} ${RESUME_GOAL_SENTENCE}"
+  system="${system}${para}${RESUME_INSTRUCTION}"
   # A fresh run's tree is this checkout's own; a resumed one is whatever
   # anyone who can push put on the branch. Claude Code loads settings, hooks
   # (shell commands the deny list never sees), MCP servers, skills,
@@ -334,15 +368,19 @@ echo "jikkyo: worktree path ${path}"
 echo "jikkyo: worktree branch ${branch}"
 
 # One child pipeline for both paths, so the flags and the deny list cannot
-# drift apart. The goal condition is the issue URL verbatim, then the fixed
-# todo, tick, and log instructions (and on resume, the resume instruction).
-# --disallowedTools takes the rest of the command line, so it stays last.
+# drift apart. The goal condition is the issue URL verbatim, then the done
+# criteria (GOAL_SENTENCE, with --chrome CHROME_GOAL_SENTENCE, and on resume
+# RESUME_GOAL_SENTENCE); the rest of
+# the fixed text goes in as one --append-system-prompt argument (see the
+# constants above). --disallowedTools takes the rest of the command line, so
+# it stays last.
 # stdin is /dev/null: `claude -p` otherwise waits for piped input, and the
 # child has no business reading ours. child_args is `--worktree <name>` for a
 # fresh run and `--setting-sources user` for a resumed one, plus `--chrome`
 # when Claude in Chrome is on; child_env turns the todo tools on, and on
 # resume adds the settings above. runner is empty unless Chrome is on.
 ${runner[@]+"${runner[@]}"} env "${child_env[@]}" claude -p "$prompt" \
+  --append-system-prompt "$system" \
   "${child_args[@]}" \
   --output-format stream-json \
   --verbose \
