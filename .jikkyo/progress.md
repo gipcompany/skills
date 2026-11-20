@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:35:43+09:00
-next: item 6: start message
+updated: 2026-11-20T19:35:53+09:00
+next: item 7: first-step instruction and not-reachable message
 
 ## Todos
 
@@ -10,7 +10,7 @@ next: item 6: start message
 - [x] Item 3: live check headless claude -p --chrome child connects, opens tab, navigates, reads (log-only commit)
 - [ ] Item 4: live check interactive session and jikkyo child keep to own tabs
 - [x] Item 5: --no-chrome flag, usage line and argument validation in SKILL.md (6c3e678)
-- [ ] Item 6: start message says Chrome on/off and why, warns about logged-in browser
+- [x] Item 6: start message says Chrome on/off and why, warns about logged-in browser (6c3e678)
 - [ ] Item 7: first-step tab-listing instruction and fixed not-reachable message passed to the summary
 - [ ] Item 8: comments instruction and report.sh watcher that SIGTERMs the child on an untrusted comment or edit
 - [ ] Item 9: own-tabs instruction; browser-choice prompt at first step counts as not reachable
@@ -27,6 +27,7 @@ next: item 6: start message
 - Phase 1 checks the author of the issue body, every comment, and the edit history; --chrome only when all trusted: tests/run.sh decision cases (all trusted, untrusted body author, comment author, editor, earlier editor, permission error) and the launch.sh command line with and without --chrome pass; precheck.sh --people and --chrome tried on the real issue 76
 - The same applies to --resume, and a resumed child with --chrome --setting-sources user loads Claude in Chrome: SKILL.md step 4c runs for a resume too; tests/run.sh checks the resumed command line (--setting-sources user then --chrome, browser instructions before the resume one, --watch to report.sh, resume environment unchanged); live: a child started with --setting-sources user --chrome and the resume environment variables (Claude Code 2.1.329) listed claude-in-chrome as connected in its init event and called tabs_context_mcp without an error
 - --no-chrome for one run, usage line, and argument validation: tests/run.sh checks SKILL.md's usage line, the rule that flags go before the URL in any order with at most one of --force or --resume and at most one --no-chrome, the usage-and-stop for a repeated or unknown flag, that it is recorded nowhere, and precheck.sh --chrome --no-chrome printing chrome off no-chrome; launch.sh rejects --no-chrome
+- The start message says Chrome on or off and why: tests/run.sh checks SKILL.md step 6's three lines (on, with the logged-in browser warning; off naming the untrusted accounts from the decision line; off for --no-chrome)
 
 ## Dead ends and decisions
 
