@@ -80,10 +80,10 @@
 #                          child's todos, one per task-list item, so it does
 #                          not start (the reason is a fixed sentence).
 #
-# A task-list item is a GFM list item outside fenced code blocks, bullet
-# (`-`, `*`, `+`) or ordered (`1.`, `1)`), at any nesting depth, whose
-# paragraph starts with `[ ]`, `[x]`, or `[X]` and whitespace; ticked and
-# unticked items both count. Nothing from the body is printed.
+# A task-list item is a GFM list item outside fenced code blocks and HTML
+# comments, bullet (`-`, `*`, `+`) or ordered (`1.`, `1)`), at any nesting
+# depth, whose paragraph starts with `[ ]`, `[x]`, or `[X]` and whitespace;
+# ticked and unticked items both count. Nothing from the body is printed.
 #
 # Exit status: 0 with a decision, 1 as above, 2 on bad input, including
 # empty input or anything that is not a list of comment arrays (with --body,
@@ -137,10 +137,18 @@ if [ "$body_mode" = true ]; then
   # only indent, `>`, and list markers before a run of 3 or more backticks
   # (with no backtick after it on the line) or tildes, and closes on a line
   # of the same character, at least as long, after indent and `>` only. A
-  # fence never closed runs to the end. Then a task-list item is a line of
-  # indent and `>`, one or more list markers (`-`, `*`, `+`, `1.`, `1)`)
-  # each followed by whitespace, then `[ ]`, `[x]`, or `[X]` and whitespace.
-  # Indented (4-space) code blocks and HTML are not dropped.
+  # fence never closed runs to the end. Then HTML comments are dropped
+  # (`<!--` to the next `-->`, or to the end when never closed), so the
+  # commented-out example of an issue template does not count. Then a
+  # task-list item is a line of indent and `>`, one or more list markers
+  # (`-`, `*`, `+`, `1.`, `1)`) each followed by whitespace, then `[ ]`,
+  # `[x]`, or `[X]` and whitespace. Indented (4-space) code blocks and other
+  # HTML are not dropped, and a fence opened inside a blockquote or list item
+  # is not closed when that container ends: both err towards refusing.
+  # These fence rules are not report.sh's LANG_FILTER, on purpose: there a
+  # fence on a list-marker line counts as prose (it errs towards `ja`), here
+  # it is code (it errs towards refusing), and neither result reaches the
+  # other script.
   # shellcheck disable=SC2016  # jq program
   out="$(jq -r '
     def opener: capture("^[ \t]*(?:(?:>|[-+*]|[0-9]{1,9}[.)])[ \t]*)*(?<f>`{3,}|~{3,})(?<i>.*)$") // null
@@ -153,19 +161,21 @@ if [ "$body_mode" = true ]; then
         else ($l | opener) as $f
           | if $f != null then .f = $f else .out[.out | length] = $l end
         end)
-      | .out[];
+      | .out | join("\n")
+      | gsub("<!--(?:[^-]|-(?!->))*(?:-->|$)"; "")
+      | split("\n")[];
     if type == "object" and (.number | type) == "number" and ((.body | type) == "string" or .body == null)
     then
       if any((.body // "") | prose_lines;
              test("^[ \t]*(?:>[ \t]*)*(?:(?:[-+*]|[0-9]{1,9}[.)])[ \t]+)+\\[[ xX]\\][ \t]"))
       then "go"
-      else "refuse the issue body has no task-list item (such as \"- [ ] ...\" outside code blocks); jikkyo needs at least one, as a done criterion the child makes a todo for"
+      else "refuse the issue body has no task-list item (such as \"- [ ] ...\" outside fenced code and HTML comments); jikkyo needs at least one, as a done criterion the child makes a todo for"
       end
-    else error("not an issue") end' 2>/dev/null)" || {
+    else error("not an issue") end' 2>/dev/null)" || out=""
+  if [ -z "$out" ]; then
     echo "precheck.sh: expected the issue as a JSON object (did the gh call fail?)" >&2
     exit 2
-  }
-  [ -n "$out" ] || { echo "precheck.sh: expected the issue as a JSON object (did the gh call fail?)" >&2; exit 2; }
+  fi
   printf '%s\n' "$out"
   exit 0
 fi

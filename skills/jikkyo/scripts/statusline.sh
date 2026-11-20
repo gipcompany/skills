@@ -20,8 +20,8 @@
 #     when the run has no todos. <eta> is the estimate as of the last write,
 #     the same figure as the status comment's `Remaining` row; it does not
 #     count down between writes (at most 5 minutes apart, the heartbeat);
-#   - finished, incomplete, failed, interrupted: `jikkyo #<N> · <state>` for 5 minutes
-#     after the file's `updated`, then nothing;
+#   - finished, incomplete, failed, interrupted: `jikkyo #<N> · <state>` for
+#     5 minutes after the file's `updated`, then nothing;
 #   - stale: `jikkyo #<N> · stale` for a `running` file whose `updated` is 15
 #     minutes old or more, for as long as the file stays (until the next run
 #     of the issue overwrites it). report.sh writes `interrupted` on TERM,

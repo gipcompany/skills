@@ -290,17 +290,21 @@ timing and signal tests waiting on a real scheduler.
   ends, or a tab after the box. `refuse` with a fixed one-line reason, and
   nothing from the body, for prose only, an empty or null body, and items
   only inside a backtick or tilde fence (also one never closed, one a
-  shorter run does not close, and one opened on a list line), and for lines
-  that are not task-list items (no whitespace after the box, `[y]`, no list
-  marker, no space after the marker, a code span, mid-line, a heading).
+  shorter run does not close, and one opened on a list line) or only inside
+  an HTML comment (multi-line, one-line, never closed, or holding a `--`
+  run), and for lines that are not task-list items (no whitespace after the
+  box, nothing after the box, `[y]`, no list marker, no space after the
+  marker, a code span, mid-line, a heading). `go` for an item after a closed
+  comment, on the line a comment closes, with a comment after it, between
+  two comments, or after a fence that holds a lone `<!--`.
   Exit 2 and no decision for an error object, empty input, text that is not
   JSON, an array, a number that is a string, or a body that is not a
   string; `--body` combines with no other flag. `SKILL.md` runs it as step
   3, before every comments check, for fresh runs and resumes alike.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
-  or more; `--force` rewriting even a live one; `finished`, `failed`, and
-  `interrupted` never blocking; comments without the marker or by another
+  or more; `--force` rewriting even a live one; `finished`, `incomplete`,
+  `failed`, and `interrupted` never blocking; comments without the marker or by another
   author not counting; several `--paginate` pages read as one list;
   fractional-second timestamps; empty input or an API error object (a
   failed `gh` listing) giving exit 2 rather than `start`; `--payload` rewriting marker, heading, and
@@ -329,8 +333,8 @@ timing and signal tests waiting on a real scheduler.
     that shape on the line. A later `finished` run of another branch does
     not hide it; a later `finished` one on the same branch takes an
     `incomplete` run out too. A trusted account's `incomplete` comment is
-    resumed, an untrusted one's is not. An `incomplete` comment never
-    blocks a new run, and `--payload` refuses it.
+    resumed, an untrusted one's is not. `--payload` refuses an
+    `incomplete` comment.
   - `none` once a later `finished` comment names the same branch, but that
     branch again if it was then interrupted once more. A `finished` comment
     by another author does not count, nor does a comment whose id is not a

@@ -2119,7 +2119,7 @@ echo "precheck.sh"
   assert_eq "running, not updated for 15 minutes: rewrite, then start" "rewrite 1" "$(comment 1 me running 900 | decide)"
   assert_eq "--force skips the check and rewrites a live one" "rewrite 1" "$(comment 1 me running 60 | decide --force)"
   assert_eq "--force with nothing running: start" "start" "$(comment 1 me finished 60 | decide --force)"
-  for st in finished failed interrupted; do
+  for st in finished incomplete failed interrupted; do
     assert_eq "a $st comment never blocks" "start" "$(comment 1 me "$st" 1 | decide)"
   done
   assert_eq "another author's marker does not count" "start" "$(comment 1 someone running 60 | decide)"
@@ -2221,7 +2221,6 @@ echo "precheck.sh"
     "$(br_comment 1 alice incomplete 60 | decide --resume 12 --trusted alice)"
   assert_eq "--resume: an untrusted account's incomplete comment is not (#72)" "none" \
     "$(br_comment 1 alice incomplete 60 | decide_resume)"
-  assert_eq "an incomplete comment never blocks a new run (#72)" "start" "$(comment 1 me incomplete 10 | decide)"
   rc=0; br_comment 1 me incomplete 10 | bash "$PRECHECK" --payload >/dev/null 2>&1 || rc=$?
   assert_eq "--payload refuses an incomplete comment, which is not running (#72)" "1" "$rc"
   assert_eq "--resume: the latest interrupted or failed one wins" "resume $BR2 5" \
@@ -2417,6 +2416,16 @@ echo "precheck.sh --body"
   body_case refuse "an item inside a longer fence a shorter run does not close: refuse" $'````\n```\n- [ ] x\n````'
   body_case refuse "an item inside a fence on a list line: refuse" $'- ```\n  - [ ] in\n  ```'
   body_case refuse "no whitespace after the box: refuse" '- [ ]x'
+  body_case refuse "nothing after the box: refuse" '- [ ]'
+  body_case refuse "an item only inside an HTML comment: refuse" $'<!--\n- [ ] example\n-->\nprose'
+  body_case refuse "an item only inside a one-line HTML comment: refuse" '<!-- - [ ] example -->'
+  body_case refuse "an item inside an HTML comment never closed: refuse" $'<!-- template\n- [ ] example'
+  body_case refuse "an item inside a comment holding a -- run: refuse" $'<!-- a -- b\n- [ ] x --->'
+  body_case go "an item after a closed HTML comment: go" $'<!-- note -->\n- [ ] real'
+  body_case go "an item on the line a comment closes: go" $'<!--\nnote -->\n- [ ] real'
+  body_case go "an item with a comment after it: go" '- [ ] real <!-- note -->'
+  body_case go "an item between two comments: go" $'<!-- a -->\n- [ ] real\n<!-- b -->'
+  body_case go "a comment opener inside a fence is code: go" $'```\n<!--\n```\n- [ ] real'
   body_case refuse "a box with another letter: refuse" '- [y] no'
   body_case refuse "a box with no list marker: refuse" '[ ] no'
   body_case refuse "no space after the list marker: refuse" '-[ ] no'
@@ -2428,7 +2437,7 @@ echo "precheck.sh --body"
   assert_eq "--body: go is the whole line" "go" "$out"
   out="$(jq -cn '{number: 72, body: "SECRET-BODY-TEXT $(id)"}' | bash "$PRECHECK" --body)"
   assert_eq "--body: refuse says why, in one line" \
-    'refuse the issue body has no task-list item (such as "- [ ] ..." outside code blocks); jikkyo needs at least one, as a done criterion the child makes a todo for' "$out"
+    'refuse the issue body has no task-list item (such as "- [ ] ..." outside fenced code and HTML comments); jikkyo needs at least one, as a done criterion the child makes a todo for' "$out"
   assert_lacks "--body: nothing from the body is printed" "SECRET-BODY-TEXT" "$out"
   out="$(jq -cn '{number: 72, body: null}' | bash "$PRECHECK" --body | cut -d' ' -f1)"
   assert_eq "--body: a null body: refuse" "refuse" "$out"

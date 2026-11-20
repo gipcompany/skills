@@ -101,8 +101,8 @@ The arguments are: $ARGUMENTS
    It prints one line:
 
    - `go` — the body has at least one task-list item (a `- [ ]`, `* [ ]`,
-     `+ [ ]`, or `1. [ ]` line, ticked or not, outside code blocks). Go to
-     step 4.
+     `+ [ ]`, `1. [ ]`, or `1) [ ]` line, at any depth, ticked or not,
+     outside fenced code and HTML comments). Go to step 4.
    - `refuse <reason>` — it has none. A run is `finished` only when every
      one of the child's todos is completed, and the child makes one todo per
      task-list item, so jikkyo needs at least one item as a done criterion.
@@ -341,8 +341,8 @@ Then, in this order:
      still name the branch if it is on the remote.
 
    The run is **resumable** when its state is `interrupted`, `failed`, or
-   `incomplete` and the branch is on the remote. If step 1 left the worktree or the
-   local branch in place (`cleanup.sh` printed `keep`, or a git step
+   `incomplete` and the branch is on the remote. If step 1 left the worktree
+   or the local branch in place (`cleanup.sh` printed `keep`, or a git step
    refused), the resume command may be refused until a person deals with
    it: `launch.sh --resume` will not start on a branch that is checked out
    in another worktree or has local commits the remote lacks. The summary
@@ -704,6 +704,9 @@ needed because this session is idle while the run goes.
   depend on the todos. The todos are the child's, from its own `TaskCreate`
   / `TaskUpdate` events, not the issue's boxes: the child is told to make
   one per task-list item, so with none it has not shown its work done.
+  `finished` is the child's own account, not a check: it makes and
+  completes its todos itself, so it says the child reported every step
+  done, not that anyone verified it.
   Status comments written before `incomplete` existed are left as they
   are: an old `finished` stays `finished` and is not resumable.
 - **How a stop is reported as resumable.** A run that ends `interrupted`,

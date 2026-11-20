@@ -52,6 +52,11 @@
 # task-list item, so a run with none has not shown its work done), `failed`
 # (an error result line), or `interrupted` (no result line, or
 # SIGTERM/SIGHUP/SIGINT).
+# A new state has to be added in every place that lists them: here
+# (`final_state`, `state_word`, `glyph`), statusline.sh (its state check and
+# `case`), precheck.sh (the `--resume` candidates, for a resumable state),
+# SKILL.md ("How a run ends", Phase 3), the root README.md, tests/README.md,
+# and the exact-text tests in tests/run.sh.
 # After the final write it prints `jikkyo: state <state>`, then
 # `jikkyo: todos <completed>/<total>` (todos not deleted), then the child's
 # final message for the parent session: the `result` text on success, the

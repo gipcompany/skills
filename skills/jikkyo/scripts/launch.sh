@@ -93,8 +93,10 @@ DENY_RULES=(
 # report.sh computes progress and the remaining-time estimate from the child's
 # TaskCreate / TaskUpdate events, and a run is `finished` only when every one
 # of its todos is completed; a child left to itself often makes no todos. So
-# the todo instruction is unconditional: one todo per task-list item (precheck
-# --body has made sure there is at least one), on resume too.
+# the todo instruction is unconditional: one todo per task-list item, on
+# resume too. That there is at least one item is assumed, not checked here:
+# SKILL.md has the parent run `precheck.sh --body` before launching, and a
+# run whose child still makes no todos ends `incomplete`.
 # The log is what a later run resumes from (design: issue #27). It lives on the
 # run's own branch, is pushed after every todo so a crash loses at most one
 # step, and is deleted before the PR so it never reaches the base branch.
