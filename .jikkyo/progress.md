@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:36:42+09:00
-next: item 12: tests
+updated: 2026-11-20T19:36:52+09:00
+next: item 13: README
 
 ## Todos
 
@@ -16,7 +16,7 @@ next: item 12: tests
 - [x] Item 9: own-tabs instruction; browser-choice prompt at first step counts as not reachable (d274d6d)
 - [x] Item 10: fixed login instruction (d274d6d)
 - [x] Item 11: decisions on login, shared browser, comments during a run, body edits, resumed runs in SKILL.md (6c3e678)
-- [ ] Item 12: tests/run.sh covers the decision, child command line, watcher
+- [x] Item 12: tests/run.sh covers the decision, child command line, watcher (0105268)
 - [ ] Item 13: README jikkyo section describes the behavior
 - [ ] Item 14: tests/run.sh and shellcheck pass
 - [ ] Delete progress log and open the PR (Closes #76)
@@ -33,6 +33,7 @@ next: item 12: tests
 - Own-tabs instruction and browser-choice prompt as not reachable: tests/run.sh checks TABS_INSTRUCTION (only tabs it opened itself, never any other tab) in the Chrome-on prompt, and BROWSER_INSTRUCTION ending the run with the fixed message when the first call asks which browser to use
 - Login instruction: tests/run.sh checks LOGIN_INSTRUCTION in the Chrome-on prompt (never sign in, no credentials, login, OAuth consent, or CAPTCHA; leave the item unticked, go on, name the page in the final message)
 - Decisions written in SKILL.md: tests/run.sh checks the Claude in Chrome bullet's sub-items (Who is checked, All or nothing, When the browser is not reachable, Sharing the browser, Login, Comments and body edits during a run, Resumed runs) and the exception in How a stop is reported as resumable
+- tests/run.sh covers the decision, the child command line, and the watcher: new sections for precheck.sh --people/--chrome (all trusted, untrusted body author, comment author, editor, permission error, --no-chrome), launch.sh with and without --chrome fresh and resumed (the comments instruction included), and report.sh --watch stopping on an untrusted comment and edit; all pass
 
 ## Dead ends and decisions
 
