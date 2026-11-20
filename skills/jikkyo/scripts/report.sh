@@ -158,7 +158,8 @@ while [ "$#" -ge 1 ]; do
   esac
 done
 if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then usage; fi
-re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]*)/([A-Za-z0-9._-]+)/issues/([1-9][0-9]*)$'
+# The same URL shape as launch.sh, with GitHub's length caps (issue #81).
+re='^https://github\.com/([A-Za-z0-9][A-Za-z0-9-]{0,38})/([A-Za-z0-9._-]{1,100}|[A-Za-z0-9._-]{1,100}\.git)/issues/([1-9][0-9]{0,9})$'
 [[ "$1" =~ $re ]] || usage
 owner="${BASH_REMATCH[1]}"
 repo="${BASH_REMATCH[2]}"

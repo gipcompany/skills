@@ -166,8 +166,12 @@ timing and signal tests waiting on a real scheduler.
   with exit 2 before the child or `gh` runs, as is an issue whose repository is
   not a remote of the checkout (a host like `notgithub.com` does not count),
   or a run outside a git repository. The child
-  gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`
-  (one argument: the URL, then the fixed instruction to make `TaskCreate`
+  gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <done criterion>'`
+  (one argument: the URL, then only "The goal is met only when the work is
+  done and every box you could verify is ticked."; issue #81), then
+  `--append-system-prompt` with one multi-line argument: a fixed lead-in with
+  no URL, then, each its own paragraph after a blank line, the fixed
+  instruction to make `TaskCreate`
   todos up front, always one per task-list item (the old wording, which
   asked for that only when the issue had a task list, fails the run), and
   complete them
@@ -180,7 +184,7 @@ timing and signal tests waiting on a real scheduler.
   keep `.jikkyo/progress.md` in its fixed shape, updating, committing, and
   pushing it after every todo, keeping secrets, environment values, and
   command output out of it, and deleting it in one pushed commit right before
-  the PR),
+  the PR; the appended prompt holds no `https://` and no goal sentence),
   `--worktree jikkyo-<N>-<timestamp>`, `--output-format stream-json`,
   `--verbose`, `--permission-mode auto`, and `--disallowedTools` with every
   rule for force pushes, remote-branch deletion, comment edits and deletes,
@@ -188,7 +192,11 @@ timing and signal tests waiting on a real scheduler.
   `git push`. The worktree name, path, and branch are printed before the child
   starts, and the path is under the repository root even from a subdirectory.
   That branch is passed to `report.sh`, so it ends up in the comment's
-  marker and `Branch` row. A fresh run gets no resume instruction. The run's
+  marker and `Branch` row. A fresh run gets no resume instruction and no
+  resume goal sentence. The `claude` stub records each argument on its own
+  line with newlines written as `\n`, so a multi-line argument stays one
+  line, and also exactly, NUL-terminated, in `.nul`, which `child_arg <n>`
+  reads. The run's
   state file lands in the repository's common dir with the session id.
 - **`launch.sh --resume`** — against a real bare remote reached through the
   issue's GitHub URL (`url.<file>.insteadOf`, with a thin `git` wrapper that
@@ -200,8 +208,11 @@ timing and signal tests waiting on a real scheduler.
   - A good resume adds a new worktree `jikkyo-<N>-<timestamp>` on the
     branch at the pushed tip, tracking `origin/<branch>`, prints the
     worktree lines (naming the resumed branch) first, and runs the child
-    inside it without `--worktree`, with the same flags and deny list and
-    the resume instruction last, which has the child make one todo per
+    inside it without `--worktree`, with the same flags and deny list, the
+    goal condition plus the resume goal sentence ("On this resumed run, the
+    goal is met only if the conversation also shows that every item done in
+    an earlier run was re-verified."), and the resume instruction, whole,
+    last in the appended prompt, which has the child make one todo per
     task-list item again, ticked ones included, and complete those it has
     re-verified (the old "for what is left" wording fails the run). The
     status comment is a new one with the same branch and a `Resumed from`
@@ -413,6 +424,13 @@ timing and signal tests waiting on a real scheduler.
   that in-progress todos of a run that ended `failed`, `interrupted`, or
   `incomplete` show ⏸️ instead of 🔄, and that a run ends in one of four
   states, starting with `finished` for every todo completed.
+- **The goal condition's length (#81)** — with the longest URL the caps
+  allow (a 39-character owner, a 100-character repository name plus `.git`,
+  a 10-digit issue number: 181 characters), the goal condition is under 4000
+  characters fresh and resumed, with Chrome off and on. A URL one over any
+  cap (owner, repository with or without `.git`, issue number) is refused
+  with exit 2 by `launch.sh`, before the child, even in a checkout whose
+  remote matches it, and by `report.sh`.
 - **Claude in Chrome (#76)** — `precheck.sh --people` lists the body
   author, every comment author, and every account in the body's edit
   history, other than `--author`, sorted and once each, with a bot by its
@@ -431,8 +449,8 @@ timing and signal tests waiting on a real scheduler.
   `--chrome` and with `--resume`, and bad flag combinations are refused. `launch.sh`
   without `--chrome` starts the child exactly as before, fresh and
   resumed (no `--chrome`, no browser instructions, no `--watch`); with
-  it, the prompt adds the browser, tabs, login, and comments instructions
-  after the log one (before the resume one on a resumed run), `--chrome`
+  it, the goal condition is the same and the appended prompt adds the
+  browser, tabs, login, and comments instructions after the log one (before the resume one on a resumed run), `--chrome`
   comes after `--worktree <name>` or `--setting-sources user`, report.sh
   gets `--watch` with a file holding the child's own PID, the resume
   environment is unchanged, and the file is removed at the end; a
