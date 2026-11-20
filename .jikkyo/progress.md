@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:37:02+09:00
-next: item 14: full test run and shellcheck
+updated: 2026-11-20T19:40:45+09:00
+next: item 4: live check of an interactive session and a child sharing the browser
 
 ## Todos
 
@@ -18,7 +18,7 @@ next: item 14: full test run and shellcheck
 - [x] Item 11: decisions on login, shared browser, comments during a run, body edits, resumed runs in SKILL.md (6c3e678)
 - [x] Item 12: tests/run.sh covers the decision, child command line, watcher (0105268)
 - [x] Item 13: README jikkyo section describes the behavior (6c3e678)
-- [ ] Item 14: tests/run.sh and shellcheck pass
+- [x] Item 14: tests/run.sh and shellcheck pass (0105268)
 - [ ] Delete progress log and open the PR (Closes #76)
 
 ## Verified task-list items
@@ -35,6 +35,7 @@ next: item 14: full test run and shellcheck
 - Decisions written in SKILL.md: tests/run.sh checks the Claude in Chrome bullet's sub-items (Who is checked, All or nothing, When the browser is not reachable, Sharing the browser, Login, Comments and body edits during a run, Resumed runs) and the exception in How a stop is reported as resumable
 - tests/run.sh covers the decision, the child command line, and the watcher: new sections for precheck.sh --people/--chrome (all trusted, untrusted body author, comment author, editor, permission error, --no-chrome), launch.sh with and without --chrome fresh and resumed (the comments instruction included), and report.sh --watch stopping on an untrusted comment and edit; all pass
 - README.md's jikkyo section describes the behavior: new Usage line with --no-chrome, a Claude in Chrome section (who is checked, the start message, the child's instructions, the watcher, resumed runs), the watcher's interrupted state, and the logged-in browser in What it runs on your machine; tests/run.sh checks it
+- bash skills/jikkyo/tests/run.sh (1099 passed, 0 failed) and shellcheck on skills/jikkyo/scripts/*.sh and skills/jikkyo/tests/*.sh (no findings) pass
 
 ## Dead ends and decisions
 
