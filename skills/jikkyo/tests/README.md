@@ -404,3 +404,12 @@ timing and signal tests waiting on a real scheduler.
   `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]` becomes `+ [x]`, and
   `1. [ ]` becomes `1. [x]`, and no
   longer has the old phrase that named only the `-` marker.
+  The status comment's todo section is described word for word in both:
+  `SKILL.md` says the `<summary>` is the label alone, the todo lines are
+  never `- [ ]`, a todo change is any change in the todo list, and on
+  `failed`, `interrupted`, or `incomplete` in-progress todos show ⏸️; the
+  README's jikkyo section has the sample comment ending with the todo
+  section, says the lines are not checkboxes and what a todo change is,
+  that in-progress todos of a run that ended `failed`, `interrupted`, or
+  `incomplete` show ⏸️ instead of 🔄, and that a run ends in one of four
+  states, starting with `finished` for every todo completed.
