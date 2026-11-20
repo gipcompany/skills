@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:36:23+09:00
-next: item 10: login instruction
+updated: 2026-11-20T19:36:32+09:00
+next: item 11: decisions in SKILL.md
 
 ## Todos
 
@@ -14,7 +14,7 @@ next: item 10: login instruction
 - [x] Item 7: first-step tab-listing instruction and fixed not-reachable message passed to the summary (d274d6d)
 - [x] Item 8: comments instruction and report.sh watcher that SIGTERMs the child on an untrusted comment or edit (d274d6d)
 - [x] Item 9: own-tabs instruction; browser-choice prompt at first step counts as not reachable (d274d6d)
-- [ ] Item 10: fixed login instruction
+- [x] Item 10: fixed login instruction (d274d6d)
 - [ ] Item 11: decisions on login, shared browser, comments during a run, body edits, resumed runs in SKILL.md
 - [ ] Item 12: tests/run.sh covers the decision, child command line, watcher
 - [ ] Item 13: README jikkyo section describes the behavior
@@ -31,6 +31,7 @@ next: item 10: login instruction
 - First step is the tab listing, and an unavailable browser ends at once with the fixed message the summary shows: tests/run.sh checks BROWSER_INSTRUCTION (tab listing first, without createIfEmpty; missing tool or any error ends at once) ending in report.sh's NOT_REACHABLE text, report.sh printing jikkyo: browser not reachable for it and not for other messages, and SKILL.md Phase 3 reading that line into the summary
 - Comments instruction and the watcher: tests/run.sh checks COMMENTS_INSTRUCTION in the Chrome-on prompt only, report.sh --watch stopping a stand-in child with SIGTERM on an untrusted comment and an untrusted body edit (and read permission, a permission error, a deleted account), ending interrupted with the Stopped row and the jikkyo: stopped by hand-over, and the real launch.sh --chrome with report.sh stopping a silent child by its PID within seconds; SKILL.md Phase 3 puts the account and reason in the closing summary
 - Own-tabs instruction and browser-choice prompt as not reachable: tests/run.sh checks TABS_INSTRUCTION (only tabs it opened itself, never any other tab) in the Chrome-on prompt, and BROWSER_INSTRUCTION ending the run with the fixed message when the first call asks which browser to use
+- Login instruction: tests/run.sh checks LOGIN_INSTRUCTION in the Chrome-on prompt (never sign in, no credentials, login, OAuth consent, or CAPTCHA; leave the item unticked, go on, name the page in the final message)
 
 ## Dead ends and decisions
 
