@@ -46,10 +46,21 @@
 # ` · ~<duration> left` heading suffix) gives elapsed / completed * (total -
 # completed), the run-wide rate; otherwise that row is present but empty.
 #
-# The final state is `finished` (a non-error result line), `failed` (an error
-# result line), or `interrupted` (no result line, or SIGTERM/SIGHUP/SIGINT).
-# After the final write it prints the child's final message for the parent
-# session: the `result` text on success, the `errors` on an error_* subtype.
+# The final state is `finished` (a non-error result line, and every todo that
+# is not deleted completed), `incomplete` (a non-error result line, but some
+# todo not completed, or no todos at all: the child is asked to make one per
+# task-list item, so a run with none has not shown its work done), `failed`
+# (an error result line), or `interrupted` (no result line, or
+# SIGTERM/SIGHUP/SIGINT).
+# A new state has to be added in every place that lists them: here
+# (`final_state`, `state_word`, `glyph`), statusline.sh (its state check and
+# `case`), precheck.sh (the `--resume` candidates, for a resumable state),
+# SKILL.md ("How a run ends", Phase 3), the root README.md, tests/README.md,
+# and the exact-text tests in tests/run.sh.
+# After the final write it prints `jikkyo: state <state>`, then
+# `jikkyo: todos <completed>/<total>` (todos not deleted), then the child's
+# final message for the parent session: the `result` text on success, the
+# `errors` on an error_* subtype.
 #
 # Language: before the first write it reads the issue's title and body with
 # `gh api` and writes the visible text in Japanese (`ja`) if they contain any
@@ -278,7 +289,7 @@ set_labels() {
 state_word() {
   if [ "$LANG_CODE" = ja ]; then
     case "$1" in running) echo "実行中" ;; finished) echo "完了" ;; failed) echo "失敗" ;;
-      interrupted) echo "中断" ;; *) echo "$1" ;; esac
+      interrupted) echo "中断" ;; incomplete) echo "未完了" ;; *) echo "$1" ;; esac
   else echo "$1"; fi
 }
 
@@ -372,8 +383,9 @@ foreach (inputs | fromjson? // empty | select(type == "object")) as $e
 # in-progress todos alone are over the cap, the newest in-progress ones, and a
 # last bullet says how many are hidden. So the section has at most MAX_TODOS +
 # 1 bullets of bounded length, and the comment stays far under GitHub's
-# 65,536-character limit. An ended `failed` or `interrupted` run claims
-# nothing live: its in-progress todos get the stopped glyph.
+# 65,536-character limit. An ended `failed`, `interrupted`, or `incomplete`
+# run claims nothing live: its in-progress todos get the stopped glyph. (A
+# `finished` run has none: all its todos are completed.)
 #
 # precheck.sh --payload depends on this shape: the section starts at the
 # body's first line that starts with `<details>`, and an in-progress line
@@ -388,7 +400,7 @@ def neutral:
   | "`" + . + "`";
 def glyph:
   if .status == "completed" then "✅"
-  elif .status == "in_progress" then (if $st == "failed" or $st == "interrupted" then "⏸️" else "🔄" end)
+  elif .status == "in_progress" then (if $st == "failed" or $st == "interrupted" or $st == "incomplete" then "⏸️" else "🔄" end)
   else "⬜" end;
 [ (.tasks // {}) | objects | to_entries[]
   | {id: .key, n: (.key | try tonumber catch null), status: (.value.status? // null),
@@ -640,9 +652,11 @@ print_final_message() {
 }
 
 final_state() {
-  jq -r '.result | if . == null then "interrupted"
-         elif .is_error == true or .subtype != "success" then "failed"
-         else "finished" end' "$state_file"
+  jq -r '.result as $r
+         | if $r == null then "interrupted"
+           elif $r.is_error == true or $r.subtype != "success" then "failed"
+           elif .total == 0 or .done < .total then "incomplete"
+           else "finished" end' "$state_file"
 }
 
 parser_pid=""
@@ -655,6 +669,9 @@ finish() {
   [ -n "$parser_pid" ] && kill "$parser_pid" 2>/dev/null
   _write "$st" "$(now)"
   echo "jikkyo: state ${st}"
+  # Non-deleted todos, the counts final_state judged by: numbers only.
+  jq -r '"jikkyo: todos \(.done)/\(.total)"' "$state_file" 2>/dev/null \
+    || echo "jikkyo: todos 0/0"
   print_final_message
   rm -rf "$work"
 }

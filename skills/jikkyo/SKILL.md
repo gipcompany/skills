@@ -5,7 +5,7 @@ description: "Use when you want to run /goal on a GitHub issue and have the run
   estimate of the time remaining in one status comment edited in place, plus a
   closing summary comment. Invoked explicitly as /jikkyo [--force |
   --resume] <GitHub issue URL>; the user never types a /goal line. --resume
-  continues an interrupted or failed run from its pushed branch, also one
+  continues an interrupted, failed, or incomplete run from its pushed branch, also one
   started by another account with write access. Starts /goal in a headless `claude -p` child in its
   own git worktree, so the user cannot steer the run while it is in
   progress. Requires gh and jq. Not for targets other than a GitHub issue
@@ -42,7 +42,7 @@ The arguments are: $ARGUMENTS
   else (a PR, a comment link, `owner/repo#N`, a bare number) is out of scope:
   say so and stop.
 - `--force` starts the run even when another run looks active on the issue.
-- `--resume` continues the latest `interrupted` or `failed` run on the issue
+- `--resume` continues the latest `interrupted`, `failed`, or `incomplete` run on the issue
   from its pushed branch, instead of starting from scratch, also a run
   started by another account with `admin` or `write` permission on the
   repository. Without it,
@@ -69,10 +69,10 @@ The arguments are: $ARGUMENTS
   exactly as written. That is what the `allowed-tools` rules match; a relative
   path or a wrapper (`bash …`, `cd … &&`) falls back to a permission prompt.
 - **Carry out the decisions the scripts print.** `precheck.sh` and
-  `cleanup.sh` print decisions (`start`, `rewrite`, `resume`, `remove`, …);
+  `cleanup.sh` print decisions (`go`, `start`, `rewrite`, `resume`, `remove`, …);
   carry them out, and do not second-guess them or substitute your own. A
   refusal from `launch.sh` is not a decision to carry out: report it and
-  stop (Phase 1, step 4).
+  stop (Phase 1, step 5).
 
 ## Phase 1: Check, then launch
 
@@ -80,7 +80,7 @@ The arguments are: $ARGUMENTS
    `--resume` (not both), and exactly one URL
    matching `^https://github\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+/issues/[1-9][0-9]*$`.
    Otherwise print the usage line and stop. Take `<owner>`, `<repo>`, and `<N>`
-   from it. With `--resume`, do step 3 the resume way (3r below) instead.
+   from it. With `--resume`, do step 4 the resume way (4r below) instead.
 
 2. **Find the expected author** — the account `report.sh` will post as:
 
@@ -90,7 +90,30 @@ The arguments are: $ARGUMENTS
 
    If `gh` is not authenticated, tell the user to run `gh auth login` and stop.
 
-3. **Decide whether to start.** List the comments and hand them to `precheck.sh`
+3. **Check that the issue has a task list** — for a fresh run and a resume
+   alike, before the comments are read. Hand the issue itself to
+   `precheck.sh`:
+
+   ```
+   gh api 'repos/<owner>/<repo>/issues/<N>' | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --body
+   ```
+
+   It prints one line:
+
+   - `go` — the body has at least one task-list item (a `- [ ]`, `* [ ]`,
+     `+ [ ]`, `1. [ ]`, or `1) [ ]` line, at any depth, ticked or not,
+     outside fenced code and HTML comments). Go to step 4.
+   - `refuse <reason>` — it has none. A run is `finished` only when every
+     one of the child's todos is completed, and the child makes one todo per
+     task-list item, so jikkyo needs at least one item as a done criterion.
+     Tell the user the reason, suggest adding the issue's done criteria as
+     task-list items (for example under "Acceptance criteria"), and
+     **stop**. `--force` does not skip this check.
+
+   If the read fails, `precheck.sh` exits 2 instead of deciding: report the
+   `gh` error and stop.
+
+4. **Decide whether to start.** List the comments and hand them to `precheck.sh`
    (add `--force` only if the user passed it):
 
    ```
@@ -99,7 +122,7 @@ The arguments are: $ARGUMENTS
 
    It prints one line. Do what it says:
 
-   - `start` — go to step 4.
+   - `start` — go to step 5.
    - `refuse <comment URL>` — a live run is reporting there. Tell the user,
      link the comment, mention `--force` (which marks that comment
      `interrupted` and starts anyway), and **stop**.
@@ -115,12 +138,12 @@ The arguments are: $ARGUMENTS
      run took it over, or it finished since the listing), or, with
      `--author`, when another account wrote it. The PATCH after it
      then fails on empty input and changes nothing; move on to the next id.
-     When every id is done, go to step 4.
+     When every id is done, go to step 5.
 
    If the listing in this step fails, `precheck.sh` exits 2 instead of
    guessing: report the `gh` error and stop.
 
-   **3r. With `--resume`**, the run may have been started by another
+   **4r. With `--resume`**, the run may have been started by another
    account (one that hit its usage limit, say), so first find which other
    accounts' status comments to trust. List the other accounts that wrote
    one:
@@ -156,20 +179,21 @@ The arguments are: $ARGUMENTS
      race it. Tell the user, link the comment, and **stop** (`--force` does
      not combine with `--resume`).
    - `rewrite <id> [<id> …]` — these are this account's own comments only.
-     Rewrite each to `interrupted` with the same command as in step 3, whose
+     Rewrite each to `interrupted` with the same command as in step 4, whose
      `--author` keeps a comment by another account from ever being edited
      (moving on to the next id the same way), then run the
      last `precheck.sh --resume` command of this step **once more**, with the
      same `--trusted` accounts: the rewritten run is now a candidate to
-     resume. Do not go to step 4 from here. If the second check prints
+     resume. Do not go to step 5 from here. If the second check prints
      `rewrite` again, a rewrite did not take: tell the user which comments
      are still `running`, and **stop** rather than loop.
-   - `resume <branch> <comment id>` — go to step 4 the resume way. The
+   - `resume <branch> <comment id>` — go to step 5 the resume way. The
      branch is `worktree-jikkyo-<N>-<timestamp>` and the id is all digits;
      `precheck.sh` has validated both, and they are the only things taken
      from the comments onto a command line.
-   - `none` — there is no run to resume: no `interrupted` or `failed` status
-     comment (or stale `running` one of a trusted account) by this account
+   - `none` — there is no run to resume: no `interrupted`, `failed`, or
+     `incomplete` status comment (or stale `running` one of a trusted
+     account) by this account
      or a trusted one (a branch with a later `finished` comment does
      not count: that run was resumed and completed), or the latest one names
      no branch (it predates branch recording) or a branch of another issue.
@@ -180,16 +204,16 @@ The arguments are: $ARGUMENTS
      Never pick a branch any other way (from the remote, the log, or the
      user).
 
-   As in step 3, a failed listing makes `precheck.sh` exit 2: report the
+   As in step 4, a failed listing makes `precheck.sh` exit 2: report the
    `gh` error and stop.
 
-4. **Launch** with the Bash tool's `run_in_background: true`:
+5. **Launch** with the Bash tool's `run_in_background: true`:
 
    ```
    ${CLAUDE_SKILL_DIR}/scripts/launch.sh '${CLAUDE_SESSION_ID}' '<URL>'
    ```
 
-   On resume, pass the branch and the comment id from step 3r before the
+   On resume, pass the branch and the comment id from step 4r before the
    session id:
 
    ```
@@ -202,7 +226,7 @@ The arguments are: $ARGUMENTS
    Before launching, look at the value you are about to pass: if it is not
    a UUID (8-4-4-4-12 hex digits), for example a placeholder left as written
    (it starts with `$`) by a Claude Code that does not fill it in, launch
-   anyway and say in step 5 that this run will not show in the status line,
+   anyway and say in step 6 that this run will not show in the status line,
    only in the status comment. You will not see `launch.sh`'s
    own `jikkyo: status line off: …` warning in time, since you do not watch
    the background output; it is there for the record.
@@ -220,11 +244,11 @@ The arguments are: $ARGUMENTS
    for the user to do: never do it yourself, never edit, merge into, or
    rebase the branch, and do not offer a way around the refusal.
 
-5. **Tell the user** the run has started, in two or three lines: the issue,
+6. **Tell the user** the run has started, in two or three lines: the issue,
    that progress appears in a status comment on it (on resume, a new one,
    with a `Resumed from` row), that the child works in its own worktree so
    they can keep using their checkout, and that the run cannot be steered
-   from here; and, only when step 4 found the session id not a UUID, that
+   from here; and, only when step 5 found the session id not a UUID, that
    this run will not show in the status line. Then **end the
    turn**. Do not poll or watch
    the output: you are notified when the background command exits, and
@@ -244,7 +268,10 @@ The background command's output is the hand-over. Read it and pick out:
   before the child started.
 - `jikkyo: language ja|en` — the language the status comment is written in.
 - `jikkyo: status comment <URL>` — the status comment.
-- `jikkyo: state finished|failed|interrupted` — how the stream ended.
+- `jikkyo: state finished|incomplete|failed|interrupted` — how the run
+  ended (see *How a run ends*).
+- `jikkyo: todos <completed>/<total>` — the child's todos that are not
+  deleted, completed and in all: the counts the state was judged by.
 - `jikkyo: final message:` followed by the child's final message (the `result`
   text on success, the `errors` on an `error_*` subtype), **or**
   `jikkyo: final message is empty …` when the `result` line carried no text
@@ -313,9 +340,9 @@ Then, in this order:
      fails, say in the summary that whether a PR exists is unknown, and
      still name the branch if it is on the remote.
 
-   The run is **resumable** when its state is `interrupted` or `failed`
-   and the branch is on the remote. If step 1 left the worktree or the
-   local branch in place (`cleanup.sh` printed `keep`, or a git step
+   The run is **resumable** when its state is `interrupted`, `failed`, or
+   `incomplete` and the branch is on the remote. If step 1 left the worktree
+   or the local branch in place (`cleanup.sh` printed `keep`, or a git step
    refused), the resume command may be refused until a person deals with
    it: `launch.sh --resume` will not start on a branch that is checked out
    in another worktree or has local commits the remote lacks. The summary
@@ -340,15 +367,23 @@ Then, in this order:
 
    - First line: `jikkyo · <state>` and a link to the status comment. For
      `ja` the state is the word the status comment uses: `完了` (finished),
-     `失敗` (failed), or `中断` (interrupted).
+     `未完了` (incomplete), `失敗` (failed), or `中断` (interrupted).
    - **Whether the goal was met**, and why, in one or two sentences based on
-     the final message. `finished` only means the child exited cleanly: the
-     `/goal` evaluator may have ruled the goal impossible, or the no-progress
-     guard may have stopped the loop. Say which, if the final message says. If
+     the final message. `finished` only means the child exited cleanly with
+     every todo completed, and `incomplete` that it exited cleanly with
+     todos left or with none at all: in either, the `/goal` evaluator may have ruled the goal
+     impossible, or the no-progress guard may have stopped the loop. Say
+     which, if the final message says. If
      there is no final message, say the run ended without one and that whether
      the goal was met is unknown. **Do not classify why a run stopped**
      (usage limit, crash, error): mention a cause only when the final
      message names it, quoted in at most one sentence.
+   - **For an `incomplete` run**, say which case it is in one sentence,
+     from the `jikkyo: todos <completed>/<total>` line: with a total above
+     0, for `en` `<completed> of <total> todos completed.` and for `ja`
+     `todo は <total> 件中 <completed> 件が完了しました。`; with a total of
+     0, for `en` `The child made no todos.` and for `ja`
+     `子は todo を作りませんでした。`
    - Any PR or branch the final message names, as a link.
    - **When the run is resumable** (step 2), say so and give the exact
      command, with the URL single-quoted as on every command line here:
@@ -415,7 +450,8 @@ needed because this session is idle while the run goes.
   it is verified; tick only verified items, never untick or reword, change
   nothing but `[ ]` to `[x]` in those lines' task-list boxes, keeping each
   line's own marker (`- [ ]` becomes `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]`
-  becomes `+ [x]`), and fetch the current body right before each edit, because
+  becomes `+ [x]`, `1. [ ]` becomes `1. [x]`), and fetch the current body
+  right before each edit, because
   `gh issue edit --body` replaces the whole body. The instruction is a
   constant, so nothing from the issue reaches the command line beyond the
   validated URL, and the goal is met only when every box the child could verify
@@ -424,8 +460,10 @@ needed because this session is idle while the run goes.
   the `/goal` evaluator judges, so "only verified" is asked, not enforced; a
   human editing the body at the same moment can still race the child, and
   ticking as it goes means more edits and more chances of that; no script
-  checks that a ticked box has a pushed commit behind it; and an issue without
-  a task list is unaffected. The push comes before the tick so that a run
+  checks that a ticked box has a pushed commit behind it. An issue without a
+  task list never gets this far: Phase 1, step 3 refuses it, since a run's
+  end state is judged by one todo per task-list item. The push comes before
+  the tick so that a run
   stopped between the two leaves an unticked box with its work on the remote,
   not a ticked box with nothing behind it.
 - **Why scripts report, not you.** You get a turn only when the background
@@ -453,7 +491,7 @@ needed because this session is idle while the run goes.
   bullets, and a last bullet says
   `… and M more (K completed)` (`… ほか M 件（うち完了 K 件）`). With no
   todos there is no section. An ended run keeps its last list, but on
-  `failed` or `interrupted` its in-progress todos show ⏸️, also when
+  `failed`, `interrupted`, or `incomplete` its in-progress todos show ⏸️, also when
   `precheck.sh --payload` rewrites a stale `running` comment, which changes
   nothing else from the first `<details>` line on. Progress is completed /
   non-deleted todos from the child's own
@@ -471,16 +509,21 @@ needed because this session is idle while the run goes.
   none, so `launch.sh` appends a fixed todo instruction right after the URL,
   before the tick instruction: break the work into small `TaskCreate` todos of
   a few minutes each before starting, mark each completed with `TaskUpdate` as
-  soon as it is done, add todos as new steps come up, and, when the issue has
-  a task list, make one todo per task-list item and tick its box right after
+  soon as it is done, add todos as new steps come up, and always make one
+  todo per task-list item (plus one per other step, so there is at least
+  one) and tick its box right after
   the push for that todo, in the order complete the todo, update and push
   the log, then tick (an item with no commits of its own, such as an open
   draft PR, has no push to wait for and is ticked once verified), because
   progress and the
-  remaining time are computed from them. Like the tick instruction it is a
+  remaining time are computed from them, and so is the end state: a run is
+  `finished` only when every todo is completed (see *How a run ends*). The
+  instruction is unconditional because Phase 1 has checked that the issue
+  has a task-list item. Like the tick instruction it is a
   constant, and since the `/goal` evaluator judges it too, it is worded as a
   way of working, not as a condition for the goal. It is asked, not enforced:
-  the child may still make no todos, or a few large ones.
+  the child may still make no todos, or a few large ones; a run with none
+  ends `incomplete`.
 - **The progress log.** So that an interrupted run leaves a record a later
   run can resume from, `launch.sh` appends a third fixed instruction after
   the todo and tick instructions, the log instruction: keep a progress log
@@ -525,7 +568,7 @@ needed because this session is idle while the run goes.
   gets `en`, and a Japanese issue, whose prose is Japanese, still gets `ja`.
   Nothing from the issue reaches a command line or the comment; only `ja` or
   `en` comes back, and a failed read gives `en`. For `ja` the heading, the
-  field names, the state words (`実行中`, `完了`, `失敗`, `中断`), the turn
+  field names, the state words (`実行中`, `完了`, `未完了`, `失敗`, `中断`), the turn
   count, and the estimate labels are Japanese; the number and duration
   formats are the same as in English, and so is the hidden marker, state
   values included, so `precheck.sh` reads a run's state the same way in
@@ -551,9 +594,10 @@ needed because this session is idle while the run goes.
   number, and exits 2 before any write otherwise. `precheck.sh` reads markers
   with or without `branch=` (comments written before it have none), and
   `--payload` keeps the field when it rewrites the state.
-- **Resuming a run.** `/jikkyo --resume <URL>` continues an interrupted or
-  failed run from its pushed branch, so another machine can pick it up.
-  The branch comes only from the latest `interrupted` or `failed` status
+- **Resuming a run.** `/jikkyo --resume <URL>` continues an interrupted,
+  failed, or incomplete run from its pushed branch, so another machine can
+  pick it up. The branch comes only from the latest `interrupted`,
+  `failed`, or `incomplete` status
   comment `precheck.sh` counts (jikkyo's marker, by this account or a
   trusted one, see "Takeover by another account" below), leaving
   out a branch that a later `finished` comment names (earlier comments are
@@ -640,19 +684,33 @@ needed because this session is idle while the run goes.
   `/goal` evaluator judges only what the conversation shows); a box that is
   ticked with no work behind it on the branch (ticked before its work was
   pushed) is done again, and the conversation says the box was ticked
-  without the work, since unticking stays forbidden; recreate
-  todos for what is left, continue from `next`, and keep updating the log.
+  without the work, since unticking stays forbidden; make todos as on a
+  fresh run, one per task-list item, already-ticked items included, plus
+  one per other step that is left, and complete the todo for an item done
+  in an earlier run once it is re-verified, so a resume with nothing left
+  can still end `finished`; continue from `next`, and keep updating the log.
   Nothing from the log or the branch reaches a command line beyond the
   validated branch name, and no script reads the log. `report.sh` writes a
   new status comment, carrying the same branch, with a `Resumed from` row
   (`再開元` in Japanese) linking the earlier status comment, built from the
   validated owner, repository, issue number, and numeric comment id. The
   earlier comment is not edited.
-- **How a run ends.** `finished` (a non-error `result` line), `failed` (an
-  error `result` line), or `interrupted` (no `result` line, or `report.sh` was
-  sent SIGTERM, SIGHUP, or SIGINT — it writes `interrupted` before it exits).
-- **How a stop is reported as resumable.** A run that ends `interrupted` or
-  `failed`, whose marker carries `branch=`, and whose branch is on the
+- **How a run ends.** `finished` (a non-error `result` line, and every
+  non-deleted todo of the child completed), `incomplete` (`未完了`: a
+  non-error `result` line, but some todo pending or in progress, or no
+  todos at all), `failed` (an error `result` line), or `interrupted` (no
+  `result` line, or `report.sh` was sent SIGTERM, SIGHUP, or SIGINT — it
+  writes `interrupted` before it exits). `failed` and `interrupted` do not
+  depend on the todos. The todos are the child's, from its own `TaskCreate`
+  / `TaskUpdate` events, not the issue's boxes: the child is told to make
+  one per task-list item, so with none it has not shown its work done.
+  `finished` is the child's own account, not a check: it makes and
+  completes its todos itself, so it says the child reported every step
+  done, not that anyone verified it.
+  Status comments written before `incomplete` existed are left as they
+  are: an old `finished` stays `finished` and is not resumable.
+- **How a stop is reported as resumable.** A run that ends `interrupted`,
+  `failed`, or `incomplete`, whose marker carries `branch=`, and whose branch is on the
   remote is resumable, and the closing summary gives
   `/jikkyo --resume '<URL>'` in the status comment's language (Phase 3).
   jikkyo does not try to tell why a run stopped, and mentions a cause only

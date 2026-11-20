@@ -56,15 +56,23 @@ timing and signal tests waiting on a real scheduler.
   (also when all are deleted, and in the start write); the summary being the
   label alone, with no count, in English and in Japanese, after the table and
   a blank line, with no `- [` line; the stopped glyph ⏸️ for in-progress
-  todos on `failed` and `interrupted` (also after `precheck.sh --payload`,
-  where nothing else in the list changes) and the snapshot kept on
-  `finished`; `--payload` leaving untouched subjects containing ` · ~`,
+  todos on `failed`, `interrupted`, and `incomplete` (also after
+  `precheck.sh --payload`, where nothing else in the list changes) and the
+  snapshot kept on `finished`, where every todo is completed; `--payload` leaving untouched subjects containing ` · ~`,
   ` · 残り ~`, `| State | running |`, `| Remaining |`, the running marker,
   `</details>`, and running headings in both languages, with and without the
   estimate suffix, in English and in Japanese; and a running marker inside a
   subject not making a live run for `precheck.sh`.
-- **`report.sh`, end states** — `finished` on a success `result`; `failed` on
-  `error_max_turns`, `error_during_execution`, or `is_error: true`;
+- **`report.sh`, end states** — `finished` on a success `result` with every
+  non-deleted todo completed (a deleted one does not count); `incomplete`
+  on a success `result` with a todo pending or in progress, with no todos,
+  or with every todo deleted, in the marker, the heading, the State row,
+  and the `jikkyo: state` line, and `未完了` in Japanese; `failed` on
+  `error_max_turns`, `error_during_execution`, or `is_error: true`, also
+  with todos left; `jikkyo: todos <completed>/<total>` (deleted todos left
+  out, `0/0` with none) right after the `jikkyo: state` line, and SKILL.md's
+  closing-summary sentences for the two `incomplete` cases in both
+  languages;
   `interrupted` when the stream has no `result` line, including an empty
   stream. Start and end times are local time with an explicit UTC offset.
 - **`report.sh`, the final message** — the `result` text on success, the
@@ -94,8 +102,8 @@ timing and signal tests waiting on a real scheduler.
   issue read (`gh api repos/o/r/issues/12`, logged apart from the writes) with
   `$GH_ISSUE`. An English issue gives today's English text; Japanese in the
   body, in the title alone, or as halfwidth katakana gives a Japanese heading,
-  table header, field names, and state words (running, finished, failed,
-  interrupted, and the turn count), with the marker still `v=1` and the
+  table header, field names, and state words (running, finished,
+  incomplete, failed, interrupted, and the turn count), with the marker still `v=1` and the
   English state; other non-ASCII text (accented Latin, Korean), a failed
   read, an answer that is not JSON, and an issue with no title or body give
   English. Code is dropped first, one case per rule: English prose with
@@ -160,10 +168,13 @@ timing and signal tests waiting on a real scheduler.
   or a run outside a git repository. The child
   gets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`, `-p '/goal <URL> <todo instruction> <tick instruction> <log instruction>'`
   (one argument: the URL, then the fixed instruction to make `TaskCreate`
-  todos up front, one per task-list item when there is one, and complete them
+  todos up front, always one per task-list item (the old wording, which
+  asked for that only when the issue had a task list, fails the run), and
+  complete them
   with `TaskUpdate`, then the fixed instruction to tick each box as soon as
   it is verified, not all at the end, tick only verified boxes, change only
-  `[ ]` to `[x]` in the box and keep each line's own marker (`-`, `*` or `+`;
+  `[ ]` to `[x]` in the box and keep each line's own marker (`-`, `*`, `+`,
+  or an ordered `1.`;
   the old wording that named only `- [ ]` fails the run), and fetch the body
   before each edit, then, last, the fixed instruction to
   keep `.jikkyo/progress.md` in its fixed shape, updating, committing, and
@@ -190,8 +201,11 @@ timing and signal tests waiting on a real scheduler.
     branch at the pushed tip, tracking `origin/<branch>`, prints the
     worktree lines (naming the resumed branch) first, and runs the child
     inside it without `--worktree`, with the same flags and deny list and
-    the resume instruction last. The status comment is a new one with the
-    same branch and a `Resumed from` row.
+    the resume instruction last, which has the child make one todo per
+    task-list item again, ticked ones included, and complete those it has
+    re-verified (the old "for what is left" wording fails the run). The
+    status comment is a new one with the same branch and a `Resumed from`
+    row.
   - A `.jikkyo/progress.md` holding a sentinel, `$(…)`, and backticks never
     reaches the child's or any git command line and is never run. Leaving
     out `rev-parse`, the git command lines are exactly these five:
@@ -235,8 +249,8 @@ timing and signal tests waiting on a real scheduler.
     `jikkyo #27 · 60% · ~12m left`, `0%` with no estimate yet, estimates in
     seconds, minutes, and hours, and `12 turns` / `1 turn` with no todos; one
     line ending in a newline.
-  - `finished`, `failed`, `interrupted` shown 4 m 59 s after `updated`, gone
-    at 5 minutes. `stale` for a `running` file 15 minutes old (not at
+  - `finished`, `incomplete`, `failed`, `interrupted` shown 4 m 59 s after
+    `updated`, gone at 5 minutes. `stale` for a `running` file 15 minutes old (not at
     14 m 59 s), however old, also with no todos, cleared by the next write,
     and replaced when `report.sh` runs that issue again.
   - Several runs on one line by issue number, joined with ` | `, an expired
@@ -244,7 +258,7 @@ timing and signal tests waiting on a real scheduler.
     while the other session sees its own; found from a linked worktree's
     subdirectory with only `current_dir` or `cwd`, and from `current_dir` or
     `cwd` when `project_dir` is outside any git checkout.
-  - Japanese: `残り ~12m`, `12 ターン`, `1 ターン`, `完了`, `失敗`, `中断`,
+  - Japanese: `残り ~12m`, `12 ターン`, `1 ターン`, `完了`, `未完了`, `失敗`, `中断`,
     `応答なし`, mixed languages on one line, an unknown or missing `lang`
     skipped, and each ended state's word checked against what `report.sh`'s
     `state_word` gives for that state.
@@ -264,15 +278,37 @@ timing and signal tests waiting on a real scheduler.
     as on macOS, a line with two runs (English and Japanese) comes out the
     same; the rest of the suite runs scripts with the `bash` on `PATH`.
   - End to end, what `report.sh` writes (English and Japanese) is what it
-    shows.
+    shows: `incomplete` for a run with 1 of 2 todos completed, `finished`
+    with both, and `完了` and `未完了` (`report.sh`'s own word) in Japanese.
 - **Constants shared by the scripts** — `statusline.sh` and `precheck.sh`
   call a `running` file stale at the same age, longer than `report.sh`'s
   heartbeat; `launch.sh`, `report.sh`, and `statusline.sh` check the session
   id with the same pattern.
+- **`precheck.sh --body`** — `go` for an issue body with a task-list item:
+  `-`, `*`, `+`, `1.`, or `12)` markers, ticked with `x` or `X` or not,
+  nested at any depth, in a blockquote, after a closed fence, with CRLF line
+  ends, or a tab after the box. `refuse` with a fixed one-line reason, and
+  nothing from the body, for prose only, an empty or null body, and items
+  only inside a backtick or tilde fence (also one never closed, one a
+  shorter run does not close, and one opened on a list line) or only inside
+  an HTML comment (multi-line, one-line, never closed, or holding a `--`
+  run), and for lines that are not task-list items (no whitespace after the
+  box, nothing after the box, `[y]`, no list marker, no space after the
+  marker, a code span, mid-line, a heading). `go` for an item after a closed
+  comment, on the line after a comment closes, with a comment after it, between
+  two comments, or after a fence that holds a lone `<!--`, and for a `<!--`
+  mid-line or in a code span (left as text), and after a comment holding a
+  fence opener (it opens no fence). `refuse` for an item in a comment
+  inside a blockquote, and for one on the line a comment closes (that whole
+  line is part of the comment block).
+  Exit 2 and no decision for an error object, empty input, text that is not
+  JSON, an array, a number that is a string, or a body that is not a
+  string; `--body` combines with no other flag. `SKILL.md` runs it as step
+  3, before every comments check, for fresh runs and resumes alike.
 - **`precheck.sh`** — `start` with no live run; `refuse <URL>` for a `running`
   comment updated under 15 minutes ago; `rewrite <ids>` for one 15 minutes old
-  or more; `--force` rewriting even a live one; `finished`, `failed`, and
-  `interrupted` never blocking; comments without the marker or by another
+  or more; `--force` rewriting even a live one; `finished`, `incomplete`,
+  `failed`, and `interrupted` never blocking; comments without the marker or by another
   author not counting; several `--paginate` pages read as one list;
   fractional-second timestamps; empty input or an API error object (a
   failed `gh` listing) giving exit 2 rather than `start`; `--payload` rewriting marker, heading, and
@@ -296,9 +332,13 @@ timing and signal tests waiting on a real scheduler.
   - `none` with no comments, for a `finished` run, another author, a latest
     run without a branch, a branch of another issue (also `jikkyo-123-`
     for 12), or a malformed one.
-  - `resume <branch> <id>` for the latest `interrupted` or `failed`
-    comment, by id, in English or Japanese, and nothing but that shape on
-    the line. A later `finished` run of another branch does not hide it.
+  - `resume <branch> <id>` for the latest `interrupted`, `failed`, or
+    `incomplete` comment, by id, in English or Japanese, and nothing but
+    that shape on the line. A later `finished` run of another branch does
+    not hide it; a later `finished` one on the same branch takes an
+    `incomplete` run out too. A trusted account's `incomplete` comment is
+    resumed, an untrusted one's is not. `--payload` refuses an
+    `incomplete` comment.
   - `none` once a later `finished` comment names the same branch, but that
     branch again if it was then interrupted once more. A `finished` comment
     by another author does not count, nor does a comment whose id is not a
@@ -352,7 +392,7 @@ timing and signal tests waiting on a real scheduler.
   `launch.sh --resume` with the branch, comment id, and
   `${CLAUDE_SESSION_ID}`; a fresh launch passes `${CLAUDE_SESSION_ID}` too.
   Before launching, the parent checks that value's shape itself and, if it
-  is not a UUID, tells the user in step 5 the run will not show in the
+  is not a UUID, tells the user in step 6 the run will not show in the
   status line; the example of a bad value does not spell the variable.
   It has a Status line section saying the skill edits no settings, and no
   script mentions `settings.json`. The repository README documents both
@@ -361,5 +401,15 @@ timing and signal tests waiting on a real scheduler.
   no run). `SKILL.md`'s "Who writes the issue body" bullet, joined into one
   line with whitespace runs collapsed so rewrapping does not matter,
   describes the same tick rule as `launch.sh`: it says that `- [ ]` becomes
-  `- [x]`, `* [ ]` becomes `* [x]`, and `+ [ ]` becomes `+ [x]`, and no
+  `- [x]`, `* [ ]` becomes `* [x]`, `+ [ ]` becomes `+ [x]`, and
+  `1. [ ]` becomes `1. [x]`, and no
   longer has the old phrase that named only the `-` marker.
+  The status comment's todo section is described word for word in both:
+  `SKILL.md` says the `<summary>` is the label alone, the todo lines are
+  never `- [ ]`, a todo change is any change in the todo list, and on
+  `failed`, `interrupted`, or `incomplete` in-progress todos show ⏸️; the
+  README's jikkyo section has the sample comment ending with the todo
+  section, says the lines are not checkboxes and what a todo change is,
+  that in-progress todos of a run that ended `failed`, `interrupted`, or
+  `incomplete` show ⏸️ instead of 🔄, and that a run ends in one of four
+  states, starting with `finished` for every todo completed.

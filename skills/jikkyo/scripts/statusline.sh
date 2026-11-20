@@ -20,8 +20,8 @@
 #     when the run has no todos. <eta> is the estimate as of the last write,
 #     the same figure as the status comment's `Remaining` row; it does not
 #     count down between writes (at most 5 minutes apart, the heartbeat);
-#   - finished, failed, interrupted: `jikkyo #<N> · <state>` for 5 minutes
-#     after the file's `updated`, then nothing;
+#   - finished, incomplete, failed, interrupted: `jikkyo #<N> · <state>` for
+#     5 minutes after the file's `updated`, then nothing;
 #   - stale: `jikkyo #<N> · stale` for a `running` file whose `updated` is 15
 #     minutes old or more, for as long as the file stays (until the next run
 #     of the issue overwrites it). report.sh writes `interrupted` on TERM,
@@ -34,7 +34,7 @@
 #
 #   jikkyo #27 · 60% · 残り ~12m | jikkyo #28 · 12 ターン | jikkyo #31 · 完了
 #
-# (失敗 failed, 中断 interrupted, 応答なし stale).
+# (未完了 incomplete, 失敗 failed, 中断 interrupted, 応答なし stale).
 #
 # Only the session that launched (or resumed) a run shows it: launch.sh gets
 # that session's ${CLAUDE_SESSION_ID} and report.sh records it as `session`.
@@ -93,11 +93,12 @@ segment() {
       elif [ "$lang" = ja ]; then seg="${seg} · ${turns} ターン"
       elif [ "$turns" = 1 ]; then seg="${seg} · 1 turn"
       else seg="${seg} · ${turns} turns"; fi ;;
-    finished | failed | interrupted | stale)
+    finished | incomplete | failed | interrupted | stale)
       if [ "$lang" = ja ]; then
         case "$kind" in
-          finished) seg="${seg} · 完了" ;; failed) seg="${seg} · 失敗" ;;
-          interrupted) seg="${seg} · 中断" ;; stale) seg="${seg} · 応答なし" ;;
+          finished) seg="${seg} · 完了" ;; incomplete) seg="${seg} · 未完了" ;;
+          failed) seg="${seg} · 失敗" ;; interrupted) seg="${seg} · 中断" ;;
+          stale) seg="${seg} · 応答なし" ;;
         esac
       else seg="${seg} · ${kind}"; fi ;;
     *) return 1 ;;
@@ -128,7 +129,7 @@ def nat: type == "number" and . >= 0 and . == floor;
   | $j
   | select(.v == 1 and (.number | nat) and .number > 0 and ($file == "\(.number).json"))
   | select(.session == $sid)
-  | select(.state | IN("running", "finished", "failed", "interrupted"))
+  | select(.state | IN("running", "finished", "incomplete", "failed", "interrupted"))
   | select((.done | nat) and (.total | nat) and (.turns | nat) and .done <= .total and (.updated | nat))
   | select(.eta_secs == null or (.eta_secs | nat))
   | select(.lang | IN("en", "ja"))

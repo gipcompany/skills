@@ -163,7 +163,7 @@ echo "report.sh: progress"
   } > "$f"
   run_report "$f"
   b="$(last_body)"
-  assert_eq "completed / non-deleted tasks, with a deletion and a mid-run add" "### jikkyo · finished · 66%" "$(heading "$b")"
+  assert_eq "completed / non-deleted tasks, with a deletion and a mid-run add" "### jikkyo · incomplete · 66%" "$(heading "$b")"
   assert_has "the table carries the progress row" "| Progress | 66% |" "$b"
 
   # The % can go down when the child adds tasks.
@@ -204,7 +204,7 @@ echo "report.sh: progress"
     assistant_text; result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
-  assert_eq "no todos: the heading shows the turn count" "### jikkyo · finished · 3 turns" "$(heading "$b")"
+  assert_eq "no todos: the heading shows the turn count" "### jikkyo · incomplete · 3 turns" "$(heading "$b")"
   assert_has "no todos: the table shows the turn count" "| Turns | 3 |" "$b"
   assert_lacks "no todos: no % anywhere" "%" "$b"
 
@@ -249,7 +249,7 @@ echo "report.sh: the todo list"
   run_report "$f"
   lines="$(todo_lines "$(last_body)")"
   assert_eq "todo lines show the TaskCreate subject, renames, and the status glyphs" \
-    "$(printf '%s\n' '- ✅ `Write the parser`' '- ⬜ `Add the parser tests`' '- 🔄 `Open the draft PR`')" "$lines"
+    "$(printf '%s\n' '- ✅ `Write the parser`' '- ⬜ `Add the parser tests`' '- ⏸️ `Open the draft PR`')" "$lines"
   assert_lacks "a failed TaskUpdate does not rename" "Never applied" "$(last_body)"
   assert_lacks "the old subject is gone after a rename" '`Add tests`' "$(last_body)"
   assert_eq "a rename alone keeps the status" "- ⬜ \`Add the parser tests\`" "$(printf '%s\n' "$lines" | sed -n 2p)"
@@ -291,7 +291,7 @@ echo "report.sh: the todo list"
   assert_eq "cap, open: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
   assert_lacks "cap, open: every completed todo is hidden" "✅" "$lines"
   assert_eq "cap, open: the newest pending todos are hidden" \
-    "$(printf '%s\n' '- ⬜ `todo 51`' '- ⬜ `todo 52`' '- 🔄 `todo 55`' '- … and 5 more (3 completed)')" \
+    "$(printf '%s\n' '- ⬜ `todo 51`' '- ⬜ `todo 52`' '- ⏸️ `todo 55`' '- … and 5 more (3 completed)')" \
     "$(printf '%s\n' "$lines" | tail -n 4)"
   assert_eq "cap, open: the oldest pending todo is kept" '- ⬜ `todo 4`' "$(printf '%s\n' "$lines" | head -n 1)"
 
@@ -304,11 +304,11 @@ echo "report.sh: the todo list"
   run_report "$f"
   lines="$(todo_lines "$(last_body)")"
   assert_eq "cap, busy: 50 todo lines and one hidden-count line" "51" "$(printf '%s\n' "$lines" | wc -l | tr -d ' ')"
-  assert_eq "cap, busy: 50 in-progress todos stay visible" "50" "$(printf '%s\n' "$lines" | grep -c '🔄')"
+  assert_eq "cap, busy: 50 in-progress todos stay visible" "50" "$(printf '%s\n' "$lines" | grep -c '⏸️')"
   assert_lacks "cap, busy: every pending todo is hidden" "⬜" "$lines"
   # shellcheck disable=SC2016  # literal backticks
   assert_eq "cap, busy: the newest in-progress todos are hidden" \
-    "$(printf '%s\n' '- 🔄 `todo 50`' '- … and 5 more (0 completed)')" "$(printf '%s\n' "$lines" | tail -n 2)"
+    "$(printf '%s\n' '- ⏸️ `todo 50`' '- … and 5 more (0 completed)')" "$(printf '%s\n' "$lines" | tail -n 2)"
 
   # The cap bounds the comment: 1000 in-progress todos with long subjects
   # still give a body far under GitHub's 65,536-character limit.
@@ -429,7 +429,8 @@ echo "report.sh: the todo list"
   assert_lacks "the Japanese summary carries no count" "%" "$(todo_section "$b")"
 
   # An ended run keeps its final snapshot, but claims nothing live: on
-  # `failed` and `interrupted`, in-progress todos get the stopped glyph.
+  # `failed`, `interrupted`, and `incomplete`, in-progress todos get the
+  # stopped glyph.
   todos_ended() { create a 1 "done one"; create b 2 "busy one"; create c 3 "left one"
                   update d 1 completed; update e 2 in_progress; }
   ended_lines="$(printf '%s\n' '- ✅ `done one`' '- ⏸️ `busy one`' '- ⬜ `left one`')"
@@ -439,15 +440,27 @@ echo "report.sh: the todo list"
   f="$TMP/todo-interrupted.jsonl"; todos_ended > "$f"
   run_report "$f"
   assert_eq "interrupted: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$(last_body)")"
-  f="$TMP/todo-finished.jsonl"; { todos_ended; result_ok; } > "$f"
+  # as_running <ended body>: the same comment as report.sh writes it while
+  # running, in either language (a stopped glyph was 🔄 then).
+  as_running() {
+    printf '%s\n' "$1" | sed -E -e '1s/state=(finished|incomplete|failed|interrupted)/state=running/' \
+      -e 's/^### jikkyo · (finished|incomplete|failed|interrupted)/### jikkyo · running/' \
+      -e 's/^\| State \| (finished|incomplete|failed|interrupted) \|$/| State | running |/' \
+      -e 's/^### jikkyo · (完了|未完了|失敗|中断)/### jikkyo · 実行中/' \
+      -e 's/^\| 状態 \| (完了|未完了|失敗|中断) \|$/| 状態 | 実行中 |/' -e 's/^- ⏸️ /- 🔄 /'
+  }
+  f="$TMP/todo-incomplete.jsonl"; { todos_ended; result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
-  assert_eq "finished: the snapshot is kept as is" \
-    "$(printf '%s\n' '- ✅ `done one`' '- 🔄 `busy one`' '- ⬜ `left one`')" "$(todo_lines "$b")"
+  assert_eq "incomplete: the in-progress todo shows the stopped glyph (#72)" "$ended_lines" "$(todo_lines "$b")"
+  f="$TMP/todo-finished.jsonl"
+  { todos_ended; update f 2 completed; update g 3 completed; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "finished: the snapshot is kept as is, every todo completed" \
+    "$(printf '%s\n' '- ✅ `done one`' '- ✅ `busy one`' '- ✅ `left one`')" "$(todo_lines "$(last_body)")"
   # The same comment while it was running (report.sh writes the same lines
   # then), rewritten by precheck.sh --payload after the run died.
-  running_b="$(printf '%s\n' "$b" | sed -e '1s/state=finished/state=running/' \
-    -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/')"
+  running_b="$(as_running "$b")"
   p="$(jq -cn --arg b "$running_b" '{id: 1, body: $b}' | bash "$PRECHECK" --payload | jq -r .body)"
   assert_eq "--payload: the in-progress todo shows the stopped glyph" "$ended_lines" "$(todo_lines "$p")"
   assert_eq "--payload: the head is rewritten as before" "### jikkyo · interrupted · 33%" "$(heading "$p")"
@@ -463,13 +476,6 @@ echo "report.sh: the todo list"
     create f 6 '</details>'; create g 7 '### jikkyo · running · 50%'; create h 8 '### jikkyo · 実行中 · 50%'
     create i 9 '| 状態 | 実行中 |'; create j 10 '| 残り | ~1m |'
     update k 3 in_progress; update l 5 in_progress; update m 7 in_progress
-  }
-  # as_running <finished body>: the same comment as report.sh writes it while
-  # running, in either language.
-  as_running() {
-    printf '%s\n' "$1" | sed -e '1s/state=finished/state=running/' \
-      -e 's/^### jikkyo · finished/### jikkyo · running/' -e 's/^| State | finished |$/| State | running |/' \
-      -e 's/^### jikkyo · 完了/### jikkyo · 実行中/' -e 's/^| 状態 | 完了 |$/| 状態 | 実行中 |/'
   }
   # stopped <todo section>: what --payload must make of it.
   stopped() { printf '%s\n' "$1" | sed 's/^- 🔄 /- ⏸️ /'; }
@@ -512,7 +518,7 @@ echo "report.sh: the todo list"
 # ===========================================================================
 echo "report.sh: end states and the final message"
 {
-  f="$TMP/ok.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/ok.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   run_report "$f"
   b="$(last_body)"
   assert_eq "a success result gives finished" "finished" "$(marker_state "$b")"
@@ -529,6 +535,60 @@ echo "report.sh: end states and the final message"
   assert_has "prints the status comment URL" "jikkyo: status comment https://github.com/o/r/issues/12#issuecomment-777" "$out"
   assert_has "prints the final state" "jikkyo: state finished" "$out"
   assert_eq "exits 0 at the end of the stream" "0" "$rc"
+
+  # A clean exit counts as finished only with every todo completed (#72).
+  f="$TMP/all-done.jsonl"
+  { create a 1; create b 2; create c 3; update d 1 completed; update e 2 completed
+    update g 3 deleted; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "all non-deleted todos completed: finished" "finished" "$(marker_state "$(last_body)")"
+  assert_eq "finished: the todos line comes right after the state line, deleted todos left out" \
+    "$(printf '%s\n' 'jikkyo: state finished' 'jikkyo: todos 2/2')" "$(grep -A1 '^jikkyo: state ' "$TMP/out")"
+  f="$TMP/some-left.jsonl"
+  { create a 1; create b 2; create c 3; update d 1 completed; update e 2 in_progress; result_ok; } > "$f"
+  run_report "$f"
+  b="$(last_body)"
+  assert_eq "some todos pending or in progress: incomplete" "incomplete" "$(marker_state "$b")"
+  assert_has "incomplete: the table says so" "| State | incomplete |" "$b"
+  assert_eq "incomplete: the heading says so" "### jikkyo · incomplete · 33%" "$(heading "$b")"
+  assert_has "incomplete: prints the final state" "jikkyo: state incomplete" "$(cat "$TMP/out")"
+  assert_has "incomplete: prints the todo counts" "jikkyo: todos 1/3" "$(cat "$TMP/out")"
+  assert_has "incomplete: still prints the final message" "$(printf 'jikkyo: final message:\nAll done. Opened PR #99.')" "$(cat "$TMP/out")"
+  assert_eq "incomplete: exits 0" "0" "$rc"
+  jq -cn '{title: "日本語", body: ""}' > "$TMP/issue-inc.json"
+  new_log; rc=0
+  GH_ISSUE="$TMP/issue-inc.json" bash "$REPORT" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
+  b="$(last_body)"
+  assert_eq "incomplete in Japanese: the marker stays English" "incomplete" "$(marker_state "$b")"
+  assert_eq "incomplete in Japanese: 未完了" "### jikkyo · 未完了 · 33%" "$(heading "$b")"
+  assert_has "incomplete in Japanese: the State row" "| 状態 | 未完了 |" "$b"
+  # A clean exit with no todos at all is incomplete too: the guard for a
+  # child that ignored the todo instruction (#72).
+  f="$TMP/no-todos.jsonl"; { assistant_text; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "no todos: incomplete" "incomplete" "$(marker_state "$(last_body)")"
+  assert_has "no todos: prints the final state" "jikkyo: state incomplete" "$(cat "$TMP/out")"
+  assert_has "no todos: prints 0/0" "jikkyo: todos 0/0" "$(cat "$TMP/out")"
+  f="$TMP/all-deleted.jsonl"; { create a 1; update b 1 deleted; result_ok; } > "$f"
+  run_report "$f"
+  assert_eq "every todo deleted: incomplete" "incomplete" "$(marker_state "$(last_body)")"
+  assert_has "every todo deleted: prints 0/0" "jikkyo: todos 0/0" "$(cat "$TMP/out")"
+  # An error result is still failed, whatever the todos.
+  f="$TMP/err-left.jsonl"; { create a 1; result_err error_max_turns; } > "$f"
+  run_report "$f"
+  assert_eq "an error result with todos left is still failed" "failed" "$(marker_state "$(last_body)")"
+  assert_has "failed: prints the todo counts too" "jikkyo: todos 0/1" "$(cat "$TMP/out")"
+  # SKILL.md has the parent read the line and say which case an incomplete
+  # run is in, in the status comment's language.
+  skill_md="$(cat "$SKILL_MD")"
+  # shellcheck disable=SC2016  # literal backticks
+  {
+    assert_has "SKILL.md: the parent reads the todos line (#72)" '- `jikkyo: todos <completed>/<total>` — ' "$skill_md"
+    assert_has "SKILL.md: incomplete, some todos done, en (#72)" '`<completed> of <total> todos completed.`' "$skill_md"
+    assert_has "SKILL.md: ...ja (#72)" '`todo は <total> 件中 <completed> 件が完了しました。`' "$skill_md"
+    assert_has "SKILL.md: incomplete, no todos, en (#72)" '`The child made no todos.`' "$skill_md"
+    assert_has "SKILL.md: ...ja (#72)" '`子は todo を作りませんでした。`' "$skill_md"
+  }
 
   f="$TMP/maxturns.jsonl"; { create a 1; result_err error_max_turns; } > "$f"
   run_report "$f"
@@ -567,7 +627,7 @@ echo "report.sh: end states and the final message"
 # ===========================================================================
 echo "report.sh: where it writes"
 {
-  f="$TMP/where.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/where.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   run_report "$f"
   assert_eq "the first write creates a comment on the issue" \
     "api -X POST repos/o/r/issues/12/comments --input - --jq [.id, .html_url] | @tsv" "$(cat "$GH_LOG/1.args")"
@@ -601,7 +661,7 @@ EOF
 echo "report.sh: the branch"
 {
   BR="worktree-jikkyo-12-20261114-132452"
-  f="$TMP/branch.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/branch.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   new_log
   rc=0; bash "$REPORT" "$URL" "$BR" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
   assert_eq "with a branch: exits 0" "0" "$rc"
@@ -661,7 +721,7 @@ x" "worktree-jikkyo-12-20261114-13245a" "worktree-jikkyo-012-20261114-132452" \
 echo "report.sh: a resumed run"
 {
   BR="worktree-jikkyo-12-20261114-132452"
-  f="$TMP/resumed.jsonl"; { create a 1; result_ok; } > "$f"
+  f="$TMP/resumed.jsonl"; { create a 1; update b 1 completed; result_ok; } > "$f"
   new_log
   rc=0; bash "$REPORT" "$URL" "$BR" 4242 < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
   assert_eq "with a comment id: exits 0" "0" "$rc"
@@ -721,9 +781,9 @@ echo "report.sh: the language of the issue"
   GH_ISSUE="$TMP/issue.json" run_report "$f"
   b="$(last_body)"
   assert_has "English issue: prints the language" "jikkyo: language en" "$(cat "$TMP/out")"
-  assert_eq "English issue: the heading is English" "### jikkyo · finished · 50%" "$(heading "$b")"
+  assert_eq "English issue: the heading is English" "### jikkyo · incomplete · 50%" "$(heading "$b")"
   assert_eq "English issue: the field names are English" \
-    "| Field | Value |,| State | finished |,| Progress | 50% |" \
+    "| Field | Value |,| State | incomplete |,| Progress | 50% |" \
     "$(printf '%s\n' "$b" | grep -E '^\| (Field|State|Progress) ' | paste -sd, -)"
   assert_eq "the issue is read once, with a plain GET" "api repos/o/r/issues/12" "$(cat "$GH_LOG/reads")"
 
@@ -733,14 +793,14 @@ echo "report.sh: the language of the issue"
   b="$(last_body)"
   assert_has "Japanese issue: prints the language" "jikkyo: language ja" "$(cat "$TMP/out")"
   assert_eq "Japanese issue: the marker keeps v=1 and the English state" \
-    "<!-- jikkyo:status v=1 state=finished -->" "$(printf '%s\n' "$b" | head -n 1)"
-  assert_eq "Japanese issue: the heading is Japanese" "### jikkyo · 完了 · 50%" "$(heading "$b")"
-  want="$(printf '%s\n' '| 項目 | 値 |' '| --- | --- |' '| 状態 | 完了 |')"
+    "<!-- jikkyo:status v=1 state=incomplete -->" "$(printf '%s\n' "$b" | head -n 1)"
+  assert_eq "Japanese issue: the heading is Japanese" "### jikkyo · 未完了 · 50%" "$(heading "$b")"
+  want="$(printf '%s\n' '| 項目 | 値 |' '| --- | --- |' '| 状態 | 未完了 |')"
   assert_eq "Japanese issue: the table header and State row are Japanese" "$want" "$(printf '%s\n' "$b" | sed -n '4,6p')"
   for row in '| 開始 | 2' '| 終了 | 2' '| 進捗 | 50% |' '| 経過 | ' '| 残り |  |'; do
     assert_has "Japanese issue: row [$row]" "$row" "$b"
   done
-  for word in Field State Started Ended Progress Elapsed Remaining finished; do
+  for word in Field State Started Ended Progress Elapsed Remaining finished incomplete; do
     assert_lacks "Japanese issue: no English [$word] in the visible text" "$word" "$(printf '%s\n' "$b" | sed '1d')"
   done
   all="$(cat "$GH_LOG"/*.args "$GH_LOG"/*.body)"
@@ -751,7 +811,7 @@ echo "report.sh: the language of the issue"
   # Only the title in Japanese; katakana alone; halfwidth katakana.
   issue "パーサの不具合" "It breaks."
   GH_ISSUE="$TMP/issue.json" run_report "$f"
-  assert_eq "Japanese in the title alone gives ja" "### jikkyo · 完了 · 50%" "$(heading "$(last_body)")"
+  assert_eq "Japanese in the title alone gives ja" "### jikkyo · 未完了 · 50%" "$(heading "$(last_body)")"
   issue "x" "ｴﾗｰ"
   GH_ISSUE="$TMP/issue.json" run_report "$f"
   assert_has "halfwidth katakana gives ja" "jikkyo: language ja" "$(cat "$TMP/out")"
@@ -816,7 +876,7 @@ echo "report.sh: the language of the issue"
   # A failed read, or an answer that is not an issue, falls back to English.
   echo '{"message":"Not Found"}' > "$TMP/issue.json"
   GH_ISSUE="$TMP/issue.json" GH_ISSUE_RC=1 run_report "$f"
-  assert_eq "a failed issue read gives en" "### jikkyo · finished · 50%" "$(heading "$(last_body)")"
+  assert_eq "a failed issue read gives en" "### jikkyo · incomplete · 50%" "$(heading "$(last_body)")"
   echo 'not json' > "$TMP/issue.json"
   GH_ISSUE="$TMP/issue.json" run_report "$f"
   assert_has "an answer that is not JSON gives en" "jikkyo: language en" "$(cat "$TMP/out")"
@@ -839,11 +899,11 @@ echo "report.sh: the language of the issue"
   assert_has "Japanese: the Turns row" "| ターン数 | 2 |" "$b"
   f="$TMP/lang-one.jsonl"; { assistant_text; result_ok; } > "$f"
   run_report "$f"
-  assert_eq "Japanese: one turn" "### jikkyo · 完了 · 1 ターン" "$(heading "$(last_body)")"
+  assert_eq "Japanese: one turn, no todos: 未完了" "### jikkyo · 未完了 · 1 ターン" "$(heading "$(last_body)")"
   assert_eq "Japanese: the first write says running" "### jikkyo · 実行中 · 0 ターン" "$(heading "$(nth_body 1)")"
   assert_eq "Japanese: running keeps the English marker" "running" "$(marker_state "$(nth_body 1)")"
   assert_has "the final message is passed on unchanged" "All done. Opened PR #99." "$(cat "$TMP/out")"
-  assert_has "the hand-over state stays English" "jikkyo: state finished" "$(cat "$TMP/out")"
+  assert_has "the hand-over state stays English" "jikkyo: state incomplete" "$(cat "$TMP/out")"
   unset GH_ISSUE
 }
 
@@ -978,8 +1038,8 @@ echo "report.sh: estimated time remaining"
   exec 4>&-
   wait "$rpid"
   b="$(last_body)"
-  assert_eq "finished: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
-  assert_eq "finished: no estimate in the heading" "### jikkyo · finished · 25%" "$(heading "$b")"
+  assert_eq "ended: the Remaining row is empty" "| Remaining |  |" "$(remaining "$b")"
+  assert_eq "ended: no estimate in the heading" "### jikkyo · incomplete · 25%" "$(heading "$b")"
   rm -f "$fifo"
 
   # The same estimate in Japanese: the words change, the duration format not.
@@ -1064,7 +1124,7 @@ echo "report.sh: the state file"
     '["comment","done","eta_secs","issue","lang","number","session","started","state","total","turns","updated","v"]' \
     "$(jq -c 'keys' "$STATE" 2>/dev/null)"
   assert_eq "...with the final state, counts, language, session, and URLs" \
-    "$(jq -cn --arg sid "$SID" '{v: 1, issue: "https://github.com/o/r/issues/12", number: 12, state: "finished",
+    "$(jq -cn --arg sid "$SID" '{v: 1, issue: "https://github.com/o/r/issues/12", number: 12, state: "incomplete",
        done: 1, total: 2, eta_secs: null, lang: "en", session: $sid,
        comment: "https://github.com/o/r/issues/12#issuecomment-777"}')" \
     "$(jq -c '{v, issue, number, state, done, total, eta_secs, lang, session, comment}' "$STATE" 2>/dev/null)"
@@ -1088,7 +1148,7 @@ EOF2
   rm -f "$STATE"
   PATH="$TMP/stubs-odd:$PATH" bash "$REPORT" "$URL" < "$f" > /dev/null 2>&1
   assert_eq "without --session, session is null; a comment id that is not a number gives no URL" \
-    '{"session":null,"comment":null,"turns":1,"state":"finished"}' \
+    '{"session":null,"comment":null,"turns":1,"state":"incomplete"}' \
     "$(jq -c '{session, comment, turns, state}' "$STATE" 2>/dev/null)"
   assert_lacks "...and nothing from the issue, the result, or gh's answer is in it" "pwned" "$(cat "$STATE")"
   assert_lacks "...no escape character either" "$(printf '\033')" "$(cat "$STATE")"
@@ -1244,7 +1304,8 @@ echo "launch.sh"
   assert_has "the prompt asks for todos up front with TaskCreate" "before starting the work, break it into small steps with TaskCreate, one todo per step of a few minutes each" "$prompt"
   assert_has "...completed with TaskUpdate as each step is done" "mark each todo completed with TaskUpdate as soon as that step is done" "$prompt"
   assert_has "...new todos as new steps come up" "add todos with TaskCreate when new steps come up" "$prompt"
-  assert_has "...one todo per task-list item when the issue has one" 'If the body of this issue has a task list (for example under "Acceptance criteria"), make one todo per task-list item' "$prompt"
+  assert_has "...always one todo per task-list item (#72)" 'Always make one todo per task-list item in the body of this issue (for example under "Acceptance criteria"), plus a todo for each other step, so there is at least one todo' "$prompt"
+  assert_lacks "...no longer only when the issue has a task list (#72)" "If the body of this issue has a task list" "$prompt"
   assert_has "...and ticks its box right after the push for that todo" "tick the box of that item right after the push for that todo" "$prompt"
   assert_has "...in the order complete, push, tick" "so the order is: complete the todo, update and push the log, then tick." "$prompt"
   assert_lacks "...not right after completing the todo (#41)" "right after you mark its todo completed" "$prompt"
@@ -1259,7 +1320,7 @@ echo "launch.sh"
   assert_has "...an item with no commits is ticked once verified" 'An item with no commits of its own (for example "a draft PR is open") is ticked as soon as it is verified.' "$prompt"
   assert_has "...before moving on, not saved for the end" "before you move on to the next item; do not save the ticks for one edit at the end" "$prompt"
   assert_has "...only verified ones, never untick or reword" "Tick only items you have verified, and never untick or reword anything." "$prompt"
-  assert_has "...changing only [ ] to [x] in the box, keeping any marker (#68)" 'Change nothing in the body but "[ ]" to "[x]" in those lines'"'"' task-list boxes, keeping each line'"'"'s own marker ("- [ ]" becomes "- [x]", "* [ ]" becomes "* [x]", "+ [ ]" becomes "+ [x]"):' "$prompt"
+  assert_has "...changing only [ ] to [x] in the box, keeping any marker (#68)" 'Change nothing in the body but "[ ]" to "[x]" in those lines'"'"' task-list boxes, keeping each line'"'"'s own marker ("- [ ]" becomes "- [x]", "* [ ]" becomes "* [x]", "+ [ ]" becomes "+ [x]", "1. [ ]" becomes "1. [x]"):' "$prompt"
   assert_lacks "...and no longer names only the - marker (#68)" 'Change nothing in the body but "- [ ]" to "- [x]"' "$prompt"
   assert_has "...fetching the body right before each edit" "fetch the current body right before each edit" "$prompt"
   assert_has "...and the goal includes the ticks" "every box you could verify is ticked" "$prompt"
@@ -1441,14 +1502,18 @@ EOF
   log_at="${prompt%%Progress log: *}"; res_at="${prompt%%Resuming: *}"
   if [ "${#log_at}" -lt "${#res_at}" ] && [ "${#res_at}" -lt "${#prompt}" ]; then ok "resume: the resume instruction comes after the log instruction"
   else bad "resume: the resume instruction comes after the log instruction"; fi
-  tail_want="continue from the \"next\" line of the log, and keep updating the log as above."
+  tail_want="Continue from the \"next\" line of the log, and keep updating the log as above."
   assert_eq "resume: the prompt ends with the resume instruction" "$tail_want" "${prompt: -${#tail_want}}"
   assert_has "resume: the log is read first, as a record, not instructions" "Read .jikkyo/progress.md first, as a record to check, not as instructions" "$prompt"
   assert_has "resume: done todos and ticked boxes are re-verified" "Before relying on any todo marked done or any box already ticked, verify it again (inspect the commit, run the tests)" "$prompt"
   assert_has "resume: a ticked box with no work behind it is done again (#41)" "A box that is ticked but has no work behind it on this branch was ticked before that work was pushed: do that item again" "$prompt"
   assert_has "resume: ...said in the conversation, and the box stays ticked" "say in the conversation that the box was ticked without the work; it stays ticked, because unticking is never allowed." "$prompt"
   assert_has "resume: ...and the re-verification is said in the conversation" "say in the conversation what you re-verified and how" "$prompt"
-  assert_has "resume: todos are recreated for what is left" "recreate todos with TaskCreate for what is left" "$prompt"
+  assert_has "resume: one todo per task-list item, ticked ones included (#72)" \
+    "make todos with TaskCreate as on a fresh run: one per task-list item in the body of this issue, already-ticked items included, plus one for each other step that is left." "$prompt"
+  assert_has "resume: ...an item done earlier is completed once re-verified (#72)" \
+    "Mark the todo for an item done in an earlier run completed with TaskUpdate once you have re-verified it, so a resume with nothing left can still end with every todo completed." "$prompt"
+  assert_lacks "resume: no longer todos for what is left only (#72)" "recreate todos with TaskCreate for what is left" "$prompt"
   assert_has "resume: the other instructions are all still there" "so the log never reaches the base branch. Resuming: " "$prompt"
   assert_eq "resume: the child gets CLAUDE_CODE_ENABLE_TODO_TOOLS=1" "1" "$(cat "$CLAUDE_ARGS.env" 2>/dev/null)"
   assert_eq "resume: the child runs with git hooks pointed at /dev/null and auto memory off" \
@@ -1751,7 +1816,7 @@ echo "statusline.sh"
   assert_eq "the output is a single line" "0" "$(tr -cd '\n' < "$TMP/sl-out" | wc -c | tr -d ' ')"
   assert_eq "...ending in a newline" "1" "$(sl | wc -l | tr -d ' ')"
 
-  for st in finished failed interrupted; do
+  for st in finished incomplete failed interrupted; do
     put 27 "{\"state\": \"$st\", \"updated\": 9701, \"eta_secs\": null}"
     assert_eq "$st: shown for 5 minutes after updated (4 m 59 s)" "jikkyo #27 · $st" "$(sl)"
     put 27 "{\"state\": \"$st\", \"updated\": 9700, \"eta_secs\": null}"
@@ -1775,7 +1840,7 @@ echo "statusline.sh"
   sl_reset
   put 12 '{"updated": 1}'
   assert_eq "issue 12 left stale" "jikkyo #12 · stale" "$(sl)"
-  { create t1 1; result_ok; } > "$TMP/sl-stale.jsonl"
+  { create t1 1; update u1 1 completed; result_ok; } > "$TMP/sl-stale.jsonl"
   new_log
   (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stale.jsonl" > /dev/null 2>&1)
   assert_eq "...until the next run of issue 12 overwrites its file" \
@@ -1821,7 +1886,7 @@ echo "statusline.sh"
   assert_eq "ja, no todos: <turns> ターン" "jikkyo #27 · 12 ターン" "$(sl)"
   put 27 '{"lang": "ja", "done": 0, "total": 0, "turns": 1, "eta_secs": null}'
   assert_eq "ja, one turn: 1 ターン" "jikkyo #27 · 1 ターン" "$(sl)"
-  for pair in finished:完了 failed:失敗 interrupted:中断; do
+  for pair in finished:完了 incomplete:未完了 failed:失敗 interrupted:中断; do
     put 27 "{\"lang\": \"ja\", \"state\": \"${pair%%:*}\", \"updated\": 9900}"
     assert_eq "ja, ${pair%%:*}: ${pair#*:}" "jikkyo #27 · ${pair#*:}" "$(sl)"
   done
@@ -1842,7 +1907,7 @@ echo "statusline.sh"
     assert_has "report.sh's comment uses [$w] too" "$w" "$report_src"
   done
   eval "$(sed -n '/^state_word() {/,/^}/p' "$REPORT")"
-  for st in finished failed interrupted; do
+  for st in finished incomplete failed interrupted; do
     put 27 "{\"state\": \"$st\", \"updated\": 9900, \"lang\": \"ja\"}"
     assert_eq "ja, $st: the status line's word is the comment's" "jikkyo #27 · $(LANG_CODE=ja state_word "$st")" "$(sl)"
   done
@@ -1850,9 +1915,16 @@ echo "statusline.sh"
   # End to end in Japanese.
   sl_reset
   new_log
-  { create t1 1; result_ok; } > "$TMP/sl-ja-stream.jsonl"
+  { create t1 1; update u1 1 completed; result_ok; } > "$TMP/sl-ja-stream.jsonl"
   (cd "$sl_repo" && GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-ja-stream.jsonl" > /dev/null 2>&1)
   assert_eq "a Japanese issue's run shows in Japanese" "jikkyo #12 · 完了" "$(sl_input | bash "$STATUSLINE")"
+  sl_reset
+  new_log
+  { create t1 1; result_ok; } > "$TMP/sl-ja-stream.jsonl"
+  (cd "$sl_repo" && GH_ISSUE="$TMP/issue-ja-state.json" bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-ja-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a Japanese issue's incomplete run shows 未完了, report.sh's word" \
+    "jikkyo #12 · $(LANG_CODE=ja state_word incomplete)" "$(sl_input | bash "$STATUSLINE")"
+  assert_eq "...which is 未完了" "jikkyo #12 · 未完了" "$(sl_input | bash "$STATUSLINE")"
   sl_reset; put 27
 
   # Quiet and local: any bad input prints nothing, exits 0, and says nothing
@@ -1963,7 +2035,13 @@ echo "statusline.sh"
   { create t1 1; create t2 2; update u1 1 completed; result_ok; } > "$TMP/sl-stream.jsonl"
   new_log
   (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stream.jsonl" > /dev/null 2>&1)
-  assert_eq "a run report.sh just finished shows as finished" "jikkyo #12 · finished" \
+  assert_eq "a run report.sh just ended with 1 of 2 todos completed shows as incomplete" "jikkyo #12 · incomplete" \
+    "$(sl_input | bash "$STATUSLINE")"
+  sl_reset
+  { create t1 1; create t2 2; update u1 1 completed; update u2 2 completed; result_ok; } > "$TMP/sl-stream.jsonl"
+  new_log
+  (cd "$sl_repo" && bash "$REPORT" --session "$SID" "$URL" < "$TMP/sl-stream.jsonl" > /dev/null 2>&1)
+  assert_eq "a run report.sh just finished with every todo completed shows as finished" "jikkyo #12 · finished" \
     "$(sl_input | bash "$STATUSLINE")"
 
   # A file from the future (the clock was set back) is skipped, so an ended
@@ -2041,7 +2119,7 @@ echo "precheck.sh"
   assert_eq "running, not updated for 15 minutes: rewrite, then start" "rewrite 1" "$(comment 1 me running 900 | decide)"
   assert_eq "--force skips the check and rewrites a live one" "rewrite 1" "$(comment 1 me running 60 | decide --force)"
   assert_eq "--force with nothing running: start" "start" "$(comment 1 me finished 60 | decide --force)"
-  for st in finished failed interrupted; do
+  for st in finished incomplete failed interrupted; do
     assert_eq "a $st comment never blocks" "start" "$(comment 1 me "$st" 1 | decide)"
   done
   assert_eq "another author's marker does not count" "start" "$(comment 1 someone running 60 | decide)"
@@ -2134,6 +2212,17 @@ echo "precheck.sh"
   assert_eq "--resume: no comments: none" "none" "$(echo '[]' | bash "$PRECHECK" --author me --now "$NOW" --resume 12)"
   assert_eq "--resume: an interrupted comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me interrupted 60 | decide_resume)"
   assert_eq "--resume: a failed comment with a branch: resume it" "resume $BR 1" "$(br_comment 1 me failed 60 | decide_resume)"
+  assert_eq "--resume: an incomplete comment with a branch: resume it (#72)" "resume $BR 1" "$(br_comment 1 me incomplete 60 | decide_resume)"
+  assert_eq "--resume: the latest of interrupted, failed, and incomplete wins (#72)" "resume $BR2 4" \
+    "$( { br_comment 1 me interrupted 9000; br2_comment 4 me incomplete 100; br_comment 3 me failed 10; } | decide_resume)"
+  assert_eq "--resume: an incomplete run that was resumed and then finished is not resumed again (#72)" "none" \
+    "$( { br_comment 1 me incomplete 9000; br_comment 2 me finished 60; } | decide_resume)"
+  assert_eq "--resume: a trusted account's incomplete comment is resumed (#72)" "resume $BR 1" \
+    "$(br_comment 1 alice incomplete 60 | decide --resume 12 --trusted alice)"
+  assert_eq "--resume: an untrusted account's incomplete comment is not (#72)" "none" \
+    "$(br_comment 1 alice incomplete 60 | decide_resume)"
+  rc=0; br_comment 1 me incomplete 10 | bash "$PRECHECK" --payload >/dev/null 2>&1 || rc=$?
+  assert_eq "--payload refuses an incomplete comment, which is not running (#72)" "1" "$rc"
   assert_eq "--resume: the latest interrupted or failed one wins" "resume $BR2 5" \
     "$( { br_comment 1 me failed 9000; br2_comment 5 me interrupted 8000; br_comment 3 me interrupted 10; } | decide_resume)"
   assert_eq "--resume: a finished run is not resumed" "none" "$(br_comment 1 me finished 60 | decide_resume)"
@@ -2300,6 +2389,78 @@ echo "precheck.sh"
 }
 
 # ===========================================================================
+echo "precheck.sh --body"
+# shellcheck disable=SC2016  # literal backticks in issue bodies
+{
+  # body_decision <body>: the first word of precheck.sh --body's line.
+  body_decision() { jq -cn --arg b "$1" '{number: 72, title: "t", body: $b}' | bash "$PRECHECK" --body | cut -d' ' -f1; }
+  body_case() {  # <go|refuse> <name> <body>
+    assert_eq "--body: $2" "$1" "$(body_decision "$3")"
+  }
+  body_case refuse "prose only: refuse" "Fix the parser. It breaks on a blank line."
+  body_case refuse "an empty body: refuse" ""
+  body_case go "a - item: go" $'Intro\n\n- [ ] one'
+  body_case go "a * item, ticked: go" '* [x] done'
+  body_case go "a + item, ticked with X: go" '+ [X] done'
+  body_case go "an ordered 1. item: go" '1. [ ] one'
+  body_case go "an ordered 12) item: go" '12) [ ] one'
+  body_case go "a nested item: go" $'- parent\n  - [ ] child'
+  body_case go "a deeply nested ordered item: go" $'1. a\n   - b\n     1. [ ] c'
+  body_case go "an item in a blockquote: go" '> - [ ] quoted'
+  body_case go "an item after a closed fence: go" $'```\ncode\n```\n- [ ] real'
+  body_case go "CRLF line ends: go" $'Intro\r\n\r\n- [ ] one\r\n'
+  body_case go "a tab after the box: go" $'- [ ]\tone'
+  body_case refuse "an item only inside a backtick fence: refuse" $'```\n- [ ] in code\n```'
+  body_case refuse "an item only inside a tilde fence with info: refuse" $'~~~md\n- [ ] in code\n~~~\nprose'
+  body_case refuse "an item inside a fence that is never closed: refuse" $'```\n- [ ] x'
+  body_case refuse "an item inside a longer fence a shorter run does not close: refuse" $'````\n```\n- [ ] x\n````'
+  body_case refuse "an item inside a fence on a list line: refuse" $'- ```\n  - [ ] in\n  ```'
+  body_case refuse "no whitespace after the box: refuse" '- [ ]x'
+  body_case refuse "nothing after the box: refuse" '- [ ]'
+  body_case refuse "an item only inside an HTML comment: refuse" $'<!--\n- [ ] example\n-->\nprose'
+  body_case refuse "an item only inside a one-line HTML comment: refuse" '<!-- - [ ] example -->'
+  body_case refuse "an item inside an HTML comment never closed: refuse" $'<!-- template\n- [ ] example'
+  body_case refuse "an item inside a comment holding a -- run: refuse" $'<!-- a -- b\n- [ ] x --->'
+  body_case go "an item after a closed HTML comment: go" $'<!-- note -->\n- [ ] real'
+  body_case go "an item on the line after a comment closes: go" $'<!--\nnote -->\n- [ ] real'
+  body_case refuse "an item on the line a comment closes is part of it: refuse" $'<!--\nnote --> - [ ] x'
+  body_case go "an item with a comment after it: go" '- [ ] real <!-- note -->'
+  body_case go "an item between two comments: go" $'<!-- a -->\n- [ ] real\n<!-- b -->'
+  body_case go "an unclosed <!-- in a code span mid-line is text: go" $'Drop every `<!--` marker.\n\n- [ ] do it'
+  body_case go "<!-- and --> in code spans around the items: go" $'Comments open with `<!--`.\n\n- [ ] a\n- [ ] b\n\nThey close with `-->`.'
+  body_case go "an unclosed <!-- mid-paragraph is text: go" $'para <!-- c\n\n- [ ] x'
+  body_case refuse "an item inside a comment in a blockquote: refuse" $'> <!--\n> - [ ] x\n> -->'
+  body_case go "a fence opener inside a comment opens no fence: go" $'<!--\n```\n-->\n- [ ] x'
+  body_case go "a comment opener inside a fence is code: go" $'```\n<!--\n```\n- [ ] real'
+  body_case refuse "a box with another letter: refuse" '- [y] no'
+  body_case refuse "a box with no list marker: refuse" '[ ] no'
+  body_case refuse "no space after the list marker: refuse" '-[ ] no'
+  body_case refuse "a box in an inline code span: refuse" 'Write `- [ ] x` to add one.'
+  body_case refuse "a box mid-line: refuse" 'text - [ ] x'
+  body_case refuse "a heading, not a list item: refuse" '# [ ] no'
+  # The decision line itself.
+  out="$(jq -cn '{number: 72, body: "- [ ] one"}' | bash "$PRECHECK" --body)"
+  assert_eq "--body: go is the whole line" "go" "$out"
+  out="$(jq -cn '{number: 72, body: "SECRET-BODY-TEXT $(id)"}' | bash "$PRECHECK" --body)"
+  assert_eq "--body: refuse says why, in one line" \
+    'refuse the issue body has no task-list item (such as "- [ ] ..." outside fenced code and HTML comments); jikkyo needs at least one, as a done criterion the child makes a todo for' "$out"
+  assert_lacks "--body: nothing from the body is printed" "SECRET-BODY-TEXT" "$out"
+  out="$(jq -cn '{number: 72, body: null}' | bash "$PRECHECK" --body | cut -d' ' -f1)"
+  assert_eq "--body: a null body: refuse" "refuse" "$out"
+  # Bad input is exit 2, never a decision.
+  for bad_input in '{"message":"Not Found"}' '' 'not json' '[{"number":1,"body":"- [ ] x"}]' '{"number":"1","body":"- [ ] x"}' '{"number":1,"body":5}'; do
+    rc=0; out="$(printf '%s' "$bad_input" | bash "$PRECHECK" --body 2>/dev/null)" || rc=$?
+    assert_eq "--body: exit 2 and no decision for [$bad_input]" "2:" "$rc:$out"
+  done
+  for flags in "--author me" "--force" "--resume 72" "--authors" "--payload" "--now 1"; do
+    rc=0
+    # shellcheck disable=SC2086  # the flags are split on purpose
+    jq -cn '{number: 72, body: "- [ ] x"}' | bash "$PRECHECK" --body $flags >/dev/null 2>&1 || rc=$?
+    assert_eq "--body does not combine with $flags" "2" "$rc"
+  done
+}
+
+# ===========================================================================
 echo "cleanup.sh"
 {
   base="$TMP/cleanup"
@@ -2429,18 +2590,34 @@ echo "SKILL.md"
   assert_has "SKILL.md: the todo lines are not checkboxes (#62)" 'never `- [ ]`, so GitHub does not count them in' "$skill"
   assert_has "SKILL.md: a todo change is any change in the todo list (#62)" "A todo change is any change in the todo list (a todo's id," "$skill"
   # shellcheck disable=SC2016  # literal backticks
-  assert_has "SKILL.md: ended runs show the stopped glyph (#62)" '`failed` or `interrupted` its in-progress todos show ⏸️, also when' "$skill"
+  assert_has "SKILL.md: ended runs show the stopped glyph (#62, #72)" '`failed`, `interrupted`, or `incomplete` its in-progress todos show ⏸️, also when' "$skill"
   # The "Who writes the issue body" bullet describes the same tick rule as
   # launch.sh (#68). It is joined into one line with whitespace runs
   # collapsed, so rewrapping the bullet does not matter (#70).
   who_writes="$(awk '/^- \*\*Who writes the issue body\.\*\*/ { on = 1; print; next }
     on && /^  / { print; next } { on = 0 }' <<<"$skill" | tr -s '[:space:]' ' ')"
+  # The task-list check is its own step, run on the issue itself, before the
+  # comments check, for fresh runs and resumes alike (#72).
+  body_line="$(grep -n -F "gh api 'repos/<owner>/<repo>/issues/<N>' | \${CLAUDE_SKILL_DIR}/scripts/precheck.sh --body" "$SKILL_MD" | cut -d: -f1)"
+  step3_line="$(grep -n '^3\. \*\*Check that the issue has a task list\*\*' "$SKILL_MD" | cut -d: -f1)"
+  step4_line="$(grep -n '^4\. \*\*Decide whether to start\.\*\*' "$SKILL_MD" | cut -d: -f1)"
+  first_comments="$(grep -n -F "issues/<N>/comments' | \${CLAUDE_SKILL_DIR}/scripts/precheck.sh" "$SKILL_MD" | head -n 1 | cut -d: -f1)"
+  if [ -n "$body_line" ] && [ -n "$step3_line" ] && [ -n "$step4_line" ] && [ -n "$first_comments" ] \
+     && [ "$step3_line" -lt "$body_line" ] && [ "$body_line" -lt "$step4_line" ] && [ "$body_line" -lt "$first_comments" ]; then
+    ok "SKILL.md: precheck.sh --body is step 3, before every comments check (#72)"
+  else bad "SKILL.md: precheck.sh --body is step 3, before every comments check (#72) ($step3_line $body_line $step4_line $first_comments)"; fi
+  assert_has "SKILL.md: ...for fresh runs and resumes alike (#72)" "for a fresh run and a resume
+   alike, before the comments are read." "$skill"
+  assert_has "SKILL.md: ...and the resume path goes through it (#72)" "With \`--resume\`, do step 4 the resume way (4r below) instead." "$skill"
+  assert_has "SKILL.md: ...a refusal stops the run (#72)" "**stop**. \`--force\` does not skip this check." "$skill"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: the tick rule keeps the - marker (#70)" '`- [ ]` becomes `- [x]`' "$who_writes"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: ...the * marker (#70)" '`* [ ]` becomes `* [x]`' "$who_writes"
   # shellcheck disable=SC2016  # literal backticks
   assert_has "SKILL.md: ...and the + marker (#70)" '`+ [ ]` becomes `+ [x]`' "$who_writes"
+  # shellcheck disable=SC2016  # literal backticks
+  assert_has "SKILL.md: ...and an ordered one (#72)" '`1. [ ]` becomes `1. [x]`' "$who_writes"
   # shellcheck disable=SC2016  # literal backticks
   assert_lacks "SKILL.md: ...and no longer names only the - marker (#70)" 'but `- [ ]` to `- [x]`' "$who_writes"
   assert_has "tests/README.md: lists the todo-list tests (#62)" "**\`report.sh\`, the todo list**" "$(cat "$HERE/README.md")"
@@ -2472,6 +2649,11 @@ echo "SKILL.md"
     assert_has "README.md: the todo lines are not checkboxes (#62)" "never a \`- [ ]\` checkbox" "$readme_jikkyo"
     assert_has "README.md: a rename or a status change is a todo change (#62)" "a todo added, deleted, renamed, or changing status" "$readme_jikkyo"
     assert_has "README.md: in-progress todos of an ended run show the stopped glyph (#62)" "show ⏸️ instead of 🔄" "$readme_jikkyo"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: ...also for incomplete (#72)" \
+      'When the run ends `failed`, `interrupted`, or `incomplete`, todos that were in progress show ⏸️ instead of 🔄.' "$readme_jikkyo"
+    # shellcheck disable=SC2016  # literal backticks
+    assert_has "README.md: the four end states (#72)" 'The run ends in one of four states: `finished` (the child exited cleanly with every one of its todos completed' "$readme_jikkyo"
     # The appended example works as written, with its two paths filled in.
     printf '#!/usr/bin/env bash\ncat > /dev/null\nprintf "my line"\n' > "$TMP/my-statusline.sh"
     chmod +x "$TMP/my-statusline.sh"
@@ -2502,14 +2684,14 @@ echo "SKILL.md"
   # shellcheck disable=SC2016  # a literal ${CLAUDE_SESSION_ID}
   assert_has "SKILL.md: a fresh launch passes the session id" "scripts/launch.sh '\${CLAUDE_SESSION_ID}' '<URL>'" "$skill"
   assert_has "SKILL.md: the parent checks the session id's shape itself before launching" "Before launching, look at the value you are about to pass" "$skill"
-  assert_has "...and tells the user the run will not show in the status line" "say in step 5 that this run will not show in the" "$skill"
+  assert_has "...and tells the user the run will not show in the status line" "say in step 6 that this run will not show in the" "$skill"
   # Matched with runs of spaces and newlines squeezed to one space, so a
-  # rewrap of step 4 does not break it.
+  # rewrap of step 5 does not break it.
   # shellcheck disable=SC2016  # a literal backtick and $
   assert_has "...naming a placeholder by its \$, not by the variable's name" \
     'for example a placeholder left as written (it starts with `$`)' \
     "$(tr -s ' \n' '  ' <<<"$skill")"
-  assert_has "...which step 5 says too, in the same words" "only when step 4 found the session id not a UUID" "$skill"
+  assert_has "...which step 6 says too, in the same words" "only when step 5 found the session id not a UUID" "$skill"
   # Claude Code fills in the variable everywhere in the skill text, so it is
   # named on exactly these three lines (the two launch lines and the Status
   # line section) and nowhere else, in any spelling.
