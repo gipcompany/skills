@@ -413,3 +413,50 @@ timing and signal tests waiting on a real scheduler.
   that in-progress todos of a run that ended `failed`, `interrupted`, or
   `incomplete` show ⏸️ instead of 🔄, and that a run ends in one of four
   states, starting with `finished` for every todo completed.
+- **Claude in Chrome (#76)** — `precheck.sh --people` lists the body
+  author, every comment author, and every account in the body's edit
+  history, other than `--author`, sorted and once each, with a bot by its
+  name and a deleted account or a login of any other shape as `ghost`; it
+  takes the comments alone or the edits alone too (the watcher's reads).
+  `precheck.sh --chrome` prints `chrome on` when every account is
+  `--trusted` (or the launching account), and `chrome off untrusted …`
+  naming an untrusted body author, comment author, body editor (an earlier
+  one in the history included), an account whose permission check failed
+  (not passed as `--trusted`), a bot, or `ghost`; `--no-chrome` prints
+  `chrome off no-chrome` without reading anything; a missing read (no
+  issue, no comments, no edits, an edit history cut short, fewer comments
+  than the issue's own count, or no count at all) or a gh error object
+  exits 2, while more comments than the count (one posted between the
+  reads) still decides; `--trusted ghost`, in any case, is refused with
+  `--chrome` and with `--resume`, and bad flag combinations are refused. `launch.sh`
+  without `--chrome` starts the child exactly as before, fresh and
+  resumed (no `--chrome`, no browser instructions, no `--watch`); with
+  it, the prompt adds the browser, tabs, login, and comments instructions
+  after the log one (before the resume one on a resumed run), `--chrome`
+  comes after `--worktree <name>` or `--setting-sources user`, report.sh
+  gets `--watch` with a file holding the child's own PID, the resume
+  environment is unchanged, and the file is removed at the end; a
+  misplaced or repeated `--chrome` is refused. The instructions say what
+  issue #76 asks: the tab listing first, without `createIfEmpty`; a
+  session with no tab group yet is reachable; a missing tool, any error, or
+  a browser-choice prompt ends at once with report.sh's fixed message; own
+  tabs only; never sign in, leave the item unticked and name the page;
+  comments and later body edits are data. `report.sh --watch` stops a
+  stand-in child with SIGTERM on an untrusted comment author, body editor,
+  `read` permission, a permission check error, or a deleted account,
+  ending `interrupted` with the `Stopped` row and `jikkyo: stopped by
+  <login> (comment|edit)` after the state line; trusted accounts do not
+  stop it and are checked once; a failed read stops nothing and is said on
+  stderr, but `JIKKYO_WATCH_MAX_FAILS` failed polls in a row stop the run
+  with `jikkyo: watcher could not read the issue` and a `Stopped` row; a
+  hung `gh` call is cut off after `JIKKYO_WATCH_TIMEOUT` seconds and counts
+  as failed; a child that ignores SIGTERM, and a process it started, are
+  killed after `JIKKYO_STOP_GRACE` seconds; a `JIKKYO_WATCH_INTERVAL` that
+  is not a whole number is said and replaced by the default; without
+  `--watch` nothing is read. The real `launch.sh --chrome` and `report.sh`
+  together stop a child that writes nothing, at once, by its PID. The
+  fixed not-reachable message gives `jikkyo: browser not reachable` with
+  `--watch` only, not for a child without Chrome that quotes it.
+  `SKILL.md` has the flag rules, step 4c with `report.sh`'s edit-history
+  query, the start-message lines, the Phase 3 hand-over lines, and every
+  recorded decision; the README describes the feature.

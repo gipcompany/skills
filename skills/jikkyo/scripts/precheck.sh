@@ -86,6 +86,39 @@
 # depth, whose paragraph starts with `[ ]`, `[x]`, or `[X]` and whitespace;
 # ticked and unticked items both count. Nothing from the body is printed.
 #
+#   { gh api repos/<o>/<r>/issues/<N>
+#     gh api --paginate repos/<o>/<r>/issues/<N>/comments
+#     gh api graphql --paginate <the edits query, EDITS_QUERY in report.sh>
+#   } | precheck.sh --author <login> --people
+#
+# prints, one per line, every account other than --author that wrote the
+# issue body, wrote a comment on it (any comment, not only jikkyo's), or
+# edited the body (the whole edit history, `Issue.userContentEdits`, not only
+# the last editor): the accounts whose permission the caller checks before
+# turning on Claude in Chrome. A login is printed only in the shape of a
+# GitHub login (as for --authors) or of an app's bot (`<name>[bot]`); a
+# missing account (deleted) or any other shape is printed as `ghost`,
+# GitHub's own name for a deleted account, which is never trusted. The input
+# is any mix of the three reads above (one issue object, comment arrays, and
+# GraphQL pages of the edit history); anything else exits 2.
+#
+#   { the same three reads } | precheck.sh --author <login> --chrome [--trusted <login>]…
+#   precheck.sh --chrome --no-chrome
+#
+# decides whether the child gets Claude in Chrome, and prints one line:
+#
+#   chrome on                     every account --people lists is --trusted.
+#   chrome off untrusted <login>… these are not (the logins as --people
+#                                 prints them, in sorted order).
+#   chrome off no-chrome          --no-chrome was given (stdin is not read).
+#
+# Here --trusted needs no --resume. All three reads must be there (the issue,
+# at least one comment array, and the edit history read to its last page),
+# and the comment arrays must hold at least as many comments as the issue's
+# own `comments` count, or it exits 2: a read that failed, or a page of one
+# that failed, must not read as "nobody else wrote it". --trusted never
+# takes `ghost`.
+#
 # Exit status: 0 with a decision, 1 as above, 2 on bad input, including
 # empty input or anything that is not a list of comment arrays (with --body,
 # not an issue object).
@@ -99,13 +132,16 @@ usage() {
   echo "       precheck.sh --author <login> --authors < comments.json" >&2
   echo "       precheck.sh --payload [--author <login>] < comment.json" >&2
   echo "       precheck.sh --body < issue.json" >&2
+  echo "       precheck.sh --author <login> --people < issue, comments, and edits" >&2
+  echo "       precheck.sh --author <login> --chrome [--trusted <login>]... < issue, comments, and edits" >&2
+  echo "       precheck.sh --chrome --no-chrome" >&2
   exit 2
 }
 
 command -v jq >/dev/null 2>&1 || { echo "precheck.sh: jq is required" >&2; exit 2; }
 
 author="" now="" force=false payload=false resume_num="" resuming=false
-authors=false trusted=() body_mode=false
+authors=false trusted=() body_mode=false people=false chrome=false no_chrome=false
 # The shape of a GitHub login. Nothing else is trusted or printed.
 LOGIN_RE='^[A-Za-z0-9][A-Za-z0-9-]{0,38}$'
 while [ "$#" -gt 0 ]; do
@@ -118,6 +154,9 @@ while [ "$#" -gt 0 ]; do
     --trusted) [ "$#" -ge 2 ] || usage; trusted+=("$2"); shift 2 ;;
     --authors) authors=true; shift ;;
     --body) body_mode=true; shift ;;
+    --people) people=true; shift ;;
+    --chrome) chrome=true; shift ;;
+    --no-chrome) no_chrome=true; shift ;;
     *) usage ;;
   esac
 done
@@ -127,6 +166,88 @@ done
 # branch=worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> -->`); comments written
 # before that have no `branch=` field. Both forms are read.
 MARKER_RE='^<!-- jikkyo:status v=1 state=(?<state>[a-z]+)(?: branch=(?<branch>worktree-jikkyo-[0-9]+-[0-9]{8}-[0-9]{6}))? -->'
+
+# --people and --chrome: who wrote the issue, its comments, and its body's
+# edits, and whether all of them are trusted. The input is a stream of JSON
+# values: the issue object (`.number`, `.user`), comment arrays, and GraphQL
+# pages of the edit history (`.data.repository.issue.userContentEdits`). Any
+# other value (a gh error object, say) is bad input. A login of another
+# shape, or none (a deleted account), becomes `ghost`, which no permission
+# check trusts. report.sh's watcher runs --people too, on the comments alone
+# and on the edits alone, to tell which of the two an account wrote.
+# shellcheck disable=SC2016  # jq program
+PEOPLE='
+  def edits: .data?.repository?.issue?.userContentEdits?;
+  def kind:
+    if type == "array" then "comments"
+    elif type == "object" and (.number | type) == "number" and has("user") then "issue"
+    elif type == "object" and (edits | type) == "object" and (edits.nodes | type) == "array" then "edits"
+    else "bad" end;
+  def who: if type == "string" and (test($login_re) or test($bot_re)) then . else "ghost" end;
+  if length == 0 or any(.[]; kind == "bad") then error("bad input") else . end
+  | [ .[] | select(kind == "edits") ] as $pages
+  | { issue: ([ .[] | select(kind == "issue") ] | length),
+      comments: ([ .[] | select(kind == "comments") ] | length),
+      comments_expected: ([ .[] | select(kind == "issue") | .comments? | numbers ] | first // null),
+      comments_read: ([ .[] | select(kind == "comments") | length ] | add // 0),
+      edits_done: ($pages != [] and ($pages[-1] | edits.pageInfo.hasNextPage? // false) == false),
+      people: ([ .[] | kind as $k
+                 | if $k == "issue" then .user?.login?
+                   elif $k == "comments" then .[] | objects | .user?.login?
+                   else edits.nodes[] | objects | .editor?.login? end
+                 | who | select(. != $author) ] | unique) }
+'
+# An app's bot account, such as `dependabot[bot]`: listed by its name, so the
+# start message can name it; the permission API does not answer for it, so
+# it is never trusted.
+BOT_RE='^[A-Za-z0-9][A-Za-z0-9-]{0,38}\[bot\]$'
+
+if [ "$people" = true ] || [ "$chrome" = true ]; then
+  if [ "$people" = true ] && [ "$chrome" = true ]; then usage; fi
+  if [ -n "$now" ] || [ "$force" = true ] || [ "$payload" = true ] || [ "$resuming" = true ] \
+     || [ "$authors" = true ] || [ "$body_mode" = true ]; then usage; fi
+  if [ "$no_chrome" = true ]; then
+    # Nothing has to be read to say no.
+    if [ "$chrome" = false ] || [ -n "$author" ] || [ "${#trusted[@]}" -gt 0 ]; then usage; fi
+    echo "chrome off no-chrome"
+    exit 0
+  fi
+  [ -n "$author" ] || usage
+  if [ "$people" = true ] && [ "${#trusted[@]}" -gt 0 ]; then usage; fi
+  for t in ${trusted[@]+"${trusted[@]}"}; do
+    [[ "$t" =~ $LOGIN_RE ]] || { echo "precheck.sh: --trusted takes a GitHub login: $t" >&2; usage; }
+  # `ghost` is GitHub's name for every deleted account, and what --people
+  # prints for a name of any other shape: trusting it would trust all of them.
+  [ "$(printf '%s' "$t" | tr '[:upper:]' '[:lower:]')" != ghost ] \
+    || { echo "precheck.sh: --trusted cannot take ghost, which stands for deleted and unknown accounts" >&2; usage; }
+  done
+  found="$(jq -c -s --arg author "$author" --arg login_re "$LOGIN_RE" --arg bot_re "$BOT_RE" "$PEOPLE" 2>/dev/null)" || found=""
+  if [ -z "$found" ]; then
+    echo "precheck.sh: expected the issue, its comments, and its edit history as JSON (did a gh call fail?)" >&2
+    exit 2
+  fi
+  if [ "$people" = true ]; then
+    jq -r '.people[]' <<<"$found"
+    exit 0
+  fi
+  if [ "$(jq -r '.issue == 1 and .comments > 0 and .edits_done' <<<"$found")" != true ]; then
+    echo "precheck.sh: --chrome needs the issue, its comments, and its whole edit history (did a gh call fail?)" >&2
+    exit 2
+  fi
+  # A comment page that failed leaves its comments out without a trace, so
+  # count them: fewer than the issue's own comment count means a read is
+  # missing. (More is fine: a comment posted between the reads.)
+  if [ "$(jq -r '.comments_expected != null and .comments_read >= .comments_expected' <<<"$found")" != true ]; then
+    echo "precheck.sh: --chrome read fewer comments than the issue has (did a page of gh api --paginate fail?)" >&2
+    exit 2
+  fi
+  trusted_json="$(jq -cn '$ARGS.positional' --args ${trusted[@]+"${trusted[@]}"})"
+  jq -r --argjson trusted "$trusted_json" '
+    [ .people[] | select(IN($trusted[]) | not) ]
+    | if . == [] then "chrome on" else "chrome off untrusted " + join(" ") end' <<<"$found"
+  exit 0
+fi
+if [ "$no_chrome" = true ]; then usage; fi
 
 if [ "$body_mode" = true ]; then
   if [ -n "$author" ] || [ -n "$now" ] || [ "$force" = true ] || [ "$payload" = true ] \
@@ -236,6 +357,10 @@ fi
 [ -n "$author" ] || usage
 for t in ${trusted[@]+"${trusted[@]}"}; do
   [[ "$t" =~ $LOGIN_RE ]] || { echo "precheck.sh: --trusted takes a GitHub login: $t" >&2; usage; }
+  # `ghost` is GitHub's name for every deleted account, and what --people
+  # prints for a name of any other shape: trusting it would trust all of them.
+  [ "$(printf '%s' "$t" | tr '[:upper:]' '[:lower:]')" != ghost ] \
+    || { echo "precheck.sh: --trusted cannot take ghost, which stands for deleted and unknown accounts" >&2; usage; }
 done
 # Another account's comments count only when deciding a resume.
 if [ "${#trusted[@]}" -gt 0 ] && [ "$resuming" = false ]; then
