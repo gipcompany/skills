@@ -1,12 +1,12 @@
 issue: https://github.com/gipcompany/skills/issues/76
 branch: worktree-jikkyo-76-20261120-190608
-updated: 2026-11-20T19:35:21+09:00
-next: item 2: resume path and its live check
+updated: 2026-11-20T19:35:33+09:00
+next: item 4: live check of the shared browser
 
 ## Todos
 
 - [x] Item 1: Phase 1 trust check of body author, comment authors, body editors; launch.sh --chrome only when all trusted (d274d6d)
-- [ ] Item 2: same check on --resume; resumed child with --chrome --setting-sources user loads Claude in Chrome (live)
+- [x] Item 2: same check on --resume; resumed child with --chrome --setting-sources user loads Claude in Chrome (live) (d274d6d)
 - [x] Item 3: live check headless claude -p --chrome child connects, opens tab, navigates, reads (log-only commit)
 - [ ] Item 4: live check interactive session and jikkyo child keep to own tabs
 - [ ] Item 5: --no-chrome flag, usage line and argument validation in SKILL.md
@@ -25,6 +25,7 @@ next: item 2: resume path and its live check
 
 - A headless claude -p --chrome child, started in the background: started in the background with stdin /dev/null, stream-json, --permission-mode auto and --chrome (Claude Code 2.1.329); its stream shows tabs_context_mcp, tabs_context_mcp with createIfEmpty creating its own group and tab, navigate to https://example.com, read_page and get_page_text returning the page text, then tabs_close_mcp
 - Phase 1 checks the author of the issue body, every comment, and the edit history; --chrome only when all trusted: tests/run.sh decision cases (all trusted, untrusted body author, comment author, editor, earlier editor, permission error) and the launch.sh command line with and without --chrome pass; precheck.sh --people and --chrome tried on the real issue 76
+- The same applies to --resume, and a resumed child with --chrome --setting-sources user loads Claude in Chrome: SKILL.md step 4c runs for a resume too; tests/run.sh checks the resumed command line (--setting-sources user then --chrome, browser instructions before the resume one, --watch to report.sh, resume environment unchanged); live: a child started with --setting-sources user --chrome and the resume environment variables (Claude Code 2.1.329) listed claude-in-chrome as connected in its init event and called tabs_context_mcp without an error
 
 ## Dead ends and decisions
 
