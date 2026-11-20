@@ -12,7 +12,11 @@
 # that commented on the issue or edited its body, and stops the child with
 # SIGTERM when one is not trusted; the run then ends `interrupted`, with a
 # `Stopped` row in the comment and `jikkyo: stopped by <login> (comment|edit)`
-# after the state line.
+# after the state line. When it cannot read the issue JIKKYO_WATCH_MAX_FAILS
+# (4) polls in a row, it stops the child the same way, with
+# `jikkyo: watcher could not read the issue` instead: a child with a browser
+# is not left running unwatched. Each gh call of the watcher gets
+# JIKKYO_WATCH_TIMEOUT (20) seconds.
 #
 # --session gives the id of the session that launched (or resumed) the run
 # (launch.sh passes it). It must have the exact shape of a Claude Code session
@@ -112,7 +116,22 @@ HEARTBEAT_INTERVAL="${JIKKYO_HEARTBEAT_INTERVAL:-300}"
 TICK="${JIKKYO_TICK:-1}"
 MIN_GAP="${JIKKYO_MIN_GAP:-1}"
 
-WATCH_INTERVAL="${JIKKYO_WATCH_INTERVAL:-30}"
+# The watcher's settings must be whole numbers (above 0, except the
+# interval): any other value would make its arithmetic fail, and the watcher
+# would never run. A bad one is said on stderr and replaced by the default.
+watch_setting() {
+  local v="$2" re='^[1-9][0-9]{0,5}$'
+  [ "$1" != JIKKYO_WATCH_INTERVAL ] || re='^(0|[1-9][0-9]{0,5})$'
+  if ! [[ "$v" =~ $re ]]; then
+    echo "report.sh: ${1} is not a whole number we can use (${v}); using ${3}" >&2
+    v="$3"
+  fi
+  printf '%s' "$v"
+}
+WATCH_INTERVAL="$(watch_setting JIKKYO_WATCH_INTERVAL "${JIKKYO_WATCH_INTERVAL:-30}" 30)"
+WATCH_MAX_FAILS="$(watch_setting JIKKYO_WATCH_MAX_FAILS "${JIKKYO_WATCH_MAX_FAILS:-4}" 4)"
+WATCH_TIMEOUT="$(watch_setting JIKKYO_WATCH_TIMEOUT "${JIKKYO_WATCH_TIMEOUT:-20}" 20)"
+STOP_GRACE="$(watch_setting JIKKYO_STOP_GRACE "${JIKKYO_STOP_GRACE:-10}" 10)"
 
 usage() {
   echo "usage: ... | report.sh [--watch <child PID file>] [--session <session id>] '<https://github.com/<owner>/<repo>/issues/<N>>' [worktree-jikkyo-<N>-<YYYYmmdd>-<HHMMSS> [<comment id>]]" >&2
@@ -305,13 +324,20 @@ set_labels() {
     L_MORE_1="… and " L_MORE_2=" more (" L_MORE_3=" completed)"
   fi
 }
-# stop_text <login> <comment|edit>: the `Stopped` row's value, when the
-# watcher stopped the run. The login has the shape precheck.sh --people
+# stop_text <login> <comment|edit|unread>: the `Stopped` row's value, when
+# the watcher stopped the run (`unread`: it could not read the issue, and the
+# login is unused). The login has the shape precheck.sh --people
 # lets through (a GitHub login, an app's bot, or `ghost`), so it holds no
 # backtick and goes into a code span as it is.
 # shellcheck disable=SC2016  # literal backticks: a Markdown code span
 stop_text() {
-  if [ "$LANG_CODE" = ja ]; then
+  if [ "$2" = unread ]; then
+    if [ "$LANG_CODE" = ja ]; then
+      printf '監視が実行を止めました: Issue のコメントと編集履歴を %s 回続けて読めず、誰が書いたかを確かめられなくなりました。' "$WATCH_MAX_FAILS"
+    else
+      printf 'The watcher stopped the run: it could not read the issue'"'"'s comments and edit history %s times in a row, so it could no longer check who wrote them.' "$WATCH_MAX_FAILS"
+    fi
+  elif [ "$LANG_CODE" = ja ]; then
     if [ "$2" = comment ]; then
       printf '監視が実行を止めました: `%s` が実行中に Issue にコメントしました。このアカウントは信頼されていません（起動したアカウントではなく、admin も write の権限もありません）。' "$1"
     else
@@ -609,7 +635,7 @@ body() {
   printf '### jikkyo · %s · %s%s\n\n' "$word" "$heading" "$eta_suffix"
   printf '| %s | %s |\n| --- | --- |\n' "$L_FIELD" "$L_VALUE"
   printf '| %s | %s |\n' "$L_STATE" "$word"
-  if [ -n "$stopped_by" ]; then
+  if [ -n "$stopped_kind" ]; then
     printf '| %s | %s |\n' "$L_STOPPED" "$(stop_text "$stopped_by" "$stopped_kind")"
   fi
   printf '| %s | %s |\n' "$L_BRANCH" "${branch:+\`$branch\`}"
@@ -690,7 +716,11 @@ print_final_message() {
   # The fixed message a child with Claude in Chrome ends with when its first
   # browser call fails (launch.sh's BROWSER_INSTRUCTION): said on its own line
   # too, so the closing summary does not have to read it out of the child's text.
-  case "$msg" in *"$NOT_REACHABLE"*) echo "jikkyo: browser not reachable" ;; esac
+  # Only with Chrome on (--watch): a child without a browser that quotes the
+  # sentence has not lost one.
+  if [ -n "$watch_file" ]; then
+    case "$msg" in *"$NOT_REACHABLE"*) echo "jikkyo: browser not reachable" ;; esac
+  fi
   echo "jikkyo: final message:"
   printf '%s\n' "$msg"
 }
@@ -713,7 +743,11 @@ finish() {
   [ -n "$parser_pid" ] && kill "$parser_pid" 2>/dev/null
   _write "$st" "$(now)"
   echo "jikkyo: state ${st}"
-  [ -z "$stopped_by" ] || echo "jikkyo: stopped by ${stopped_by} (${stopped_kind})"
+  case "$stopped_kind" in
+    "") ;;
+    unread) echo "jikkyo: watcher could not read the issue" ;;
+    *) echo "jikkyo: stopped by ${stopped_by} (${stopped_kind})" ;;
+  esac
   # Non-deleted todos, the counts final_state judged by: numbers only.
   jq -r '"jikkyo: todos \(.done)/\(.total)"' "$state_file" 2>/dev/null \
     || echo "jikkyo: todos 0/0"
@@ -733,10 +767,15 @@ finish() {
 # trusted, a 404, or any error in that permission check stops the run: the
 # child gets SIGTERM (by the PID launch.sh wrote to the --watch file), and
 # the run ends `interrupted` through finish, with a `Stopped` row naming the
-# account and a `jikkyo: stopped by <login> <comment|edit>` hand-over line.
+# account and a `jikkyo: stopped by <login> (comment|edit)` hand-over line.
 # A failed read of the comments or the edits (or of this account) is not a
-# finding: that poll is skipped, and the next one reads again. Trusted
-# accounts are remembered for the run; an untrusted one ends it.
+# finding by itself: that poll is skipped, said on stderr, and the next one
+# reads again. But WATCH_MAX_FAILS failed polls in a row stop the run the
+# same way (`jikkyo: watcher could not read the issue`), so a child with a
+# browser is never left running unwatched for long. Every gh call here is
+# cut off after WATCH_TIMEOUT seconds, so a hung call cannot stall the
+# scheduler, and counts as failed. Trusted accounts are remembered for the
+# run; an untrusted one ends it. A bot or `ghost` is never trusted.
 # ---------------------------------------------------------------------------
 NOT_REACHABLE='Claude in Chrome is not reachable, so this run stopped before doing any work.'
 # The body's whole edit history, paged with gh's --paginate ($endCursor).
@@ -749,29 +788,67 @@ stopped_kind=""
 own_login=""
 trusted_logins=" "
 last_watch=""
+watch_fails=0
+
+# limited <out file> <command…>: run the command with its stdout in the file
+# and its stderr dropped, and give up after WATCH_TIMEOUT seconds (exit 124).
+# macOS has no timeout(1), so this polls the job once a second.
+limited() {
+  local out="$1" pid i=0
+  shift
+  "$@" > "$out" 2>/dev/null &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$i" -ge "$WATCH_TIMEOUT" ]; then
+      kill -TERM "$pid" 2>/dev/null
+      wait "$pid" 2>/dev/null
+      return 124
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  wait "$pid"
+}
 
 # trusted <login>: 0 when the account has exactly admin or write.
 trusted() {
   local p
-  p="$(gh api "repos/${owner}/${repo}/collaborators/$1/permission" --jq .permission 2>/dev/null)" || return 1
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in ghost|*'[bot]') return 1 ;; esac
+  limited "$work/watch.perm" gh api "repos/${owner}/${repo}/collaborators/$1/permission" --jq .permission || return 1
+  p="$(cat "$work/watch.perm")"
   [ "$p" = admin ] || [ "$p" = write ]
+}
+
+# watch_failed <what>: one poll could not read the issue. Say so, and stop
+# the run once WATCH_MAX_FAILS polls in a row have failed.
+watch_failed() {
+  watch_fails=$((watch_fails + 1))
+  echo "jikkyo: watcher could not read ${1} (${watch_fails} of ${WATCH_MAX_FAILS} in a row)" >&2
+  if [ "$watch_fails" -ge "$WATCH_MAX_FAILS" ]; then
+    stop_run "" unread
+  fi
+  return 0
 }
 
 watch_issue() {
   local comments edits kind login people
   if [ -z "$own_login" ]; then
-    own_login="$(gh api user --jq .login 2>/dev/null)" || own_login=""
-    [[ "$own_login" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ ]] || { own_login=""; return 0; }
+    limited "$work/watch.user" gh api user --jq .login || { watch_failed "this account"; return 0; }
+    own_login="$(cat "$work/watch.user")"
+    [[ "$own_login" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,38}$ ]] || { own_login=""; watch_failed "this account"; return 0; }
   fi
-  comments="$(gh api --paginate "repos/${owner}/${repo}/issues/${num}/comments" 2>/dev/null)" || return 0
-  edits="$(gh api graphql --paginate -f owner="$owner" -f name="$repo" -F number="$num" \
-             -f query="$EDITS_QUERY" 2>/dev/null)" || return 0
+  limited "$work/watch.comments" gh api --paginate "repos/${owner}/${repo}/issues/${num}/comments?per_page=100" \
+    || { watch_failed "the comments"; return 0; }
+  limited "$work/watch.edits" gh api graphql --paginate -f owner="$owner" -f name="$repo" -F number="$num" \
+             -f query="$EDITS_QUERY" || { watch_failed "the edit history"; return 0; }
+  # Both lists first, so a read that fails does not leave the poll half done.
+  comments="$("$HERE/precheck.sh" --author "$own_login" --people < "$work/watch.comments" 2>/dev/null)" \
+    || { watch_failed "the comments"; return 0; }
+  edits="$("$HERE/precheck.sh" --author "$own_login" --people < "$work/watch.edits" 2>/dev/null)" \
+    || { watch_failed "the edit history"; return 0; }
+  watch_fails=0
   for kind in comment edit; do
-    if [ "$kind" = comment ]; then
-      people="$("$HERE/precheck.sh" --author "$own_login" --people <<<"$comments" 2>/dev/null)" || return 0
-    else
-      people="$("$HERE/precheck.sh" --author "$own_login" --people <<<"$edits" 2>/dev/null)" || return 0
-    fi
+    if [ "$kind" = comment ]; then people="$comments"; else people="$edits"; fi
     while IFS= read -r login; do
       [ -n "$login" ] || continue
       case "$trusted_logins" in *" $login "*) continue ;; esac
@@ -784,15 +861,44 @@ watch_issue() {
   done
 }
 
-# stop_run <login> <comment|edit>: SIGTERM the child, end the run
-# `interrupted`, and exit.
+# descendants <pid>: every live process below it, children first.
+descendants() {
+  local c
+  for c in $(pgrep -P "$1" 2>/dev/null); do
+    echo "$c"
+    descendants "$c"
+  done
+}
+
+# stop_run <login> <comment|edit|unread>: stop the child and every process
+# it started, end the run `interrupted`, and exit. The tree is listed before
+# the child is signalled (once the child is gone, its children are
+# reparented and can no longer be found from it). SIGTERM first; whatever is
+# still alive after STOP_GRACE seconds gets SIGKILL, so the run never ends
+# with its child still at work. A process that left the tree on its own
+# (a daemon) is not reached.
 stop_run() {
-  local pid
+  local pid pids p i=0 alive
   stopped_by="$1"
   stopped_kind="$2"
   pid="$(cat "$watch_file" 2>/dev/null)"
   if [[ "$pid" =~ ^[1-9][0-9]*$ ]]; then
-    kill -TERM "$pid" 2>/dev/null
+    pids="$pid $(descendants "$pid" | tr '\n' ' ')"
+    # shellcheck disable=SC2086  # a list of PIDs, split on purpose
+    kill -TERM $pids 2>/dev/null
+    while :; do
+      alive=""
+      for p in $pids; do kill -0 "$p" 2>/dev/null && alive="$alive $p"; done
+      [ -n "$alive" ] || break
+      if [ "$i" -ge "$STOP_GRACE" ]; then
+        echo "jikkyo: the child did not stop within ${STOP_GRACE}s of SIGTERM; sending SIGKILL" >&2
+        # shellcheck disable=SC2086
+        kill -KILL $alive 2>/dev/null
+        break
+      fi
+      sleep 1
+      i=$((i + 1))
+    done
   else
     echo "jikkyo: no child PID to stop; the child ends when it next writes to the stream" >&2
   fi

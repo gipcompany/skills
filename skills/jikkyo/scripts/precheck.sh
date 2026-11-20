@@ -113,8 +113,11 @@
 #   chrome off no-chrome          --no-chrome was given (stdin is not read).
 #
 # Here --trusted needs no --resume. All three reads must be there (the issue,
-# at least one comment array, and the edit history read to its last page), or
-# it exits 2: a read that failed must not read as "nobody else wrote it".
+# at least one comment array, and the edit history read to its last page),
+# and the comment arrays must hold at least as many comments as the issue's
+# own `comments` count, or it exits 2: a read that failed, or a page of one
+# that failed, must not read as "nobody else wrote it". --trusted never
+# takes `ghost`.
 #
 # Exit status: 0 with a decision, 1 as above, 2 on bad input, including
 # empty input or anything that is not a list of comment arrays (with --body,
@@ -185,6 +188,8 @@ PEOPLE='
   | [ .[] | select(kind == "edits") ] as $pages
   | { issue: ([ .[] | select(kind == "issue") ] | length),
       comments: ([ .[] | select(kind == "comments") ] | length),
+      comments_expected: ([ .[] | select(kind == "issue") | .comments? | numbers ] | first // null),
+      comments_read: ([ .[] | select(kind == "comments") | length ] | add // 0),
       edits_done: ($pages != [] and ($pages[-1] | edits.pageInfo.hasNextPage? // false) == false),
       people: ([ .[] | kind as $k
                  | if $k == "issue" then .user?.login?
@@ -211,6 +216,10 @@ if [ "$people" = true ] || [ "$chrome" = true ]; then
   if [ "$people" = true ] && [ "${#trusted[@]}" -gt 0 ]; then usage; fi
   for t in ${trusted[@]+"${trusted[@]}"}; do
     [[ "$t" =~ $LOGIN_RE ]] || { echo "precheck.sh: --trusted takes a GitHub login: $t" >&2; usage; }
+  # `ghost` is GitHub's name for every deleted account, and what --people
+  # prints for a name of any other shape: trusting it would trust all of them.
+  [ "$(printf '%s' "$t" | tr '[:upper:]' '[:lower:]')" != ghost ] \
+    || { echo "precheck.sh: --trusted cannot take ghost, which stands for deleted and unknown accounts" >&2; usage; }
   done
   found="$(jq -c -s --arg author "$author" --arg login_re "$LOGIN_RE" --arg bot_re "$BOT_RE" "$PEOPLE" 2>/dev/null)" || found=""
   if [ -z "$found" ]; then
@@ -223,6 +232,13 @@ if [ "$people" = true ] || [ "$chrome" = true ]; then
   fi
   if [ "$(jq -r '.issue == 1 and .comments > 0 and .edits_done' <<<"$found")" != true ]; then
     echo "precheck.sh: --chrome needs the issue, its comments, and its whole edit history (did a gh call fail?)" >&2
+    exit 2
+  fi
+  # A comment page that failed leaves its comments out without a trace, so
+  # count them: fewer than the issue's own comment count means a read is
+  # missing. (More is fine: a comment posted between the reads.)
+  if [ "$(jq -r '.comments_expected != null and .comments_read >= .comments_expected' <<<"$found")" != true ]; then
+    echo "precheck.sh: --chrome read fewer comments than the issue has (did a page of gh api --paginate fail?)" >&2
     exit 2
   fi
   trusted_json="$(jq -cn '$ARGS.positional' --args ${trusted[@]+"${trusted[@]}"})"
@@ -341,6 +357,10 @@ fi
 [ -n "$author" ] || usage
 for t in ${trusted[@]+"${trusted[@]}"}; do
   [[ "$t" =~ $LOGIN_RE ]] || { echo "precheck.sh: --trusted takes a GitHub login: $t" >&2; usage; }
+  # `ghost` is GitHub's name for every deleted account, and what --people
+  # prints for a name of any other shape: trusting it would trust all of them.
+  [ "$(printf '%s' "$t" | tr '[:upper:]' '[:lower:]')" != ghost ] \
+    || { echo "precheck.sh: --trusted cannot take ghost, which stands for deleted and unknown accounts" >&2; usage; }
 done
 # Another account's comments count only when deciding a resume.
 if [ "${#trusted[@]}" -gt 0 ] && [ "$resuming" = false ]; then

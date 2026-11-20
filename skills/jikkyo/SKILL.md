@@ -230,7 +230,7 @@ The arguments are: $ARGUMENTS
    only the last editor), by reading all three into `precheck.sh`:
 
    ```
-   { gh api 'repos/<owner>/<repo>/issues/<N>'; gh api --paginate 'repos/<owner>/<repo>/issues/<N>/comments'; gh api graphql --paginate -f owner='<owner>' -f name='<repo>' -F number='<N>' -f query='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){issue(number:$number){userContentEdits(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{editor{login}}}}}}'; } | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --author '<login>' --people
+   { gh api 'repos/<owner>/<repo>/issues/<N>'; gh api --paginate 'repos/<owner>/<repo>/issues/<N>/comments?per_page=100'; gh api graphql --paginate -f owner='<owner>' -f name='<repo>' -F number='<N>' -f query='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){issue(number:$number){userContentEdits(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{editor{login}}}}}}'; } | ${CLAUDE_SKILL_DIR}/scripts/precheck.sh --author '<login>' --people
    ```
 
    It prints one account per line, each a GitHub login, an app's bot
@@ -259,8 +259,11 @@ The arguments are: $ARGUMENTS
      `--chrome`.
 
    If a read fails, `precheck.sh` exits 2 instead of deciding (a failed read
-   must not look like "nobody else wrote it"): report the `gh` error and
-   stop.
+   must not look like "nobody else wrote it"). That includes one page of
+   the comments failing, which the pipe above would otherwise hide: it
+   checks that it got at least as many comments as the issue's own count.
+   Report the `gh` error and stop. Never pass `ghost` as `--trusted`; it
+   refuses it.
 
 5. **Launch** with the Bash tool's `run_in_background: true`, adding
    `--chrome` as the very first argument only when step 4c printed
@@ -313,7 +316,8 @@ The arguments are: $ARGUMENTS
    without the user having been told:
 
    - `chrome on`: "Chrome on (every author of the issue and its comments,
-     and every editor of its body, is you or has write permission)", and a
+     and every editor of its body, is you or has admin or write
+     permission)", and a
      warning that the child acts in **your logged-in browser**, in its own
      tabs, and is stopped if an account that is not trusted comments on or
      edits the issue during the run.
@@ -346,6 +350,11 @@ The background command's output is the hand-over. Read it and pick out:
   watcher stopped a run with Claude in Chrome on, because that account,
   which is not trusted, commented on the issue (`comment`) or edited its
   body (`edit`) during the run. The state is then `interrupted`.
+- `jikkyo: watcher could not read the issue` — only when `report.sh`'s
+  watcher stopped a run with Claude in Chrome on because it could not read
+  the issue's comments or edit history several polls in a row (4 by
+  default, about two minutes), so it could no longer check who wrote them.
+  The state is then `interrupted`.
 - `jikkyo: todos <completed>/<total>` — the child's todos that are not
   deleted, completed and in all: the counts the state was judged by.
 - `jikkyo: browser not reachable` — only when the child, with Claude in
@@ -466,6 +475,11 @@ Then, in this order:
      the authors again, so while that comment or edit is there the resumed
      run has Claude in Chrome off. For `ja`:
      `` 実行中に `<account>` が Issue にコメントした（本文を編集した）ため、監視が実行を止めました。このアカウントは信頼されていません。 ``
+   - **With a `jikkyo: watcher could not read the issue` line**, say that
+     jikkyo's watcher stopped the run because it could not read the
+     issue's comments and edit history several times in a row, so it could
+     no longer check who wrote them, and that the run can be resumed. For
+     `ja`: `監視が Issue のコメントと編集履歴を続けて読めなかったため、実行を止めました。`
    - **With a `jikkyo: browser not reachable` line**, say that Claude in
      Chrome was not reachable, so the run stopped before doing any work,
      and that the user can open Chrome with the extension connected (one
@@ -868,9 +882,14 @@ needed because this session is idle while the run goes.
     (`--watch`): its scheduler loop, already awake for the whole run,
     reads the comments and the edit history every 30 seconds and checks
     every account the same way (trusted ones are remembered for the run).
-    One that is not trusted, or whose check fails, stops the run:
-    `report.sh` sends the child SIGTERM and ends the run through its one
-    `finish` path. It needs the child's PID, which a foreground pipeline
+    One that is not trusted, or whose check fails, stops the run, and so
+    does a bot (the permission API does not answer for one): `report.sh`
+    sends SIGTERM to the child and every process under it, sends SIGKILL to
+    whatever is left after 10 seconds, and ends the run through its one
+    `finish` path. A read that fails skips that poll, but 4 failed polls in
+    a row stop the run the same way (`jikkyo: watcher could not read the
+    issue`), and every `gh` call of the watcher is cut off after 20
+    seconds, so a child with a browser is never left running unwatched. It needs the child's PID, which a foreground pipeline
     does not expose, so with `--chrome` `launch.sh` starts the child
     through a `sh -c` that writes its own PID to a file and execs the
     child in place, and passes that file to `report.sh`. Simply letting

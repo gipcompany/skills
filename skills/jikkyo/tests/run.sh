@@ -79,7 +79,7 @@ fi
 case "$*" in
   "api user --jq .login")
     printf '%s\n' "$*" >> "$GH_LOG/reads"; echo "${GH_USER:-me}"; exit 0 ;;
-  "api --paginate repos/o/r/issues/12/comments")
+  "api --paginate repos/o/r/issues/12/comments"|"api --paginate repos/o/r/issues/12/comments?per_page=100")
     printf '%s\n' "$*" >> "$GH_LOG/reads"
     if [ -n "${GH_COMMENTS:-}" ]; then cat "$GH_COMMENTS"; else echo '[]'; fi
     exit 0 ;;
@@ -2756,7 +2756,8 @@ echo "precheck.sh: the Claude in Chrome decision (#76)"
   mkdir -p "$ch"
   # issue_json <author>, comments_json <login>…, edits_json <login|null>…:
   # the three reads, as gh prints them. `null` is an editor whose account is gone.
-  issue_json() { jq -cn --arg a "$1" '{number: 12, title: "t", body: "- [ ] x", user: {login: $a}}'; }
+  # issue_json <author> [<comment count>]: the issue's own `comments` count.
+  issue_json() { jq -cn --arg a "$1" --argjson n "${2:-0}" '{number: 12, title: "t", body: "- [ ] x", user: {login: $a}, comments: $n}'; }
   comments_json() { jq -cn '[$ARGS.positional[] | {user: {login: .}, body: "c"}]' --args "$@"; }
   edits_json() {
     jq -cn --argjson more "${MORE:-false}" '{data: {repository: {issue: {userContentEdits: {
@@ -2767,7 +2768,7 @@ echo "precheck.sh: the Claude in Chrome decision (#76)"
   reads() {
     local who="$1" posters=() editors=()
     IFS=',' read -r -a posters <<<"$2"; IFS=',' read -r -a editors <<<"$3"
-    issue_json "$who"; comments_json ${posters[@]+"${posters[@]}"}; edits_json ${editors[@]+"${editors[@]}"}
+    issue_json "$who" "${#posters[@]}"; comments_json ${posters[@]+"${posters[@]}"}; edits_json ${editors[@]+"${editors[@]}"}
   }
   decide() {  # <reads file> [--trusted …] -> stdout, rc in $rc
     local f="$1"; shift
@@ -2820,15 +2821,30 @@ echo "precheck.sh: the Claude in Chrome decision (#76)"
   done
 
   # A failed read must not look like "nobody else wrote it".
-  { issue_json alice; comments_json bob; } > "$ch/no-edits.json"
-  { issue_json alice; edits_json carol; } > "$ch/no-comments.json"
+  { issue_json alice 1; comments_json bob; } > "$ch/no-edits.json"
+  { issue_json alice 1; edits_json carol; } > "$ch/no-comments.json"
   { comments_json bob; edits_json carol; } > "$ch/no-issue.json"
-  { issue_json alice; comments_json bob; MORE=true edits_json carol; } > "$ch/edits-cut.json"
-  { issue_json alice; comments_json bob; echo '{"message":"Bad credentials","status":"401"}'; } > "$ch/error.json"
+  { issue_json alice 1; comments_json bob; MORE=true edits_json carol; } > "$ch/edits-cut.json"
+  { issue_json alice 1; comments_json bob; echo '{"message":"Bad credentials","status":"401"}'; } > "$ch/error.json"
   : > "$ch/empty.json"
-  for f in no-edits no-comments no-issue edits-cut error empty; do
+  # A page of the comments that failed: `{ gh …; gh …; }` hides its exit
+  # status, so only the count tells (the issue has 3, one page of 1 came).
+  { issue_json alice 3; comments_json bob; edits_json carol; } > "$ch/comments-cut.json"
+  { jq -cn '{number: 12, title: "t", body: "b", user: {login: "alice"}}'; comments_json bob; edits_json carol; } > "$ch/no-count.json"
+  for f in no-edits no-comments no-issue edits-cut error empty comments-cut no-count; do
     decide "$ch/$f.json" --trusted alice --trusted bob --trusted carol
     assert_eq "--chrome with a missing or failed read ($f): exit 2, no decision" "2:" "$rc:$out"
+  done
+  # A comment posted between the issue read and the comments read: more
+  # comments than the count is not a missing read.
+  { issue_json alice 1; comments_json bob carol; edits_json; } > "$ch/comments-more.json"
+  decide "$ch/comments-more.json" --trusted alice --trusted bob --trusted carol
+  assert_eq "--chrome with more comments than the issue's count (one posted between reads): decides" "0:chrome on" "$rc:$out"
+  for g in ghost Ghost GHOST; do
+    decide "$ch/all.json" --trusted alice --trusted "$g"
+    assert_eq "--chrome --trusted $g: usage, exit 2 (ghost stands for deleted and unknown accounts)" "2:" "$rc:$out"
+    rc=0; echo '[]' | bash "$PRECHECK" --author me --resume 12 --trusted "$g" >/dev/null 2>&1 || rc=$?
+    assert_eq "--resume --trusted $g: usage, exit 2" "2" "$rc"
   done
   rc=0; bash "$PRECHECK" --author me --people < "$ch/error.json" >/dev/null 2>&1 || rc=$?
   assert_eq "--people with an error object in the input: exit 2" "2" "$rc"
@@ -3015,7 +3031,7 @@ echo "report.sh --watch: stopping the run on an untrusted comment or edit (#76)"
   n="$(grep -c 'collaborators/alice/permission' "$GH_LOG/reads")"
   assert_eq "...a trusted account is checked once for the run, however often it is seen" "1" "$n"
 
-  # A failed read is not a finding: the run goes on.
+  # A failed read is not a finding by itself: the run goes on, and says so.
   mkdir -p "$wt/bin"
   printf '%s\n' '#!/usr/bin/env bash' \
     "case \"\$*\" in \"api --paginate \"*|\"api graphql \"*) echo failed >> \"$wt/failed\"; echo '{\"message\":\"Server Error\"}'; exit 1 ;; esac" \
@@ -3023,12 +3039,69 @@ echo "report.sh --watch: stopping the run on an untrusted comment or edit (#76)"
   chmod +x "$wt/bin/gh"
   { create t1 1; result_ok; } > "$wt/short.jsonl"
   new_log; rc=0; rm -f "$wt/failed"
-  out="$( { create t1 1; sleep 1; result_ok; } | PATH="$wt/bin:$PATH" JIKKYO_WATCH_INTERVAL=0 \
-    bash "$REPORT" --watch "$wt/child.pid" "$URL" 2>/dev/null)" || rc=$?
+  out="$( { create t1 1; sleep 1; result_ok; } | PATH="$wt/bin:$PATH" JIKKYO_WATCH_INTERVAL=0 JIKKYO_WATCH_MAX_FAILS=100000 \
+    bash "$REPORT" --watch "$wt/child.pid" "$URL" 2>"$wt/err")" || rc=$?
   if [ -s "$wt/failed" ]; then ok "the watcher read the comments (and failed) while the run went on"
   else bad "the watcher read the comments (and failed) while the run went on"; fi
   assert_has "...a failed read stops nothing" "jikkyo: state incomplete" "$out"
   assert_lacks "...and names nobody" "stopped by" "$out"
+  assert_has "...but is said on stderr" "jikkyo: watcher could not read the comments (1 of 100000 in a row)" "$(cat "$wt/err")"
+
+  # Failed reads in a row stop the run: a child with a browser is not left
+  # unwatched. The stand-in child is alive until stopped.
+  stand_in() {  # <command> -> runs it as the child, PID in $wt/child.pid, sets $child
+    bash -c "$1" & child=$!
+    echo "$child" > "$wt/child.pid"
+  }
+  stand_in 'sleep 30'
+  new_log; rc=0
+  out="$( { create t1 1; update u1 1 in_progress; while kill -0 "$child" 2>/dev/null; do sleep 0.1; done; } \
+    | PATH="$wt/bin:$PATH" JIKKYO_WATCH_INTERVAL=0 JIKKYO_WATCH_MAX_FAILS=2 bash "$REPORT" --watch "$wt/child.pid" "$URL" 2>/dev/null)" || rc=$?
+  alive=no; kill -0 "$child" 2>/dev/null && alive=yes; kill "$child" 2>/dev/null; wait "$child" 2>/dev/null
+  assert_eq "JIKKYO_WATCH_MAX_FAILS failed polls in a row: the child is stopped" "no" "$alive"
+  assert_has "...the hand-over says the watcher could not read the issue" \
+    "$(printf 'jikkyo: state interrupted\njikkyo: watcher could not read the issue')" "$out"
+  assert_lacks "...and names nobody" "stopped by" "$out"
+  assert_has "...the status comment says why" "| Stopped | The watcher stopped the run: it could not read the issue's comments and edit history 2 times in a row" "$(last_body)"
+
+  # A gh call that hangs is cut off after JIKKYO_WATCH_TIMEOUT seconds and
+  # counts as a failed read, so the scheduler is not stalled for good.
+  printf '%s\n' '#!/usr/bin/env bash' \
+    "case \"\$*\" in \"api --paginate \"*) exec sleep 60 ;; esac" \
+    "exec \"$STUBS/gh\" \"\$@\"" > "$wt/bin/gh"
+  stand_in 'sleep 30'
+  new_log; rc=0; SECONDS=0
+  out="$( { create t1 1; while kill -0 "$child" 2>/dev/null; do sleep 0.1; done; } \
+    | PATH="$wt/bin:$PATH" JIKKYO_WATCH_INTERVAL=0 JIKKYO_WATCH_MAX_FAILS=1 JIKKYO_WATCH_TIMEOUT=1 \
+      bash "$REPORT" --watch "$wt/child.pid" "$URL" 2>/dev/null)" || rc=$?
+  kill "$child" 2>/dev/null; wait "$child" 2>/dev/null
+  assert_has "a hung gh call is cut off and counts as a failed read" "jikkyo: watcher could not read the issue" "$out"
+  if [ "$SECONDS" -lt 15 ]; then ok "...within the timeout, not the hung call's 60 s ($SECONDS s)"
+  else bad "...within the timeout, not the hung call's 60 s ($SECONDS s)"; fi
+
+  # The child and every process under it are stopped; one that ignores
+  # SIGTERM gets SIGKILL after JIKKYO_STOP_GRACE seconds.
+  printf '%s\n' "$(posts mallory)" > "$wt/comments.json"
+  stand_in "trap '' TERM; sleep 60 & echo \$! > '$wt/grandchild'; wait"
+  for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$wt/grandchild" ] && break; sleep 0.2; done
+  new_log; rc=0; SECONDS=0
+  out="$( { create t1 1; while kill -0 "$child" 2>/dev/null; do sleep 0.1; done; } \
+    | GH_COMMENTS="$wt/comments.json" JIKKYO_WATCH_INTERVAL=0 JIKKYO_STOP_GRACE=1 \
+      bash "$REPORT" --watch "$wt/child.pid" "$URL" 2>"$wt/err")" || rc=$?
+  alive=no; kill -0 "$child" 2>/dev/null && alive=yes
+  galive=no; kill -0 "$(cat "$wt/grandchild")" 2>/dev/null && galive=yes
+  kill -KILL "$child" "$(cat "$wt/grandchild")" 2>/dev/null; wait "$child" 2>/dev/null; rm -f "$wt/grandchild"
+  assert_eq "a child that ignores SIGTERM is killed (SIGKILL)" "no" "$alive"
+  assert_eq "...and so is the process it started" "no" "$galive"
+  assert_has "...said on stderr" "sending SIGKILL" "$(cat "$wt/err")"
+  assert_has "...the run still ends as stopped" "jikkyo: stopped by mallory (comment)" "$out"
+
+  # A bad JIKKYO_WATCH_INTERVAL is said and replaced by the default, rather
+  # than leaving the watcher off.
+  new_log
+  out="$(JIKKYO_WATCH_INTERVAL=30s bash "$REPORT" --watch "$wt/none.pid" "$URL" < "$wt/short.jsonl" 2>&1 >/dev/null)"
+  assert_has "a JIKKYO_WATCH_INTERVAL that is not a whole number is said and replaced" \
+    "JIKKYO_WATCH_INTERVAL is not a whole number we can use (30s); using 30" "$out"
 
   # Without --watch nothing is read beyond the issue (for the language).
   new_log
@@ -3063,10 +3136,15 @@ echo "report.sh: the browser is not reachable (#76)"
   f="$TMP/unreachable.jsonl"
   NR="$(bash -c 'eval "$(grep "^NOT_REACHABLE=" "$1")"; printf "%s" "$NOT_REACHABLE"' _ "$REPORT")"
   jq -cn --arg m "$NR" '{type: "result", subtype: "success", is_error: false, result: $m}' > "$f"
-  run_report "$f"
+  # The line is for a child with Claude in Chrome on (--watch). The stream
+  # ends at once, before the watcher's first poll.
+  new_log; rc=0
+  bash "$REPORT" --watch "$TMP/no-child.pid" "$URL" < "$f" > "$TMP/out" 2> "$TMP/err" || rc=$?
   assert_has "the fixed message gives a jikkyo: browser not reachable line" \
     "$(printf 'jikkyo: browser not reachable\njikkyo: final message:\n%s' "$NR")" "$(cat "$TMP/out")"
   assert_eq "...and the run ends incomplete (no todos)" "incomplete" "$(marker_state "$(last_body)")"
+  run_report "$f"
+  assert_lacks "with Chrome off, a child that quotes the sentence gives no such line" "browser not reachable" "$(cat "$TMP/out")"
   run_report "$TMP/progress.jsonl"
   assert_lacks "any other final message gives no such line" "browser not reachable" "$(cat "$TMP/out")"
 }
@@ -3088,7 +3166,7 @@ echo "SKILL.md and README.md: Claude in Chrome (#76)"
   assert_has "SKILL.md: ...each checked like 4r" "gh api 'repos/<owner>/<repo>/collaborators/<account>/permission' --jq .permission" "$skill"
   assert_has "SKILL.md: ...and decides with --chrome" "precheck.sh --author '<login>' --chrome [--trusted '<trusted login>' …]" "$skill"
   assert_has "SKILL.md: a failed read stops, it is not \"nobody else\"" "If a read fails, \`precheck.sh\` exits 2 instead of deciding" "$flat"
-  assert_has "SKILL.md: start message, on" "Chrome on (every author of the issue and its comments, and every editor of its body, is you or has write permission)" "$flat"
+  assert_has "SKILL.md: start message, on" "Chrome on (every author of the issue and its comments, and every editor of its body, is you or has admin or write permission)" "$flat"
   assert_has "SKILL.md: ...warns about the logged-in browser" "the child acts in **your logged-in browser**" "$flat"
   assert_has "SKILL.md: start message, off, naming the accounts" "\"Chrome off (not trusted: <accounts>)\", naming each account the decision line printed" "$flat"
   assert_has "SKILL.md: start message, --no-chrome" "\"Chrome off (--no-chrome)\"" "$flat"
