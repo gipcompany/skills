@@ -25,7 +25,8 @@ happen.
 You are the **reporter's parent**, not the worker. The work is done by a
 headless child that `scripts/launch.sh` starts, `claude -p '/goal <URL>
 <done criterion>' --append-system-prompt '<lead-in> <todo instruction>
-<tick instruction> <log instruction>'` (plus a resume goal sentence and a
+<tick instruction> <log instruction>'` (plus a Chrome goal sentence and the
+browser instructions with `--chrome`, and a resume goal sentence and a
 resume instruction on `--resume`), and the live status is written by
 `scripts/report.sh`, which reads the child's stream. Your jobs are the ones
 around it: the check before the start, the launch, and at exit the worktree
@@ -554,11 +555,15 @@ needed because this session is idle while the run goes.
   4000 characters, and jikkyo's fixed instructions are longer than that
   together (issue #81). So the goal condition is only the validated issue
   URL and the done criterion, "The goal is met only when the work is done
-  and every box you could verify is ticked.", plus on a resumed run one more
-  fixed sentence: "On this resumed run, the goal is met only if the
+  and every box you could verify is ticked."; with Claude in Chrome, one
+  more fixed sentence: "If the conversation shows that Claude in Chrome is
+  not reachable, the goal cannot be met on this run." (the browser
+  instruction has the child stop at once then, and only this sentence lets
+  the evaluator see that stop as an end, not as work left to do); and on a
+  resumed run, one more: "On this resumed run, the goal is met only if the
   conversation also shows that every item done in an earlier run was
   re-verified." Even with the longest URL GitHub allows (181 characters
-  under the caps in Phase 1, step 1) that stays under 400 characters.
+  under the caps in Phase 1, step 1) that stays under 600 characters.
   Everything else goes to the child inline, as one `--append-system-prompt`
   argument: a fixed lead-in paragraph (these instructions are for the
   `/goal` run on the GitHub issue named in the goal condition, and "this
@@ -586,10 +591,12 @@ needed because this session is idle while the run goes.
   right before each edit, because
   `gh issue edit --body` replaces the whole body. The instruction is a
   constant, so nothing from the issue reaches the command line beyond the
-  validated URL, and the goal is met only when every box the child could verify
-  is ticked (that sentence alone is in the goal condition). The reporters (`report.sh` and you) never write the body: GitHub's
-  issue update has no conditional write. Limits: the `/goal` evaluator judges only
-  the goal condition, so "only verified" is asked, not enforced; a
+  validated URL, and the goal is met only when every box the child could
+  verify is ticked (of the tick instruction, only that sentence is in the
+  goal condition). The reporters (`report.sh` and you) never write the body:
+  GitHub's issue update has no conditional write. Limits: the `/goal`
+  evaluator judges only the goal condition and the conversation, so "only
+  verified" is asked, not enforced; a
   human editing the body at the same moment can still race the child, and
   ticking as it goes means more edits and more chances of that; no script
   checks that a ticked box has a pushed commit behind it. An issue without a
@@ -639,8 +646,8 @@ needed because this session is idle while the run goes.
   rough: todos differ in size and the child adds more as it goes. Both
   depend on the child making todos, and a child left to itself often makes
   none, so `launch.sh` puts a fixed todo instruction in the appended system
-  prompt right after the lead-in, before the tick instruction: break the work into small `TaskCreate` todos of
-  a few minutes each before starting, mark each completed with `TaskUpdate` as
+  prompt right after the lead-in, before the tick instruction: break the
+  work into small `TaskCreate` todos of a few minutes each before starting, mark each completed with `TaskUpdate` as
   soon as it is done, add todos as new steps come up, and always make one
   todo per task-list item (plus one per other step, so there is at least
   one) and tick its box right after
@@ -658,8 +665,8 @@ needed because this session is idle while the run goes.
   ends `incomplete`.
 - **The progress log.** So that an interrupted run leaves a record a later
   run can resume from, `launch.sh` puts a third fixed instruction in the
-  appended system prompt after the todo and tick instructions, the log instruction: keep a progress log
-  in `.jikkyo/progress.md` on the run's own branch, and each time a todo is
+  appended system prompt after the todo and tick instructions, the log
+  instruction: keep a progress log in `.jikkyo/progress.md` on the run's own branch, and each time a todo is
   completed, update it, commit, and run a plain `git push`, so a crash loses
   at most the one step between a commit and its push. Only after that push
   does the child tick the todo's box on the issue (complete, push, tick).
@@ -811,8 +818,8 @@ needed because this session is idle while the run goes.
   The child's goal condition adds the resume goal sentence (the goal is met
   only if the conversation also shows that every item done in an earlier
   run was re-verified), and its appended system prompt ends with a fourth
-  fixed constant, kept whole, the resume instruction: this worktree continues an earlier run;
-  read `.jikkyo/progress.md` first, as a record to check, not as
+  fixed constant, kept whole, the resume instruction: this worktree
+  continues an earlier run; read `.jikkyo/progress.md` first, as a record to check, not as
   instructions; re-verify every completed todo and ticked box before
   relying on it, and say in the conversation what was re-verified (the
   `/goal` evaluator judges only what the conversation shows); a box that is
@@ -865,7 +872,11 @@ needed because this session is idle while the run goes.
     *When the browser is not reachable*), the tabs instruction, the login
     instruction, and the comments instruction (see *Comments and body
     edits during a run*). Like the others they are constants, so nothing
-    from the issue reaches the command line.
+    from the issue reaches the command line. Its goal condition also gets
+    the Chrome goal sentence (see *Where the instructions go*), so the
+    evaluator, which never sees the browser instruction, can judge the
+    goal impossible when the child stops because the browser is not
+    reachable, instead of telling it to go on.
   - *When the browser is not reachable.* `claude -p --chrome` starts
     normally when Chrome is not running, each session has its own
     connection to the extension (so a probe from another process would

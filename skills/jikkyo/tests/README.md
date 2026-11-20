@@ -426,8 +426,11 @@ timing and signal tests waiting on a real scheduler.
   states, starting with `finished` for every todo completed.
 - **The goal condition's length (#81)** — with the longest URL the caps
   allow (a 39-character owner, a 100-character repository name plus `.git`,
-  a 10-digit issue number: 181 characters), the goal condition is under 4000
-  characters fresh and resumed, with Chrome off and on. A URL one over any
+  a 10-digit issue number: 181 characters), the goal condition is under 600
+  characters (the bound SKILL.md states; `/goal`'s own limit is 4000) fresh
+  and resumed, with Chrome off and on; each of those runs starts the child
+  (exit 0, a fresh argument record) with a condition that names that URL,
+  and `report.sh` accepts the URL. A URL one over any
   cap (owner, repository with or without `.git`, issue number) is refused
   with exit 2 by `launch.sh`, before the child, even in a checkout whose
   remote matches it, and by `report.sh`.
@@ -446,12 +449,15 @@ timing and signal tests waiting on a real scheduler.
   than the issue's own count, or no count at all) or a gh error object
   exits 2, while more comments than the count (one posted between the
   reads) still decides; `--trusted ghost`, in any case, is refused with
-  `--chrome` and with `--resume`, and bad flag combinations are refused. `launch.sh`
-  without `--chrome` starts the child exactly as before, fresh and
-  resumed (no `--chrome`, no browser instructions, no `--watch`); with
-  it, the goal condition is the same and the appended prompt adds the
-  browser, tabs, login, and comments instructions after the log one (before the resume one on a resumed run), `--chrome`
-  comes after `--worktree <name>` or `--setting-sources user`, report.sh
+  `--chrome` and with `--resume`, and bad flag combinations are refused.
+  `launch.sh` without `--chrome` starts the child exactly as before, fresh
+  and resumed (no `--chrome`, no browser instructions, no `--watch`); with
+  it, the goal condition adds the Chrome goal sentence ("If the
+  conversation shows that Claude in Chrome is not reachable, the goal
+  cannot be met on this run."), after the done criterion and before the
+  resume goal sentence, and the appended prompt adds the browser, tabs,
+  login, and comments instructions after the log one (before the resume
+  one on a resumed run), `--chrome` comes after `--worktree <name>` or `--setting-sources user`, report.sh
   gets `--watch` with a file holding the child's own PID, the resume
   environment is unchanged, and the file is removed at the end; a
   misplaced or repeated `--chrome` is refused. The instructions say what

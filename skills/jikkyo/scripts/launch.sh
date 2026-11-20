@@ -97,9 +97,10 @@ DENY_RULES=(
 # Where the fixed text goes (issue #81). `/goal` refuses a condition longer
 # than 4000 characters, and the instructions below are longer than that
 # together, so the condition carries only the issue URL and the done
-# criteria: GOAL_SENTENCE on every run, and RESUME_GOAL_SENTENCE as well on a
-# resumed one. The /goal evaluator judges only the condition and the
-# conversation, so those two sentences are all it is given to judge by.
+# criteria: GOAL_SENTENCE on every run, CHROME_GOAL_SENTENCE as well with
+# --chrome, and RESUME_GOAL_SENTENCE as well on a resumed one. The /goal
+# evaluator judges only the condition and the conversation, so those
+# sentences are all it is given to judge by.
 # Everything else is a way of working and reaches the child through
 # `--append-system-prompt`: the lead-in, then the todo, tick, and log
 # instructions, then with --chrome the browser, tabs, login, and comments
@@ -112,6 +113,12 @@ GOAL_SENTENCE='The goal is met only when the work is done and every box you coul
 # which reaches the child whole: it keeps the re-verification evidence in what
 # the evaluator judges.
 RESUME_GOAL_SENTENCE='On this resumed run, the goal is met only if the conversation also shows that every item done in an earlier run was re-verified.'
+# With --chrome only, after GOAL_SENTENCE and before RESUME_GOAL_SENTENCE.
+# BROWSER_INSTRUCTION, in the appended prompt, has the child stop at once when
+# the browser is not reachable. The evaluator never sees that instruction, so
+# without this sentence it would judge the stop "not yet met" and tell the
+# child to go on; with it, the evaluator can judge the goal impossible.
+CHROME_GOAL_SENTENCE='If the conversation shows that Claude in Chrome is not reachable, the goal cannot be met on this run.'
 # The first paragraph of the appended prompt. The URL is only in the goal
 # condition, the child's first user turn, so this says what "this issue" in
 # the paragraphs below refers to, without repeating the URL.
@@ -248,6 +255,7 @@ prompt="/goal ${url} ${GOAL_SENTENCE}"
 para=$'\n\n'
 system="${LEAD_IN}${para}${TODO_INSTRUCTION}${para}${TICK_INSTRUCTION}${para}${LOG_INSTRUCTION}"
 if [ "$chrome" = true ]; then
+  prompt="${prompt} ${CHROME_GOAL_SENTENCE}"
   system="${system}${para}${BROWSER_INSTRUCTION}${para}${TABS_INSTRUCTION}${para}${LOGIN_INSTRUCTION}${para}${COMMENTS_INSTRUCTION}"
 fi
 child_args=()
@@ -361,7 +369,8 @@ echo "jikkyo: worktree branch ${branch}"
 
 # One child pipeline for both paths, so the flags and the deny list cannot
 # drift apart. The goal condition is the issue URL verbatim, then the done
-# criteria (GOAL_SENTENCE, and on resume RESUME_GOAL_SENTENCE); the rest of
+# criteria (GOAL_SENTENCE, with --chrome CHROME_GOAL_SENTENCE, and on resume
+# RESUME_GOAL_SENTENCE); the rest of
 # the fixed text goes in as one --append-system-prompt argument (see the
 # constants above). --disallowedTools takes the rest of the command line, so
 # it stays last.

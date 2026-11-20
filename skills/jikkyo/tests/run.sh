@@ -141,9 +141,12 @@ last_body() { nth_body "$(calls)"; }
 heading() { printf '%s\n' "$1" | sed -n '2p'; }
 marker_state() { printf '%s\n' "$1" | sed -n '1s/.*state=\([a-z]*\).*/\1/p'; }
 # child_arg <n>: the child's n-th argument exactly as it got it, newlines
-# included (from the stub's .nul record).
+# included (from the stub's .nul record). Nothing, and status 1, when
+# $CLAUDE_ARGS is missing: the tests delete it before each launch, so a launch
+# that never started the child cannot be read as the one before it.
 child_arg() {
   local i=0 a
+  [ -e "$CLAUDE_ARGS" ] || return 1
   while IFS= read -r -d '' a; do
     i=$(( i + 1 ))
     if [ "$i" = "$1" ]; then printf '%s' "$a"; return 0; fi
@@ -2639,6 +2642,10 @@ echo "SKILL.md"
   assert_has "SKILL.md: the goal condition is the URL and the done criterion (#81)" "claude -p '/goal <URL> <done criterion>' --append-system-prompt '<lead-in> <todo instruction> <tick instruction> <log instruction>'" "$sflat"
   assert_has "SKILL.md: says where each instruction goes (#81)" "**Where the instructions go.**" "$skill"
   assert_has "SKILL.md: ...and that the evaluator judges only the goal condition (#81)" "The \`/goal\` evaluator judges only the goal condition and the conversation" "$sflat"
+  assert_lacks "SKILL.md: no line says the evaluator judges only the goal condition, without the conversation (#81)" "evaluator judges only the goal condition, so" "$sflat"
+  assert_has "SKILL.md: the Chrome goal sentence is in the goal condition (#81)" "with Claude in Chrome, one more fixed sentence: \"If the conversation shows that Claude in Chrome is not reachable, the goal cannot be met on this run.\"" "$sflat"
+  assert_has "SKILL.md: states the bound the length tests check (#81)" "that stays under 600 characters" "$sflat"
+  assert_lacks "SKILL.md: no claim that the tick sentence alone is the condition (#81)" "that sentence alone is in the goal condition" "$sflat"
   assert_has "SKILL.md: the URL pattern has GitHub's caps (#81)" '[A-Za-z0-9][A-Za-z0-9-]{0,38}/([A-Za-z0-9._-]{1,100}|[A-Za-z0-9._-]{1,100}\.git)/issues/[1-9][0-9]{0,9}$' "$skill"
   assert_lacks "SKILL.md: no longer appends instructions to the goal condition (#81)" "appends a fixed instruction to the goal condition" "$skill"
   assert_has "SKILL.md: documents the progress log" "**The progress log.**" "$skill"
@@ -2912,9 +2919,10 @@ echo "launch.sh --chrome: the child command line (#76)"
   RESUME_I="$(instr RESUME_INSTRUCTION)"
   GOAL_I="$(instr GOAL_SENTENCE)"
   RGOAL_I="$(instr RESUME_GOAL_SENTENCE)"
+  CGOAL_I="$(instr CHROME_GOAL_SENTENCE)"
   LEAD_I="$(instr LEAD_IN)"
   P=$'\n\n'
-  for v in BROWSER_I TABS_I LOGIN_I COMMENTS_I GOAL_I RGOAL_I LEAD_I; do
+  for v in BROWSER_I TABS_I LOGIN_I COMMENTS_I GOAL_I RGOAL_I CGOAL_I LEAD_I; do
     if [ -n "${!v}" ]; then ok "launch.sh defines $v"; else bad "launch.sh defines $v"; fi
   done
   assert_has "the browser instruction makes the tab listing the first step" \
@@ -2925,6 +2933,8 @@ echo "launch.sh --chrome: the child command line (#76)"
   NOT_REACHABLE_R="$(bash -c 'eval "$(grep "^NOT_REACHABLE=" "$1")"; printf "%s" "$NOT_REACHABLE"' _ "$REPORT")"
   assert_eq "...ending with exactly the fixed message report.sh looks for" "end at once with exactly this final message: ${NOT_REACHABLE_R}" \
     "end at once with exactly this final message: ${BROWSER_I##*final message: }"
+  assert_eq "the Chrome goal sentence lets the evaluator end a run that cannot reach the browser (#81)" \
+    "If the conversation shows that Claude in Chrome is not reachable, the goal cannot be met on this run." "$CGOAL_I"
   assert_has "the tabs instruction keeps the child to its own tabs" \
     "work only in tabs you opened yourself, and never read, switch to, or act on any other tab, even one you can see" "$TABS_I"
   assert_has "the login instruction: never sign in" \
@@ -2965,8 +2975,8 @@ EOF2
   rm -f "$CLAUDE_ARGS" "$REPORT_ARGS" "$REPORT_ARGS.pid"
   (cd "$repo" && bash "$cw/launch.sh" --chrome "$SID" "$URL") >/dev/null 2>&1 < /dev/null
   on_args="$(cat "$CLAUDE_ARGS")"
-  assert_eq "Chrome on (fresh): the goal is the same as with Chrome off (#81)" \
-    "/goal $URL $GOAL_I" "$(child_arg 2)"
+  assert_eq "Chrome on (fresh): the goal adds the Chrome goal sentence after the done criterion (#81)" \
+    "/goal $URL $GOAL_I $CGOAL_I" "$(child_arg 2)"
   assert_eq "Chrome on (fresh): the appended prompt adds the browser, tabs, login, and comments instructions after the log one" \
     "$LEAD_I$P$TODO_I$P$TICK_I$P$LOG_I$P$BROWSER_I$P$TABS_I$P$LOGIN_I$P$COMMENTS_I" "$(child_arg 4)"
   norm() { sed -n '5,$p' | sed -e "s/^jikkyo-12-[0-9]\{8\}-[0-9]\{6\}$/<name>/"; }
@@ -2996,7 +3006,7 @@ EOF2
       assert_lacks "Chrome off (resumed): no --chrome anywhere" "--chrome" "$(cat "$CLAUDE_ARGS")"
       assert_eq "Chrome off (resumed): report.sh gets no --watch" "--session" "$(sed -n 1p "$REPORT_ARGS")"
     else
-      assert_eq "Chrome on (resumed): the goal is the same as with Chrome off (#81)" "/goal $URL $GOAL_I $RGOAL_I" "$(child_arg 2)"
+      assert_eq "Chrome on (resumed): the goal has the Chrome goal sentence before the re-verification one (#81)" "/goal $URL $GOAL_I $CGOAL_I $RGOAL_I" "$(child_arg 2)"
       assert_eq "Chrome on (resumed): the browser instructions come before the resume instruction" \
         "$LEAD_I$P$TODO_I$P$TICK_I$P$LOG_I$P$BROWSER_I$P$TABS_I$P$LOGIN_I$P$COMMENTS_I$P$RESUME_I" "$(child_arg 4)"
       assert_eq "Chrome on (resumed): --chrome alongside --setting-sources user" \
@@ -3024,6 +3034,11 @@ EOF2
 echo "launch.sh: the goal condition stays under 4000 characters (#81)"
 {
   cd "$CWD_REPO" || exit 1
+  # Uses the Claude in Chrome block's launch.sh copy and report.sh stub ($cw)
+  # and the resume tests' bare remote ($rs), so it stays after both.
+  # SKILL.md states a bound of 600 for the longest condition; `/goal` itself
+  # refuses one over 4000. Checking the stated bound keeps the docs honest.
+  COND_MAX=600
   # The longest URL the caps allow: a 39-character owner, a 100-character
   # repository name plus .git, and a 10-digit issue number.
   L_OWNER="o$(printf 'w%.0s' $(seq 38))"
@@ -3046,17 +3061,23 @@ echo "launch.sh: the goal condition stays under 4000 characters (#81)"
     rc=0; printf '' | bash "$REPORT" "https://github.com/$o_/$r_/issues/$n_" >/dev/null 2>&1 || rc=$?
     assert_eq "...and report.sh refuses it too (owner ${#o_}, repository ${#r_}, number ${#n_} digits)" "2" "$rc"
   done
+  # ...while the longest valid URL gets past report.sh's URL check.
+  new_log; rc=0; out="$(printf '' | bash "$REPORT" "$L_URL" 2>&1)" || rc=$?
+  case "$out" in *usage:*) usage_shown=yes ;; *) usage_shown=no ;; esac
+  if [ "$rc" != 2 ] && [ "$usage_shown" = no ]; then ok "report.sh accepts the longest valid URL"
+  else bad "report.sh accepts the longest valid URL (rc=$rc)"; fi
 
   # Fresh, Chrome off and on, in a checkout whose remote is that repository.
   lrepo="$TMP/long-repo"; git init -q "$lrepo"
   git -C "$lrepo" remote add origin "https://github.com/$L_OWNER/$L_REPO"
   for flag in "" --chrome; do
-    rm -f "$CLAUDE_ARGS" "$REPORT_ARGS" "$REPORT_ARGS.pid"
-    (cd "$lrepo" && bash "$cw/launch.sh" $flag "$SID" "$L_URL") >/dev/null 2>&1 < /dev/null
+    rm -f "$CLAUDE_ARGS" "$REPORT_ARGS" "$REPORT_ARGS.pid"; rc=0
+    (cd "$lrepo" && bash "$cw/launch.sh" $flag "$SID" "$L_URL") >/dev/null 2>&1 < /dev/null || rc=$?
     cond="$(child_arg 2)"; cond="${cond#/goal }"
     label="fresh, Chrome $([ -n "$flag" ] && echo on || echo off)"
-    if [ -e "$CLAUDE_ARGS" ] && [ "${#cond}" -lt 4000 ]; then ok "$label: the goal condition is ${#cond} characters, under 4000"
-    else bad "$label: the goal condition is under 4000 characters (got ${#cond})"; fi
+    if [ "$rc" = 0 ] && [ -e "$CLAUDE_ARGS" ] && [ "${cond#"$L_URL "}" != "$cond" ] && [ "${#cond}" -lt "$COND_MAX" ]; then
+      ok "$label: the goal condition names the URL and is ${#cond} characters, under $COND_MAX"
+    else bad "$label: the child starts with a goal condition that names the URL, under $COND_MAX characters (got ${#cond}, rc=$rc)"; fi
   done
 
   # Resumed, Chrome off and on: a bare remote reached through the long URL,
@@ -3083,8 +3104,9 @@ EOF
     out="$(cd "$lr/repo" && PATH="$lr/bin:$PATH" bash "$cw/launch.sh" ${flag[@]+"${flag[@]}"} --resume "$LBR" 4242 "$SID" "$L_URL" 2>&1 < /dev/null)" || rc=$?
     cond="$(child_arg 2)"; cond="${cond#/goal }"
     case "$cond" in *"On this resumed run"*) resumed=yes ;; *) resumed=no ;; esac
-    if [ "$resumed" = yes ] && [ "${#cond}" -lt 4000 ]; then ok "resumed, Chrome $mode: the goal condition is ${#cond} characters, under 4000"
-    else bad "resumed, Chrome $mode: the goal condition is under 4000 characters (got ${#cond}, rc=$rc)"; fi
+    if [ "$rc" = 0 ] && [ "$resumed" = yes ] && [ "${cond#"$L_URL "}" != "$cond" ] && [ "${#cond}" -lt "$COND_MAX" ]; then
+      ok "resumed, Chrome $mode: the goal condition names the URL and is ${#cond} characters, under $COND_MAX"
+    else bad "resumed, Chrome $mode: the child starts with a goal condition that names the URL, under $COND_MAX characters (got ${#cond}, rc=$rc)"; fi
     wpath="$(printf '%s\n' "$out" | sed -n 's/^jikkyo: worktree path //p')"
     [ -n "$wpath" ] && git_t -C "$lr/repo" worktree remove --force "$wpath" 2>/dev/null
   done
