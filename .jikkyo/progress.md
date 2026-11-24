@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/85
 branch: worktree-jikkyo-85-20261124-231136
 updated: 2026-11-24T23:50:00+09:00
-next: tick item 7 (matter-of-taste feasibility round)
+next: tick item 8 (fewer than two survivors)
 
 ## Todos
 
@@ -12,7 +12,7 @@ next: tick item 7 (matter-of-taste feasibility round)
 - [x] Item 4: ALTERNATIVE goes through the feasibility check (cf67ade)
 - [x] Item 5: no-winner display lists only confirmed options (cf67ade)
 - [x] Item 6: tally.sh infeasible state (c791afa)
-- [ ] Item 7: matter-of-taste questions get a feasibility-only round
+- [x] Item 7: matter-of-taste questions get a feasibility-only round (cf67ade)
 - [ ] Item 8: fewer than two survivors still asked
 - [ ] Item 9: verifier fails twice
 - [ ] Item 10: SKILL.md, voting.md, kabeuchi-voter.md describe the rule
@@ -30,6 +30,7 @@ next: tick item 7 (matter-of-taste feasibility round)
 - Item 4 (ALTERNATIVE checked): read voting.md Grouping and tallying (ALT mapped to X<n>, same check, no re-vote) and the voter/verifier prompts (ALT, <perspective> ALT)
 - Item 5 (no-winner shows only confirmed): read voting.md What the user sees, no-winner layout ("List only confirmed options here", example with a left out: line)
 - Item 6 (tally.sh infeasible): tests/run.sh tally cases pass (not judged, "chose B, not confirmed feasible", never wins); header, voting.md state table and its "run once, final state" rule updated; agreement test passes
+- Item 7 (taste questions checked): read voting.md Which questions get a vote, SKILL.md taste bullet, and gotchas.md voting FAQ (no longer says exempt)
 
 ## Dead ends and decisions
 
