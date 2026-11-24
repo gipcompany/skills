@@ -19,6 +19,7 @@ you can actually **write** it before spending the session.
 | `kabeuchi-voter` is available but its tools are broader than read-only (or unrestricted) | Abort and say so. A project's `.claude/agents/` overrides the user's, so a cloned repository can ship its own. |
 | `kabeuchi-voter` is read-only but its description lacks "Reads the per-question brief" | Abort; it is a copy from before the brief file. Tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again. Re-copy it after every update of this skill. |
 | `kabeuchi-voter` is read-only but its description lacks "ready to hand to /goal" | Abort; it is a copy from before the checker role that Phase 3's "ready for `/goal`" check uses. Tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again. |
+| `kabeuchi-voter` is read-only but its description lacks "Checks each option's feasibility" | Abort; it is a copy from before the feasibility check, whose body does not tell the voters to leave a verdict `UNKNOWN` rather than guess. Tell the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again. |
 | No scratchpad, so the briefs live in a `mktemp -d` directory | Not yet tried in a real session. If all three voters fail on a question, check first whether they could read the brief there (a permission prompt a background subagent cannot answer). |
 | The "ready for `/goal`" check in Phase 3 (`references/ready-for-goal.md`) | Not yet tried in a real session: the checker's reply format, the re-check after a gap is closed, and the "Known gaps" write-back have only been reviewed. If it misbehaves, suspect first a reply rejected as malformed (a checker that wraps `READY` or its `GAP:` lines in prose or a code fence fails twice and leaves the target not checked), and then a "Known gaps" section reported as a gap of its own (a `GAP:` line about the section itself rather than about an open point it lists, so even a session that closes every gap never gets `READY`). |
 
@@ -89,8 +90,11 @@ writable target there is nothing for it to add.
 **Voting makes every question slow. Can I turn it off?**
 No — a recommendation you see is meant to be one that was checked, and an
 off-switch would make that untrue without anyone noticing. Questions that are a
-matter of taste (a name, a tone) are already exempt and say so. If you only
-want a fast interview, use `/grilling` directly.
+matter of taste (a name, a tone) get no vote and say so, but they are not
+exempt from checking: their options still go through a feasibility-only round,
+because only the choice between feasible options is left to taste. An extra
+feasibility-only round for options not yet confirmed can add to the wait too.
+If you only want a fast interview, use `/grilling` directly.
 
 **Will kabeuchi commit or push my local file changes?**
 No. It performs no git operations on local targets — no `add`, `commit`, or

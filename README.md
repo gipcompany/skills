@@ -130,7 +130,8 @@ The recommendation under each question is the one place a grilling session can q
 - Three subagents vote **independently**, each from a fixed perspective — `spec` (what has been required and agreed), `code` (what the codebase actually does), and `docs` (what the library or service does today, via Context7 and the web). Each must cite evidence it actually looked at, or abstain.
 - A fourth subagent **verifies** that evidence. A vote whose evidence does not hold is invalid, however many voters agree with it.
 - An option needs **two valid votes** to become the recommendation. Otherwise the competing options are laid out side by side for you to choose from. A line under each recommendation shows how it was decided, for example `🗳️ 2/2 valid, unanimous (docs: abstained)`.
-- Questions with no right answer (a name, a tone) are not voted on, and say so.
+- **Every option shown has been checked for feasibility**, not only the recommended one. Besides its vote, each voter says for every option whether it can be done, citing evidence it looked at, and the verifier checks that evidence too. An option nobody could confirm gets one more feasibility-only round; one still unconfirmed after it, or found infeasible, is left out of the choices with a one-line reason (for example `left out: C — not confirmed (no voter found evidence that X supports Y)`), and can never be recommended. So you can pick any option you see and trust that it can be done.
+- Questions with no right answer (a name, a tone) are not voted on, and say so, but they are still checked: their options go through the same feasibility check, and only the choice between feasible options is left to taste.
 
 The counting is done by `scripts/tally.sh`, which is covered by the test suite.
 
@@ -144,7 +145,7 @@ Read it first; it is short. Copy it again whenever you update the skill: kabeuch
 
 At startup kabeuchi stops if `kabeuchi-voter` is missing, **or if the definition in effect has broader tools than that** — a project's `.claude/agents/` overrides yours, so a repository you cloned could otherwise ship a `kabeuchi-voter` of its own. It never falls back to unvoted recommendations.
 
-Voting costs four subagent runs per question and makes each question take longer to appear. That trade is deliberate: the point of the vote is that a recommendation you see has been checked. What the vote does not need is to wait on anything else: the voters share one brief file instead of three copies of the same prompt, and the previous answer is written back into the target while they work.
+Voting costs four subagent runs per question and makes each question take longer to appear; when some option could not be confirmed feasible, an extra feasibility-only round adds four more. That trade is deliberate: the point of the vote is that a recommendation you see, and every option next to it, has been checked. What the vote does not need is to wait on anything else: the voters share one brief file instead of three copies of the same prompt, and the previous answer is written back into the target while they work.
 
 ### Ready for `/goal` at the end
 

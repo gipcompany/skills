@@ -3,8 +3,15 @@
 # tally.sh — count a kabeuchi vote and build the 🗳️ line shown under ➡️.
 #
 # Usage:
-#   tally.sh [file]      # read the votes from <file>; with no file (or '-')
+#   tally.sh [--verifier-failed] [file]
+#                        # read the votes from <file>; with no file (or '-')
 #                        # read stdin
+#
+#   --verifier-failed    the verifier failed twice on this question's vote, so
+#                        no vote's evidence was checked. Nothing is recommended
+#                        and the 🗳️ line says so, even when every vote ended up
+#                        `infeasible` and none is `unverified`. valid and
+#                        invalid are rejected as malformed input with it.
 #
 # Grouping three free-text answers into "the same option" is a judgement call,
 # so kabeuchi does that itself and hands this script the result. Everything
@@ -26,10 +33,16 @@
 #                  abstain     the voter found no evidence from its perspective
 #                  failed      the voter failed twice (once plus one retry)
 #                  unverified  the verifier failed twice, so nothing was checked
+#                  infeasible  the vote's option was not confirmed feasible
+#                              (found infeasible, or not confirmed after the
+#                              extra feasibility-only round), whatever the
+#                              verifier said about the vote's own evidence
 #
 # Rules (the agreed spec — references/voting.md explains the why):
 #
-#   - abstain and failed count as neither valid nor invalid
+#   - abstain, failed, and infeasible count as neither valid nor invalid
+#   - an infeasible vote can never help its option win: an option nobody
+#     confirmed to be feasible must never be recommended
 #   - an option needs at least 2 valid votes to become the recommendation; that
 #     threshold does not drop when some voters abstain or fail
 #   - if any vote is unverified, nothing is recommended: votes whose evidence
@@ -44,8 +57,8 @@
 #   🗳️ ...                         the line to print directly under ➡️
 #
 # In the 🗳️ line, N/M reads "N votes for the recommendation out of M votes that
-# were judged" (valid + invalid). Abstained and failed votes are not judged, so
-# they are left out of M and named in the parentheses instead.
+# were judged" (valid + invalid). Abstained, failed, and infeasible votes are
+# not judged, so they are left out of M and named in the parentheses instead.
 #
 # Exit codes:
 #   0  tallied; both lines written to stdout
@@ -53,9 +66,11 @@
 #
 set -uo pipefail
 
-usage() { echo "usage: tally.sh [file]" >&2; exit 2; }
+usage() { echo "usage: tally.sh [--verifier-failed] [file]" >&2; exit 2; }
 die()   { echo "tally.sh: $*" >&2; exit 2; }
 
+verifier_failed=0
+if [ "${1:-}" = "--verifier-failed" ]; then verifier_failed=1; shift; fi
 [ "$#" -le 1 ] || usage
 src="${1:--}"
 case "$src" in -) ;; -*) usage ;; esac
@@ -81,7 +96,7 @@ while IFS= read -r line || [ -n "$line" ]; do
   fi
   case "$p" in *[[:cntrl:]]*) die "line $((n + 1)): control character in perspective" ;; esac
   case "$s" in
-    valid|invalid|unverified)
+    valid|invalid|unverified|infeasible)
       case "$o" in -|*[!A-Za-z0-9_-]*) die "line $((n + 1)): state $s needs an option id ([A-Za-z0-9_-]+)" ;; esac ;;
     abstain|failed)
       [ "$o" = "-" ] || die "line $((n + 1)): state $s takes option id '-'" ;;
@@ -102,6 +117,14 @@ case " ${state[*]} " in
     esac ;;
 esac
 
+# With --verifier-failed nothing was judged, so a valid or invalid state is a
+# caller bug too.
+if [ "$verifier_failed" -eq 1 ]; then
+  case " ${state[*]} " in *" valid "*|*" invalid "*)
+    die "--verifier-failed cannot be used with valid or invalid (nothing was judged)" ;;
+  esac
+fi
+
 # --- decide -----------------------------------------------------------------
 
 winner=-
@@ -116,7 +139,7 @@ for i in 0 1 2; do
   esac
 done
 
-if [ "$unverified" -eq 0 ]; then
+if [ "$unverified" -eq 0 ] && [ "$verifier_failed" -eq 0 ]; then
   for i in 0 1 2; do
     [ "${state[$i]}" = valid ] || continue
     c=0
@@ -139,6 +162,7 @@ note() {
     abstain)    printf '%s: abstained' "$p" ;;
     failed)     printf '%s: failed' "$p" ;;
     unverified) printf '%s: %s (unverified)' "$p" "$o" ;;
+    infeasible) printf '%s: chose %s, not confirmed feasible' "$p" "$o" ;;
   esac
 }
 
@@ -151,7 +175,7 @@ done
 
 if [ "$winner" != - ]; then
   if [ "$wins" -eq "$valid" ]; then head="${wins}/${judged} valid, unanimous"; else head="${wins}/${judged} valid, majority"; fi
-elif [ "$unverified" -eq 1 ]; then
+elif [ "$unverified" -eq 1 ] || [ "$verifier_failed" -eq 1 ]; then
   head="no recommendation, unverified because the verifier failed"
 elif [ "$valid" -eq 0 ]; then
   head="no recommendation, no valid votes"
