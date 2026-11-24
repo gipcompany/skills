@@ -1,6 +1,6 @@
 ---
 name: kabeuchi-voter
-description: Read-only voter, verifier, and checker for /kabeuchi. Casts one evidence-backed vote on a kabeuchi question from an assigned perspective, checks the evidence other votes cite, or checks whether a target is ready to hand to /goal. Reads the per-question brief. Invoked by /kabeuchi only; not for general use.
+description: Read-only voter, verifier, and checker for /kabeuchi. Casts one evidence-backed vote on a kabeuchi question from an assigned perspective, checks the evidence other votes cite, or checks whether a target is ready to hand to /goal. Reads the per-question brief. Checks each option's feasibility. Invoked by /kabeuchi only; not for general use.
 tools: Read, Grep, Glob, WebFetch, WebSearch, mcp__context7
 model: inherit
 ---

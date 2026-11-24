@@ -109,11 +109,14 @@ Exit status is non-zero if any assertion fails; the last line reports
   vote (its option was not confirmed feasible) leaves the `N/M` denominator,
   is named as `<perspective>: chose <option>, not confirmed feasible` apart
   from invalid and abstained votes (an alternative by its `X<n>`), never helps
-  its option win even when two agree, and may sit next to `unverified`; votes
-  can be read from a file. Malformed input — the wrong number of votes, an
+  its option win even when two agree, and may sit next to `unverified`;
+  `--verifier-failed` keeps the verifier's failure on the `🗳️` line when every
+  vote ended up `infeasible` (without it that reads "no valid votes"), also next
+  to `unverified` and `failed` votes; votes can be read from a file. Malformed input — the wrong number of votes, an
   unknown or misspelled state, a missing or extra field, an option ID on an
   abstention or none on a valid or `infeasible` vote, an option ID outside
-  `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, a control character
+  `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, `--verifier-failed`
+  with a valid or invalid vote, a control character
   in a perspective, an unknown option, a missing file — exits 2 with
   **nothing on stdout**, so half a tally can never be mistaken for one.
 - **`grilled-line.sh`** — with no existing line, one blank line and the line

@@ -3,8 +3,15 @@
 # tally.sh — count a kabeuchi vote and build the 🗳️ line shown under ➡️.
 #
 # Usage:
-#   tally.sh [file]      # read the votes from <file>; with no file (or '-')
+#   tally.sh [--verifier-failed] [file]
+#                        # read the votes from <file>; with no file (or '-')
 #                        # read stdin
+#
+#   --verifier-failed    the verifier failed twice on this question's vote, so
+#                        no vote's evidence was checked. Nothing is recommended
+#                        and the 🗳️ line says so, even when every vote ended up
+#                        `infeasible` and none is `unverified`. valid and
+#                        invalid are rejected as malformed input with it.
 #
 # Grouping three free-text answers into "the same option" is a judgement call,
 # so kabeuchi does that itself and hands this script the result. Everything
@@ -59,9 +66,11 @@
 #
 set -uo pipefail
 
-usage() { echo "usage: tally.sh [file]" >&2; exit 2; }
+usage() { echo "usage: tally.sh [--verifier-failed] [file]" >&2; exit 2; }
 die()   { echo "tally.sh: $*" >&2; exit 2; }
 
+verifier_failed=0
+if [ "${1:-}" = "--verifier-failed" ]; then verifier_failed=1; shift; fi
 [ "$#" -le 1 ] || usage
 src="${1:--}"
 case "$src" in -) ;; -*) usage ;; esac
@@ -108,6 +117,14 @@ case " ${state[*]} " in
     esac ;;
 esac
 
+# With --verifier-failed nothing was judged, so a valid or invalid state is a
+# caller bug too.
+if [ "$verifier_failed" -eq 1 ]; then
+  case " ${state[*]} " in *" valid "*|*" invalid "*)
+    die "--verifier-failed cannot be used with valid or invalid (nothing was judged)" ;;
+  esac
+fi
+
 # --- decide -----------------------------------------------------------------
 
 winner=-
@@ -122,7 +139,7 @@ for i in 0 1 2; do
   esac
 done
 
-if [ "$unverified" -eq 0 ]; then
+if [ "$unverified" -eq 0 ] && [ "$verifier_failed" -eq 0 ]; then
   for i in 0 1 2; do
     [ "${state[$i]}" = valid ] || continue
     c=0
@@ -158,7 +175,7 @@ done
 
 if [ "$winner" != - ]; then
   if [ "$wins" -eq "$valid" ]; then head="${wins}/${judged} valid, unanimous"; else head="${wins}/${judged} valid, majority"; fi
-elif [ "$unverified" -eq 1 ]; then
+elif [ "$unverified" -eq 1 ] || [ "$verifier_failed" -eq 1 ]; then
   head="no recommendation, unverified because the verifier failed"
 elif [ "$valid" -eq 0 ]; then
   head="no recommendation, no valid votes"

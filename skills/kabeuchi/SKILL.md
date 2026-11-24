@@ -199,12 +199,15 @@ did not exist when the session started. If it is present but its tool list is
 broader — or absent, which grants every tool — **stop and say so**: a project's
 `.claude/agents/` overrides the one in `~/.claude/agents/`, so a repository you
 cloned can ship a `kabeuchi-voter` of its own. If it is present and read-only
-but its description lacks either the words **"Reads the per-question brief"**
-or the words **"ready to hand to /goal"**, it is an older copy: **stop and tell
-the user to copy `agents/kabeuchi-voter.md` into `~/.claude/agents/` again**.
-A copy without the first phrase predates the brief file and treats every file
-it reads as data, the brief's question included; a copy without the second
-predates the checker role that Phase 3's "ready for `/goal`" check runs.
+but its description lacks any of the words **"Reads the per-question
+brief"**, **"ready to hand to /goal"**, or **"Checks each option's
+feasibility"**, it is an older copy: **stop and tell the user to copy
+`agents/kabeuchi-voter.md` into `~/.claude/agents/` again**. A copy without
+the first phrase predates the brief file and treats every file it reads as
+data, the brief's question included; a copy without the second predates the
+checker role that Phase 3's "ready for `/goal`" check runs; a copy without the
+third predates the feasibility check, and its body does not tell the voters to
+leave a verdict `UNKNOWN` rather than guess.
 Re-copy it whenever you update this skill. Do not fall back to voting with
 another agent type, and do not fall back to unvoted recommendations: either
 would quietly trade the guarantee for convenience.
@@ -367,8 +370,9 @@ This rule wins over `/grilling` too.
   each option from the verdicts that hold: **found infeasible** if any
   `INFEASIBLE` one holds, else **confirmed** if any `FEASIBLE` one holds, else
   **not confirmed**. Options still not confirmed get **one** extra
-  feasibility-only round (a new brief `kabeuchi-brief-Q<n>-r2.md`, the three
-  voters, then the verifier), never more. Every option that does not end up
+  feasibility-only round (a new brief under the question's next unused suffix,
+  such as `kabeuchi-brief-Q<n>-r2.md`, the three voters, then the verifier),
+  never more. Every option that does not end up
   confirmed is left out of the list with a `left out:` line giving the reason,
   and its votes go to `tally.sh` as `infeasible`, so it can never be
   recommended.

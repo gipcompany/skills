@@ -85,8 +85,9 @@ If the user asks for a vote on a question you did not vote on, run one.
    tallying*), then classify every option — drafted or alternative — as
    confirmed, found infeasible, or not confirmed (*Feasibility*).
 7. **Investigate further, once.** If any option is still **not confirmed**,
-   run one **feasibility-only round** on just those options: write a new brief,
-   `kabeuchi-brief-Q<n>-r2.md`, whose `## Options` lists only them; launch the
+   run one **feasibility-only round** on just those options: write a new brief
+   under the next suffix not yet used for this question (`kabeuchi-brief-Q<n>-r2.md`,
+   or `-r3` after a re-vote; *The brief*), whose `## Options` lists only them; launch the
    three voters in parallel and in the background with the feasibility-only
    voter prompt; then the verifier with the feasibility-only verifier prompt.
    Classify those options again from the verdicts that hold in both rounds.
@@ -554,11 +555,19 @@ in the required format. **Retry it once.**
   goes through the one extra feasibility-only round, as any option not
   confirmed does. There is no whole-question re-vote. After that round, record
   each non-abstain, non-failed vote as `unverified` if its option was
-  confirmed, or `infeasible` if not; the question goes out with no single
-  recommendation. If that round confirms nothing either, the question goes out
-  **with no options**: say that feasibility could not be checked, add the
-  `left out:` lines, and let the user decide whether to re-ask the question or
-  drop it.
+  confirmed, or `infeasible` if not, and run `tally.sh --verifier-failed`, so
+  the `🗳️` line says the verifier failed even when every vote ended up
+  `infeasible`; the question goes out with no single recommendation. If that
+  round confirms nothing either, the question goes out **with no options**:
+  say that feasibility could not be checked, add the `left out:` lines, and let
+  the user decide whether to re-ask the question or drop it:
+
+  ```
+  ➡️ No option could be confirmed feasible — the verifier failed, so feasibility could not be checked.
+  🗳️ no recommendation, unverified because the verifier failed (spec: chose A, not confirmed feasible; code: chose B, not confirmed feasible; docs: abstained)
+  left out: A — not confirmed (the verifier failed twice)
+  left out: B — not confirmed (no verdict held in the extra round)
+  ```
 - In the extra feasibility-only round itself, a voter or the verifier is
   retried once too. A voter that fails again adds no verdicts; a verifier that
   fails again confirms nothing in that round. There is no second extra round.

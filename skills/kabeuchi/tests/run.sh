@@ -783,6 +783,25 @@ echo "tally.sh"
   assert_eq "infeasible next to unverified recommends nothing" \
     "$(printf 'recommend\t-\n🗳️ no recommendation, unverified because the verifier failed (spec: A (unverified); code: A (unverified); docs: chose B, not confirmed feasible)')" "$out"
 
+  # When the verifier failed twice and the extra round confirmed nothing, every
+  # vote is infeasible and none unverified; --verifier-failed keeps the failure
+  # on the 🗳️ line instead of a plain "no valid votes".
+  tally_vf() { printf '%s\n' "$@" | bash "$TALLY" --verifier-failed; }
+  out="$(tally_vf "spec${T}A${T}infeasible" "code${T}B${T}infeasible" "docs${T}-${T}abstain")"
+  assert_eq "--verifier-failed names the failure when every vote is infeasible" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, unverified because the verifier failed (spec: chose A, not confirmed feasible; code: chose B, not confirmed feasible; docs: abstained)')" "$out"
+  out="$(tally "spec${T}A${T}infeasible" "code${T}B${T}infeasible" "docs${T}-${T}abstain")"
+  assert_eq "without --verifier-failed every vote infeasible reads no valid votes" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, no valid votes (spec: chose A, not confirmed feasible; code: chose B, not confirmed feasible; docs: abstained)')" "$out"
+  out="$(tally_vf "spec${T}A${T}unverified" "code${T}B${T}infeasible" "docs${T}-${T}failed")"
+  assert_eq "--verifier-failed with unverified, infeasible and failed recommends nothing" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, unverified because the verifier failed (spec: A (unverified); code: chose B, not confirmed feasible; docs: failed)')" "$out"
+  rc=0; o="$(printf 'spec\tA\tvalid\ncode\tA\tvalid\ndocs\t-\tabstain\n' | bash "$TALLY" --verifier-failed 2>/dev/null)" || rc=$?
+  assert_eq "--verifier-failed with valid votes exits 2" "2" "$rc"
+  assert_eq "--verifier-failed with valid votes writes nothing to stdout" "" "$o"
+  rc=0; o="$(printf 'spec\tA\tinvalid\ncode\tA\tinfeasible\ndocs\t-\tabstain\n' | bash "$TALLY" --verifier-failed 2>/dev/null)" || rc=$?
+  assert_eq "--verifier-failed with an invalid vote exits 2" "2" "$rc"
+
   d="$(mktemp -d)"
   printf 'spec\tA\tvalid\ncode\tA\tvalid\ndocs\tA\tvalid\n' > "$d/votes.tsv"
   out="$(bash "$TALLY" "$d/votes.tsv")"
