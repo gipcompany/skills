@@ -758,6 +758,31 @@ echo "tally.sh"
   assert_eq "a verifier failure recommends nothing, even when all agree" \
     "$(printf 'recommend\t-\n🗳️ no recommendation, unverified because the verifier failed (spec: A (unverified); code: A (unverified); docs: A (unverified))')" "$out"
 
+  # infeasible: the vote's option was not confirmed feasible. It leaves the
+  # denominator like an abstention, is named apart from invalid, and never
+  # helps its option win, even when its evidence held.
+  out="$(tally "spec${T}A${T}valid" "code${T}B${T}infeasible" "docs${T}A${T}valid")"
+  assert_eq "an infeasible vote leaves the denominator and is named" \
+    "$(printf 'recommend\tA\n🗳️ 2/2 valid, unanimous (code: chose B, not confirmed feasible)')" "$out"
+
+  out="$(tally "spec${T}B${T}infeasible" "code${T}B${T}infeasible" "docs${T}A${T}valid")"
+  assert_eq "agreeing infeasible votes never recommend their option" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, only 1 valid vote (spec: chose B, not confirmed feasible; code: chose B, not confirmed feasible; docs: A)')" "$out"
+
+  out="$(tally "spec${T}A${T}infeasible" "code${T}-${T}abstain" "docs${T}B${T}invalid")"
+  assert_eq "infeasible, abstain, and invalid are told apart" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, no valid votes (spec: chose A, not confirmed feasible; code: abstained; docs: invalid, evidence did not hold)')" "$out"
+
+  out="$(tally "spec${T}A${T}valid" "code${T}A${T}valid" "docs${T}X1${T}infeasible")"
+  assert_eq "an infeasible alternative is named by its X id" \
+    "$(printf 'recommend\tA\n🗳️ 2/2 valid, unanimous (docs: chose X1, not confirmed feasible)')" "$out"
+
+  # After a verifier failure the extra round can confirm some options and not
+  # others, so infeasible may sit next to unverified; still no recommendation.
+  out="$(tally "spec${T}A${T}unverified" "code${T}A${T}unverified" "docs${T}B${T}infeasible")"
+  assert_eq "infeasible next to unverified recommends nothing" \
+    "$(printf 'recommend\t-\n🗳️ no recommendation, unverified because the verifier failed (spec: A (unverified); code: A (unverified); docs: chose B, not confirmed feasible)')" "$out"
+
   d="$(mktemp -d)"
   printf 'spec\tA\tvalid\ncode\tA\tvalid\ndocs\tA\tvalid\n' > "$d/votes.tsv"
   out="$(bash "$TALLY" "$d/votes.tsv")"
@@ -782,6 +807,10 @@ echo "tally.sh"
   check_rejects "valid without an option id exits 2" "spec${T}-${T}valid" "code${T}A${T}valid" "docs${T}A${T}valid"
   check_rejects "an option id outside [A-Za-z0-9_-] exits 2" "spec${T}A;rm${T}valid" "code${T}A${T}valid" "docs${T}A${T}valid"
   check_rejects "unverified mixed with valid exits 2" "spec${T}A${T}unverified" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "infeasible without an option id exits 2" "spec${T}-${T}infeasible" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "infeasible with an option id outside [A-Za-z0-9_-] exits 2" "spec${T}B C${T}infeasible" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "a misspelled infeasible state exits 2" "spec${T}B${T}unfeasible" "code${T}A${T}valid" "docs${T}A${T}valid"
+  check_rejects "infeasible with an extra field exits 2" "spec${T}B${T}infeasible${T}x" "code${T}A${T}valid" "docs${T}A${T}valid"
   check_rejects "a control character in the perspective exits 2" $'sp\033ec'"${T}A${T}valid" "code${T}A${T}valid" "docs${T}A${T}valid"
 
   rc=0; bash "$TALLY" --lang </dev/null >/dev/null 2>&1 || rc=$?
@@ -1036,6 +1065,89 @@ echo "agents/kabeuchi-voter.md"
   assert_eq "a description lacking a phrase fails the check" "1" "$rc"
   rc=0; desc_has "$d/voter.md" "Reads the per-question brief" || rc=$?
   assert_eq "a description containing a phrase passes the check" "0" "$rc"
+  rm -rf "$d"
+}
+
+echo "feasibility line formats (voting.md, kabeuchi-voter.md, SKILL.md)"
+{
+  # The voters write FEASIBILITY: lines and the verifier answers them with
+  # per-verdict HOLDS | FAILS lines. The prompts in references/voting.md are
+  # what the subagents are given, while SKILL.md and the agent definition
+  # restate the formats; if one of them drifts, the main session reads the
+  # replies by a format the subagents were never asked for.
+  SKILL_MD="${HERE}/../SKILL.md"
+  VOTING="${HERE}/../references/voting.md"
+  VOTER="${HERE}/../agents/kabeuchi-voter.md"
+
+  # feas_lines <file>: every feasibility format line in the file, leading
+  # spaces stripped, one per line, sorted and de-duplicated.
+  feas_lines() {
+    sed 's/^ *//' "$1" |
+      grep -E '^<option-id>: FEASIBLE |^<perspective> <option-id>: HOLDS ' |
+      sort -u
+  }
+  want="$(printf '%s\n' \
+    '<option-id>: FEASIBLE | INFEASIBLE | UNKNOWN — <path:line, URL, or Context7 query> — <short quote>' \
+    '<perspective> <option-id>: HOLDS | FAILS — <one-line reason>' | sort -u)"
+
+  for f in "$VOTING" "$VOTER" "$SKILL_MD"; do
+    assert_eq "$(basename "$f") states both feasibility line formats, and no other" \
+      "$want" "$(feas_lines "$f")"
+  done
+
+  # The check fails when a file drifts: a renamed verdict, or a missing line.
+  d="$(mktemp -d)"
+  printf '<option-id>: FEASIBLE | NOT_FEASIBLE | UNKNOWN — <path:line, URL, or Context7 query> — <short quote>\n<perspective> <option-id>: HOLDS | FAILS — <one-line reason>\n' >"$d/a.md"
+  if [ "$(feas_lines "$d/a.md")" != "$want" ]; then ok "a renamed verdict fails the format check"
+  else bad "a renamed verdict passed the format check"; fi
+  printf '  <option-id>: FEASIBLE | INFEASIBLE | UNKNOWN — <path:line, URL, or Context7 query> — <short quote>\n' >"$d/b.md"
+  if [ "$(feas_lines "$d/b.md")" != "$want" ]; then ok "a file missing the HOLDS | FAILS line fails the format check"
+  else bad "a file missing the HOLDS | FAILS line passed the format check"; fi
+  rm -rf "$d"
+}
+
+echo "tally.sh states (tally.sh header, voting.md)"
+# The backticks below are literal markdown, never command substitution.
+# shellcheck disable=SC2016
+{
+  # The states tally.sh accepts are listed in its header and in the state
+  # table in references/voting.md, which is what the main session follows when
+  # it gives each vote its state. The two lists must name the same states.
+  VOTING="${HERE}/../references/voting.md"
+
+  # header_states <script>: the state names in the header's state list (the
+  # lines indented under "state  what became of the vote:"), sorted.
+  header_states() {
+    awk '/^#   state +what became of the vote:/ { on = 1; next }
+         on && /^#$/ { exit }
+         on && /^#                  [a-z]+ / { print $2 }' "$1" | sort
+  }
+  # table_states <voting.md>: the first-column states of the table under
+  # "## Grouping and tallying", sorted.
+  table_states() {
+    awk '/^## Grouping and tallying/ { on = 1; next } /^## / { on = 0 } on' "$1" |
+      grep -oE '^\| `[a-z]+` \|' | sed 's/^| `//; s/` |$//' | sort
+  }
+  # case_states <script>: the states the input loop's case statement accepts.
+  case_states() {
+    awk '/^  case "\$s" in/ { on = 1; next } on && /^  esac/ { exit }
+         on && /^    [a-z|]+\)/ { sub(/\).*/, ""); gsub(/ /, ""); print }' "$1" |
+      tr '|' '\n' | sort
+  }
+
+  hs="$(header_states "$TALLY")"
+  if printf '%s\n' "$hs" | grep -qx infeasible; then ok "tally.sh's header lists the infeasible state"
+  else bad "tally.sh's header does not list the infeasible state"; fi
+  assert_eq "tally.sh's header and voting.md's state table name the same states" \
+    "$hs" "$(table_states "$VOTING")"
+  assert_eq "tally.sh's header and its input check accept the same states" \
+    "$hs" "$(case_states "$TALLY")"
+
+  # The check fails when the table drifts.
+  d="$(mktemp -d)"
+  printf '## Grouping and tallying\n\n| State | When |\n|---|---|\n| `valid` | x |\n| `invalid` | x |\n\n## What the user sees\n\n| `infeasible` | not in the section |\n' >"$d/voting.md"
+  if [ "$(table_states "$d/voting.md")" != "$hs" ]; then ok "a state table missing states fails the check"
+  else bad "a state table missing states passed the check"; fi
   rm -rf "$d"
 }
 

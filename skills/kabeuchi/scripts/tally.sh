@@ -26,10 +26,16 @@
 #                  abstain     the voter found no evidence from its perspective
 #                  failed      the voter failed twice (once plus one retry)
 #                  unverified  the verifier failed twice, so nothing was checked
+#                  infeasible  the vote's option was not confirmed feasible
+#                              (found infeasible, or not confirmed after the
+#                              extra feasibility-only round), whatever the
+#                              verifier said about the vote's own evidence
 #
 # Rules (the agreed spec — references/voting.md explains the why):
 #
-#   - abstain and failed count as neither valid nor invalid
+#   - abstain, failed, and infeasible count as neither valid nor invalid
+#   - an infeasible vote can never help its option win: an option nobody
+#     confirmed to be feasible must never be recommended
 #   - an option needs at least 2 valid votes to become the recommendation; that
 #     threshold does not drop when some voters abstain or fail
 #   - if any vote is unverified, nothing is recommended: votes whose evidence
@@ -44,8 +50,8 @@
 #   🗳️ ...                         the line to print directly under ➡️
 #
 # In the 🗳️ line, N/M reads "N votes for the recommendation out of M votes that
-# were judged" (valid + invalid). Abstained and failed votes are not judged, so
-# they are left out of M and named in the parentheses instead.
+# were judged" (valid + invalid). Abstained, failed, and infeasible votes are
+# not judged, so they are left out of M and named in the parentheses instead.
 #
 # Exit codes:
 #   0  tallied; both lines written to stdout
@@ -81,7 +87,7 @@ while IFS= read -r line || [ -n "$line" ]; do
   fi
   case "$p" in *[[:cntrl:]]*) die "line $((n + 1)): control character in perspective" ;; esac
   case "$s" in
-    valid|invalid|unverified)
+    valid|invalid|unverified|infeasible)
       case "$o" in -|*[!A-Za-z0-9_-]*) die "line $((n + 1)): state $s needs an option id ([A-Za-z0-9_-]+)" ;; esac ;;
     abstain|failed)
       [ "$o" = "-" ] || die "line $((n + 1)): state $s takes option id '-'" ;;
@@ -139,6 +145,7 @@ note() {
     abstain)    printf '%s: abstained' "$p" ;;
     failed)     printf '%s: failed' "$p" ;;
     unverified) printf '%s: %s (unverified)' "$p" "$o" ;;
+    infeasible) printf '%s: chose %s, not confirmed feasible' "$p" "$o" ;;
   esac
 }
 

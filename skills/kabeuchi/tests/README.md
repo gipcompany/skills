@@ -105,12 +105,17 @@ Exit status is non-zero if any assertion fails; the last line reports
   and all three are named differently; a 2-of-3 majority names the dissent; an
   option needs **2 valid votes** to win, so a three-way split, a lone valid vote,
   two agreeing *invalid* votes, and no valid votes all recommend nothing; any
-  `unverified` vote recommends nothing even when all agree; votes can be read
-  from a file. Malformed input — the wrong number of votes, an unknown state, a
-  missing or extra field, an option ID on an abstention or none on a valid vote,
-  an option ID outside `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, a
-  control character in a perspective, an unknown option, a missing file — exits
-  2 with **nothing on stdout**, so half a tally can never be mistaken for one.
+  `unverified` vote recommends nothing even when all agree; an `infeasible`
+  vote (its option was not confirmed feasible) leaves the `N/M` denominator,
+  is named as `<perspective>: chose <option>, not confirmed feasible` apart
+  from invalid and abstained votes (an alternative by its `X<n>`), never helps
+  its option win even when two agree, and may sit next to `unverified`; votes
+  can be read from a file. Malformed input — the wrong number of votes, an
+  unknown or misspelled state, a missing or extra field, an option ID on an
+  abstention or none on a valid or `infeasible` vote, an option ID outside
+  `[A-Za-z0-9_-]`, `unverified` mixed with a judged vote, a control character
+  in a perspective, an unknown option, a missing file — exits 2 with
+  **nothing on stdout**, so half a tally can never be mistaken for one.
 - **`grilled-line.sh`** — with no existing line, one blank line and the line
   are appended (an empty body becomes the line alone); a line at the end is
   replaced; one moved up the body is removed with its blank line (or, at the
@@ -148,6 +153,20 @@ Exit status is non-zero if any assertion fails; the last line reports
   sets must be equal, so a phrase added to only one of them fails. The check is
   shown to fail on a description without a phrase — even when the phrase
   appears in the body below the frontmatter.
+- **feasibility line formats** — the voters' `FEASIBILITY:` lines and the
+  verifier's per-verdict `HOLDS | FAILS` lines are given to the subagents by
+  the prompts in `references/voting.md` and restated in
+  `agents/kabeuchi-voter.md` and `SKILL.md`. Each of the three files must state
+  exactly the two format lines, `<option-id>: FEASIBLE | INFEASIBLE | UNKNOWN —
+  …` and `<perspective> <option-id>: HOLDS | FAILS — …`, and no variant of
+  them. The test shows that it fails on a renamed verdict and on a missing
+  line.
+- **`tally.sh` states** — the states listed in `tally.sh`'s header, the states
+  its input check accepts, and the first column of the state table under
+  *Grouping and tallying* in `references/voting.md` must be the same set, and
+  it must include `infeasible`. The test shows that it fails on a table that
+  is missing states, including one whose missing row appears only outside that
+  section.
 - **done criteria marker wording** — Phase 2 writes done criteria as
   task-list items and the "ready for `/goal`" checker judges them, so the two
   must agree on the marker, or the checker reports every session's own done
