@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/85
 branch: worktree-jikkyo-85-20261124-231136
 updated: 2026-11-24T23:50:00+09:00
-next: tick item 10 (SKILL.md, voting.md, kabeuchi-voter.md)
+next: tick item 11 (README kabeuchi section)
 
 ## Todos
 
@@ -15,7 +15,7 @@ next: tick item 10 (SKILL.md, voting.md, kabeuchi-voter.md)
 - [x] Item 7: matter-of-taste questions get a feasibility-only round (cf67ade)
 - [x] Item 8: fewer than two survivors still asked (cf67ade)
 - [x] Item 9: verifier fails twice (cf67ade)
-- [ ] Item 10: SKILL.md, voting.md, kabeuchi-voter.md describe the rule
+- [x] Item 10: SKILL.md, voting.md, kabeuchi-voter.md describe the rule (cf67ade)
 - [ ] Item 11: README kabeuchi section
 - [ ] Item 12: tests for tally.sh infeasible
 - [ ] Item 13: agreement checks and tests/README.md
@@ -33,6 +33,7 @@ next: tick item 10 (SKILL.md, voting.md, kabeuchi-voter.md)
 - Item 7 (taste questions checked): read voting.md Which questions get a vote, SKILL.md taste bullet, and gotchas.md voting FAQ (no longer says exempt)
 - Item 8 (fewer than two survive): read voting.md What the user sees, "Fewer than two options survive" paragraph and its no-option example
 - Item 9 (verifier fails twice): read voting.md Failures (nothing confirmed, all options to the extra round, no re-vote, no-options question if it confirms nothing)
+- Item 10 (three files describe the rule): read SKILL.md Phase 2 bullets, voting.md Feasibility section, kabeuchi-voter.md roles and rule 4; diff shows the voter's tools: line unchanged
 
 ## Dead ends and decisions
 
