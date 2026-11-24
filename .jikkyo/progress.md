@@ -1,14 +1,14 @@
 issue: https://github.com/gipcompany/skills/issues/85
 branch: worktree-jikkyo-85-20261124-231136
 updated: 2026-11-24T23:50:00+09:00
-next: tick item 3 (left-out lines)
+next: tick item 4 (ALTERNATIVE feasibility)
 
 ## Todos
 
 - [x] Start the progress log (bd9f770)
 - [x] Item 1: feasibility check before the question (cf67ade)
 - [x] Item 2: one feasibility-only round for unconfirmed options (cf67ade)
-- [ ] Item 3: left-out lines under the question
+- [x] Item 3: left-out lines under the question (cf67ade)
 - [ ] Item 4: ALTERNATIVE goes through the feasibility check
 - [ ] Item 5: no-winner display lists only confirmed options
 - [ ] Item 6: tally.sh infeasible state
@@ -26,6 +26,7 @@ next: tick item 3 (left-out lines)
 
 - Item 1 (feasibility checked before the question): read voting.md voter and verifier prompts (FEASIBILITY block, per-verdict HOLDS | FAILS lines), flow steps 5-6, the Feasibility section, and SKILL.md's classify rule
 - Item 2 (one extra feasibility-only round): read voting.md flow step 7 (kabeuchi-brief-Q<n>-r2.md, three voters then verifier, at most once) and Failures (one retry, at most one extra round)
+- Item 3 (left-out lines): read voting.md What the user sees, which shows the "left out: <id> — found infeasible | not confirmed (<reason>)" format and example
 
 ## Dead ends and decisions
 
