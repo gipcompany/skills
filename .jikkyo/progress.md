@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/85
 branch: worktree-jikkyo-85-20261124-231136
 updated: 2026-11-24T23:50:00+09:00
-next: tick item 9 (verifier fails twice)
+next: tick item 10 (SKILL.md, voting.md, kabeuchi-voter.md)
 
 ## Todos
 
@@ -14,7 +14,7 @@ next: tick item 9 (verifier fails twice)
 - [x] Item 6: tally.sh infeasible state (c791afa)
 - [x] Item 7: matter-of-taste questions get a feasibility-only round (cf67ade)
 - [x] Item 8: fewer than two survivors still asked (cf67ade)
-- [ ] Item 9: verifier fails twice
+- [x] Item 9: verifier fails twice (cf67ade)
 - [ ] Item 10: SKILL.md, voting.md, kabeuchi-voter.md describe the rule
 - [ ] Item 11: README kabeuchi section
 - [ ] Item 12: tests for tally.sh infeasible
@@ -32,6 +32,7 @@ next: tick item 9 (verifier fails twice)
 - Item 6 (tally.sh infeasible): tests/run.sh tally cases pass (not judged, "chose B, not confirmed feasible", never wins); header, voting.md state table and its "run once, final state" rule updated; agreement test passes
 - Item 7 (taste questions checked): read voting.md Which questions get a vote, SKILL.md taste bullet, and gotchas.md voting FAQ (no longer says exempt)
 - Item 8 (fewer than two survive): read voting.md What the user sees, "Fewer than two options survive" paragraph and its no-option example
+- Item 9 (verifier fails twice): read voting.md Failures (nothing confirmed, all options to the extra round, no re-vote, no-options question if it confirms nothing)
 
 ## Dead ends and decisions
 
