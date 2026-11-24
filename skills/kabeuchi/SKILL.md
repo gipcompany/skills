@@ -377,6 +377,13 @@ This rule wins over `/grilling` too.
   confirmed is left out of the list with a `left out:` line giving the reason,
   and its votes go to `tally.sh` as `infeasible`, so it can never be
   recommended.
+- **Never show more than three options.** Confirmed voter alternatives are
+  added to the options, so a question can come out of the vote with more than
+  three. Then, after `tally.sh`, reword it before it is shown: drop every
+  option with no valid vote, each with one `dropped: <option-id> — no valid
+  vote (<reason>)` line under the question, and fold what is left into one
+  question about the detail it differs in. Options keep their IDs and are
+  never merged, so the rewording does not change which option a vote supports.
 - **Launch the votes first, then write back.** Once the user answers, draft the
   next question and start its vote — in the background — *before* writing the
   previous answer back into the target, and do the write-back while the votes
@@ -402,7 +409,8 @@ This rule wins over `/grilling` too.
   the evidence they cite yourself; the verifier does.
 
 The brief, the prompts, the output formats, the grouping step, the feasibility
-classification, the display rules (including the `left out:` lines), and the
+classification, the display rules (including the `left out:` and `dropped:`
+lines and the three-option limit), and the
 handling of abstentions and failures live in
 **`references/voting.md`**. Read it before your first question.
 

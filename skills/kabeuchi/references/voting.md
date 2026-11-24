@@ -99,12 +99,18 @@ If the user asks for a vote on a question you did not vote on, run one.
    an option found infeasible is not re-checked.
 8. **Tally.** Give each vote its final state (*Grouping and tallying*) and run
    `scripts/tally.sh` once. A matter-of-taste question skips this step.
-9. **Present** the question with the outcome (see *What the user sees*):
-   only confirmed options as choices, one `left out:` line for each option
-   that is not. The write-back diff is already on screen from step 4; do not
-   hold it back to show here.
+9. **Narrow to three.** If more than three options are confirmed — voter
+   alternatives can push a question past three — reword the question so it
+   shows at most three: drop every confirmed option with no valid vote, then
+   fold what is left into one question about the detail it differs in
+   (*Grouping and tallying*). Otherwise skip this step.
+10. **Present** the question with the outcome (see *What the user sees*):
+    only confirmed options as choices, one `left out:` line for each option
+    that is not, and one `dropped:` line for each option step 9 dropped. The
+    write-back diff is already on screen from step 4; do not hold it back to
+    show here.
 
-Do not show the question until step 9. The user should never see a
+Do not show the question until step 10. The user should never see a
 recommendation that has not been voted on, or an option that has not been
 checked for feasibility, and an unvoted draft on screen invites an answer
 before the vote is in. Do not start voting on the *next*
@@ -127,7 +133,7 @@ launch the votes first and run the loop — re-fetch, merge, present the diff,
 write, read back — while they work. Nothing about the loop itself changes, and
 in particular **the diff still goes out before the write**: print it as text
 immediately before the `gh issue edit` or file write, not after, and not saved
-up for step 9. An issue body is public the moment it is written, so a diff
+up for step 10. An issue body is public the moment it is written, so a diff
 shown afterwards would no longer be a chance to stop it.
 
 - **Clean write-back.** The diff is out, the write is done, and the voted
@@ -448,6 +454,39 @@ option. No re-vote and no extra step: an alternative that is not confirmed
 simply joins the other options not confirmed in the one extra
 feasibility-only round.
 
+### At most three options shown
+
+You draft at most three options, but every confirmed alternative is added to
+them, so a question can come out of the vote with four, five, or six confirmed
+options. A list that long makes the user read every option to find the real
+choice. So when more than three options are confirmed, **reword the question
+before it is shown**, after `tally.sh` has run (*The flow for one question*,
+step 9):
+
+1. **Drop every confirmed option with no valid vote.** An option no vote
+   validly backed — every voter rejected it, chose something else, or the
+   evidence for its vote failed — is not the real choice. Each dropped option
+   gets one `dropped:` line under the question (*What the user sees*). Each
+   voter backs at most one option, so at most three options have a valid vote,
+   and after this step **at most three options are left**. If the verifier
+   failed, no vote is `valid`; read `unverified` for `valid` here, which leaves
+   at most three just the same.
+2. **Fold what is left.** When the options left differ only in one detail —
+   which extra files are in scope, which flag, which name — reword the question
+   to ask about that detail, and shorten each option to its value for that
+   detail. Keep the parts they share in the question itself.
+
+The rewording changes only the words the user reads, never the vote:
+
+- Every option keeps the ID it had in the brief, and two options are never
+  merged into one, so **each valid vote still supports the same option** it
+  did before. The `🗳️` line is the one `tally.sh` already printed; do not run
+  it again, and do not relabel it.
+- The question is not voted on again. Its meaning has not changed, only the
+  words around the options the vote already settled.
+- A matter-of-taste question never needs this step: it has no alternatives, so
+  it never has more than the three options you drafted.
+
 Everything after grouping is a fixed rule, and `scripts/tally.sh` applies it.
 Run it once per question, after the extra feasibility-only round when there is
 one, on each vote's **final** state. Feed it three lines,
@@ -503,6 +542,38 @@ left out: X1 — found infeasible (code: the parser rejects nested tables)
 
 The format is `left out: <option-id> — found infeasible (<reason>)` or
 `left out: <option-id> — not confirmed (<reason>)`.
+
+**Never more than three choices.** When more than three options were
+confirmed, the question is reworded first (*At most three options shown*), and
+the user sees at most three. An option dropped there is not dropped quietly:
+it gets one line under the question, after any `left out:` lines, naming it
+and saying why, with a one-line reason drawn from the votes:
+
+```
+dropped: <option-id> — no valid vote (<reason>)
+```
+
+For example, three drafted options and two confirmed alternatives make five.
+`spec` and `code` both proposed `X1`, `docs` proposed `X2`, and all three
+votes hold; the two alternatives differ only in which extra files are in
+scope:
+
+```
+Which extra files does the change cover, beyond SKILL.md?
+   X1. references/voting.md
+   X2. references/voting.md and README.md
+➡️ X1. references/voting.md
+🗳️ 2/3 valid, majority (docs: chose X2 instead)
+   docs: <the docs voter's CLAIM, one line>
+dropped: A — no valid vote (every voter rejected it)
+dropped: B — no valid vote (every voter rejected it)
+dropped: C — no valid vote (no voter chose it)
+```
+
+The kept options keep their IDs, so `X1` and `X2` here are the same options
+the `🗳️` line counts. If every confirmed option is dropped — no vote
+was valid — the question goes out as in *Fewer than two options survive*
+below, with the `dropped:` lines saying what was tried.
 
 **There is a winner.** `➡️` is the winning option. If the vote was not
 unanimous among all three voters, add one line per minority, invalid, abstained,
