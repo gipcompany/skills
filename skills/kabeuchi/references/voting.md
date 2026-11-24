@@ -58,9 +58,12 @@ If the user asks for a vote on a question you did not vote on, run one.
 
 ## The flow for one question
 
-1. **Draft** the question and its candidate options (`A`, `B`, `C`, …). This is
-   the frontier question you would have asked anyway (see the one-question
-   rule). Form your own view if you like, but **do not pass it to anyone**.
+1. **Draft** the question and **at most three options** (`A`, `B`, `C`). This
+   is the frontier question you would have asked anyway (see the one-question
+   rule). If you find more than three candidates, narrow the question first:
+   leave out the ones you can already rule out, or ask about the one detail the
+   rest differ in. Form your own view if you like, but **do not pass it to
+   anyone**.
 2. **Write the brief** — one file for this question, written once (see *The
    brief* below).
 3. **Vote.** Launch three `kabeuchi-voter` subagents **in parallel and in the
@@ -189,7 +192,7 @@ reads the same file.
 ## Options
 A. <option>
 B. <option>
-...
+C. <option>
 
 ## Already settled in this session (do not contradict these)
 - <decision>

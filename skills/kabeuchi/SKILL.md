@@ -350,7 +350,8 @@ replaces that with an evidence-checked vote, because a recommendation that is
 wrong tends to be discovered only after other decisions have been built on it.
 This rule wins over `/grilling` too.
 
-- Before presenting a question, draft it with its candidate options, write them
+- Before presenting a question, draft it with **at most three options**
+  (`A`, `B`, `C`; with more candidates, narrow the question first), write them
   once into a **brief file**, and have three `kabeuchi-voter` subagents vote on
   it **in parallel** from fixed perspectives (`spec`, `code`, `docs`), each
   citing evidence it actually looked at, then have a fourth check that
