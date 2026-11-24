@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/85
 branch: worktree-jikkyo-85-20261124-231136
 updated: 2026-11-24T23:50:00+09:00
-next: tick item 5 (no-winner display)
+next: tick item 6 (tally.sh infeasible)
 
 ## Todos
 
@@ -10,7 +10,7 @@ next: tick item 5 (no-winner display)
 - [x] Item 2: one feasibility-only round for unconfirmed options (cf67ade)
 - [x] Item 3: left-out lines under the question (cf67ade)
 - [x] Item 4: ALTERNATIVE goes through the feasibility check (cf67ade)
-- [ ] Item 5: no-winner display lists only confirmed options
+- [x] Item 5: no-winner display lists only confirmed options (cf67ade)
 - [ ] Item 6: tally.sh infeasible state
 - [ ] Item 7: matter-of-taste questions get a feasibility-only round
 - [ ] Item 8: fewer than two survivors still asked
@@ -28,6 +28,7 @@ next: tick item 5 (no-winner display)
 - Item 2 (one extra feasibility-only round): read voting.md flow step 7 (kabeuchi-brief-Q<n>-r2.md, three voters then verifier, at most once) and Failures (one retry, at most one extra round)
 - Item 3 (left-out lines): read voting.md What the user sees, which shows the "left out: <id> — found infeasible | not confirmed (<reason>)" format and example
 - Item 4 (ALTERNATIVE checked): read voting.md Grouping and tallying (ALT mapped to X<n>, same check, no re-vote) and the voter/verifier prompts (ALT, <perspective> ALT)
+- Item 5 (no-winner shows only confirmed): read voting.md What the user sees, no-winner layout ("List only confirmed options here", example with a left out: line)
 
 ## Dead ends and decisions
 
