@@ -1,7 +1,7 @@
 issue: https://github.com/gipcompany/skills/issues/85
 branch: worktree-jikkyo-85-20261124-231136
 updated: 2026-11-24T23:50:00+09:00
-next: tick item 13 (agreement checks and tests/README.md)
+next: tick item 14 (CI checks), then delete this log and open the PR
 
 ## Todos
 
@@ -18,7 +18,7 @@ next: tick item 13 (agreement checks and tests/README.md)
 - [x] Item 10: SKILL.md, voting.md, kabeuchi-voter.md describe the rule (cf67ade)
 - [x] Item 11: README kabeuchi section (7b9ed65)
 - [x] Item 12: tests for tally.sh infeasible (c791afa)
-- [ ] Item 13: agreement checks and tests/README.md
+- [x] Item 13: agreement checks and tests/README.md (c791afa)
 - [ ] Item 14: run.sh and shellcheck pass
 - [ ] Delete progress log and open the PR
 
@@ -36,6 +36,7 @@ next: tick item 13 (agreement checks and tests/README.md)
 - Item 10 (three files describe the rule): read SKILL.md Phase 2 bullets, voting.md Feasibility section, kabeuchi-voter.md roles and rule 4; diff shows the voter's tools: line unchanged
 - Item 11 (README): read the Requires kabeuchi-voter section (feasibility bullet with left-out example, taste questions still checked, extra round adds four runs)
 - Item 12 (infeasible tests): run.sh has 5 counting/wording cases and 4 malformed-input cases for infeasible, all ok
+- Item 13 (agreement checks): run.sh sections "feasibility line formats" and "tally.sh states" pass and fail on drift fixtures; tests/README.md lists both
 
 ## Dead ends and decisions
 
