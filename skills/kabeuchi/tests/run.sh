@@ -1170,6 +1170,86 @@ echo "tally.sh states (tally.sh header, voting.md)"
   rm -rf "$d"
 }
 
+echo "three-option limit (SKILL.md, voting.md)"
+# The backticks below are literal markdown, never command substitution.
+# shellcheck disable=SC2016
+{
+  # A question shows at most three options: the main session drafts at most
+  # three, and when confirmed voter alternatives push it past three, it is
+  # reworded and each option dropped gets a `dropped:` line. SKILL.md states
+  # the rule and references/voting.md spells it out; if one of them drifts,
+  # the main session follows a limit or a line format the other never states.
+  SKILL_MD="${HERE}/../SKILL.md"
+  VOTING="${HERE}/../references/voting.md"
+  DROPPED='`dropped: <option-id> — no valid vote (<reason>)`'
+  DROPPED_LINE='dropped: <option-id> — no valid vote (<reason>)'
+
+  # section <file> <heading>: the lines under "## <heading>" up to the next
+  # "## " heading, joined into one line with runs of spaces squeezed, so
+  # wrapping a sentence over several lines does not change the result.
+  section() {
+    awk -v h="## $2" 'index($0, h) == 1 { on = 1; next } /^## / { on = 0 } on' "$1" |
+      tr '\n' ' ' | tr -s ' '
+  }
+  # draft_ok <file> <heading>: exit 0 if the section says the main session
+  # drafts **at most three options**.
+  draft_ok() { section "$1" "$2" | grep -qF -- '**at most three options**'; }
+  # max_shown <file>: the largest number of option rows (`   A. `, `   X1. `)
+  # in any one fenced example under "## What the user sees".
+  max_shown() {
+    awk '/^## What the user sees/ { on = 1; next } /^## / { on = 0 }
+         on && /^```/ { if (inb) { if (n > m) m = n; n = 0 } inb = !inb; next }
+         on && inb && /^   [A-Z][0-9]*\. / { n++ }
+         END { print m + 0 }' "$1"
+  }
+  # bad_dropped <file>: every example `dropped:` line under "## What the user
+  # sees" that does not follow the format, apart from the format line itself.
+  bad_dropped() {
+    awk '/^## What the user sees/ { on = 1; next } /^## / { on = 0 } on' "$1" |
+      grep -E '^dropped: ' |
+      grep -vF -- "$DROPPED_LINE" |
+      grep -vE '^dropped: ([A-Z]|X[0-9]+) — no valid vote \(.+\)$'
+  }
+
+  if draft_ok "$SKILL_MD" "Phase 2:"; then ok "SKILL.md Phase 2 drafts at most three options"
+  else bad "SKILL.md Phase 2 does not say the main session drafts at most three options"; fi
+  if draft_ok "$VOTING" "The flow for one question"; then ok "voting.md's flow drafts at most three options"
+  else bad "voting.md's flow does not say the main session drafts at most three options"; fi
+  if section "$SKILL_MD" "Phase 2:" | grep -qF -- "$DROPPED"; then ok "SKILL.md Phase 2 states the dropped: line format"
+  else bad "SKILL.md Phase 2 does not state the dropped: line format"; fi
+  if section "$VOTING" "What the user sees" | grep -qF -- "$DROPPED_LINE"; then ok "voting.md's What the user sees states the dropped: line format"
+  else bad "voting.md's What the user sees does not state the dropped: line format"; fi
+  if section "$VOTING" "Grouping and tallying" | grep -qF -- '### At most three options shown'; then
+    ok "voting.md's Grouping and tallying says how a question is narrowed to three"
+  else bad "voting.md's Grouping and tallying has no At most three options shown subsection"; fi
+  n="$(max_shown "$VOTING")"
+  if [ "$n" -ge 1 ] && [ "$n" -le 3 ]; then ok "no example in What the user sees shows more than three options"
+  else bad "an example in What the user sees shows $n options (expected 1 to 3)"; fi
+  assert_eq "every example dropped: line in voting.md follows the format" "" "$(bad_dropped "$VOTING")"
+
+  # The checks fail when either side drifts.
+  d="$(mktemp -d)"
+  printf '## Phase 2: y\n\nDraft the question and its candidate options.\n\n## Phase 3: z\n' >"$d/skill.md"
+  rc=0; draft_ok "$d/skill.md" "Phase 2:" || rc=$?
+  assert_eq "a Phase 2 with no option limit fails the check" "1" "$rc"
+  printf '## Phase 1: x\n\ndraft **at most three options**\n\n## Phase 2: y\n\nnothing\n' >"$d/skill.md"
+  rc=0; draft_ok "$d/skill.md" "Phase 2:" || rc=$?
+  assert_eq "a limit stated outside Phase 2 fails the check" "1" "$rc"
+  printf '## What the user sees\n\n```\nQ?\n   A. a\n   B. b\n   C. c\n   X1. d\n```\n' >"$d/voting.md"
+  assert_eq "an example with four options is counted as four" "4" "$(max_shown "$d/voting.md")"
+  printf '## What the user sees\n\n```\ndropped: B — no vote (x)\n```\n' >"$d/voting.md"
+  if [ -n "$(bad_dropped "$d/voting.md")" ]; then ok "a dropped: line off the format fails the check"
+  else bad "a dropped: line off the format passed the check"; fi
+
+  # And they pass on a correct input, including a limit wrapped over lines.
+  printf '## Phase 2: y\n\nDraft it with **at most\nthree options**.\n\n## Phase 3: z\n' >"$d/skill.md"
+  rc=0; draft_ok "$d/skill.md" "Phase 2:" || rc=$?
+  assert_eq "a limit wrapped over two lines passes the check" "0" "$rc"
+  printf '## What the user sees\n\n```\ndropped: X2 — no valid vote (x)\n```\n' >"$d/voting.md"
+  assert_eq "a dropped: line on the format passes the check" "" "$(bad_dropped "$d/voting.md")"
+  rm -rf "$d"
+}
+
 echo "done criteria marker wording (SKILL.md, references)"
 # The backticks below are literal markdown, never command substitution.
 # shellcheck disable=SC2016
