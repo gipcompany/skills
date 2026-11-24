@@ -89,8 +89,11 @@ writable target there is nothing for it to add.
 **Voting makes every question slow. Can I turn it off?**
 No — a recommendation you see is meant to be one that was checked, and an
 off-switch would make that untrue without anyone noticing. Questions that are a
-matter of taste (a name, a tone) are already exempt and say so. If you only
-want a fast interview, use `/grilling` directly.
+matter of taste (a name, a tone) get no vote and say so, but they are not
+exempt from checking: their options still go through a feasibility-only round,
+because only the choice between feasible options is left to taste. An extra
+feasibility-only round for options not yet confirmed can add to the wait too.
+If you only want a fast interview, use `/grilling` directly.
 
 **Will kabeuchi commit or push my local file changes?**
 No. It performs no git operations on local targets — no `add`, `commit`, or
