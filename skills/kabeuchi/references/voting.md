@@ -649,8 +649,8 @@ in the required format. **Retry it once.**
 Never retry beyond that — one retry for each subagent, and **at most one extra
 feasibility-only round per question** — and never quietly drop the vote for
 the question: the user should be able to see from the `🗳️` line exactly how
-much the recommendation was checked, and from the `left out:` lines which
-options were not shown and why.
+much the recommendation was checked, and from the `left out:` and `dropped:`
+lines which options were not shown and why.
 
 ## The security boundary
 
