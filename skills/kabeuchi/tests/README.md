@@ -170,6 +170,20 @@ Exit status is non-zero if any assertion fails; the last line reports
   it must include `infeasible`. The test shows that it fails on a table that
   is missing states, including one whose missing row appears only outside that
   section.
+- **three-option limit** — a question shows at most three options, and
+  `SKILL.md` and `references/voting.md` must state the same limit. Both
+  `SKILL.md`'s Phase 2 section and *The flow for one question* in
+  `references/voting.md` must say the main session drafts **at most three
+  options**; both Phase 2 and *What the user sees* must state the
+  `dropped: <option-id> — no vote (<reason>)` line format; *Grouping and
+  tallying* must hold the *At most three options shown* subsection; no fenced
+  example under *What the user sees* may list more than three option rows; and
+  every example `dropped:` line there must follow the format. Each section is
+  joined into one line first, so wrapping does not fail the test. The test
+  shows that it fails on a Phase 2 with no limit, on a limit stated outside
+  Phase 2, on an example with four options, and on a `dropped:` line off the
+  format, and passes on a limit wrapped over two lines and on a `dropped:`
+  line on the format.
 - **done criteria marker wording** — Phase 2 writes done criteria as
   task-list items and the "ready for `/goal`" checker judges them, so the two
   must agree on the marker, or the checker reports every session's own done

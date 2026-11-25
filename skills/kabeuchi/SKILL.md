@@ -350,7 +350,8 @@ replaces that with an evidence-checked vote, because a recommendation that is
 wrong tends to be discovered only after other decisions have been built on it.
 This rule wins over `/grilling` too.
 
-- Before presenting a question, draft it with its candidate options, write them
+- Before presenting a question, draft it with **at most three options**
+  (`A`, `B`, `C`; with more candidates, narrow the question first), write them
   once into a **brief file**, and have three `kabeuchi-voter` subagents vote on
   it **in parallel** from fixed perspectives (`spec`, `code`, `docs`), each
   citing evidence it actually looked at, then have a fourth check that
@@ -376,6 +377,16 @@ This rule wins over `/grilling` too.
   confirmed is left out of the list with a `left out:` line giving the reason,
   and its votes go to `tally.sh` as `infeasible`, so it can never be
   recommended.
+- **Never show more than three options.** Confirmed voter alternatives are
+  added to the options, so a question can come out of the vote with more than
+  three confirmed. Then, after `tally.sh`, narrow it to exactly three before
+  it is shown: drop only confirmed options no voter chose, last in the brief
+  first, each with one `dropped: <option-id> — no vote (<reason>)` line under
+  the question, and never an option a vote chose. When the three left differ
+  in only one detail, you may also fold them into one question about that
+  detail, by moving only the words they share into the question. Options keep
+  their IDs and are never merged, so the rewording does not change which
+  option a vote supports.
 - **Launch the votes first, then write back.** Once the user answers, draft the
   next question and start its vote — in the background — *before* writing the
   previous answer back into the target, and do the write-back while the votes
@@ -401,7 +412,8 @@ This rule wins over `/grilling` too.
   the evidence they cite yourself; the verifier does.
 
 The brief, the prompts, the output formats, the grouping step, the feasibility
-classification, the display rules (including the `left out:` lines), and the
+classification, the display rules (including the `left out:` and `dropped:`
+lines and the three-option limit), and the
 handling of abstentions and failures live in
 **`references/voting.md`**. Read it before your first question.
 
