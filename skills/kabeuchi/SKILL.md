@@ -379,11 +379,14 @@ This rule wins over `/grilling` too.
   recommended.
 - **Never show more than three options.** Confirmed voter alternatives are
   added to the options, so a question can come out of the vote with more than
-  three. Then, after `tally.sh`, reword it before it is shown: drop every
-  option with no valid vote, each with one `dropped: <option-id> — no valid
-  vote (<reason>)` line under the question, and fold what is left into one
-  question about the detail it differs in. Options keep their IDs and are
-  never merged, so the rewording does not change which option a vote supports.
+  three confirmed. Then, after `tally.sh`, narrow it to exactly three before
+  it is shown: drop only confirmed options no voter chose, last in the brief
+  first, each with one `dropped: <option-id> — no vote (<reason>)` line under
+  the question, and never an option a vote chose. When the three left differ
+  in only one detail, you may also fold them into one question about that
+  detail, by moving only the words they share into the question. Options keep
+  their IDs and are never merged, so the rewording does not change which
+  option a vote supports.
 - **Launch the votes first, then write back.** Once the user answers, draft the
   next question and start its vote — in the background — *before* writing the
   previous answer back into the target, and do the write-back while the votes

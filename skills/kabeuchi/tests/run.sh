@@ -1181,8 +1181,8 @@ echo "three-option limit (SKILL.md, voting.md)"
   # the main session follows a limit or a line format the other never states.
   SKILL_MD="${HERE}/../SKILL.md"
   VOTING="${HERE}/../references/voting.md"
-  DROPPED='`dropped: <option-id> — no valid vote (<reason>)`'
-  DROPPED_LINE='dropped: <option-id> — no valid vote (<reason>)'
+  DROPPED='`dropped: <option-id> — no vote (<reason>)`'
+  DROPPED_LINE='dropped: <option-id> — no vote (<reason>)'
 
   # section <file> <heading>: the lines under "## <heading>" up to the next
   # "## " heading, joined into one line with runs of spaces squeezed, so
@@ -1208,7 +1208,7 @@ echo "three-option limit (SKILL.md, voting.md)"
     awk '/^## What the user sees/ { on = 1; next } /^## / { on = 0 } on' "$1" |
       grep -E '^dropped: ' |
       grep -vF -- "$DROPPED_LINE" |
-      grep -vE '^dropped: ([A-Z]|X[0-9]+) — no valid vote \(.+\)$'
+      grep -vE '^dropped: ([A-Z]|X[0-9]+) — no vote \(.+\)$'
   }
 
   if draft_ok "$SKILL_MD" "Phase 2:"; then ok "SKILL.md Phase 2 drafts at most three options"
@@ -1237,7 +1237,7 @@ echo "three-option limit (SKILL.md, voting.md)"
   assert_eq "a limit stated outside Phase 2 fails the check" "1" "$rc"
   printf '## What the user sees\n\n```\nQ?\n   A. a\n   B. b\n   C. c\n   X1. d\n```\n' >"$d/voting.md"
   assert_eq "an example with four options is counted as four" "4" "$(max_shown "$d/voting.md")"
-  printf '## What the user sees\n\n```\ndropped: B — no vote (x)\n```\n' >"$d/voting.md"
+  printf '## What the user sees\n\n```\ndropped: B — no valid vote (x)\n```\n' >"$d/voting.md"
   if [ -n "$(bad_dropped "$d/voting.md")" ]; then ok "a dropped: line off the format fails the check"
   else bad "a dropped: line off the format passed the check"; fi
 
@@ -1245,7 +1245,7 @@ echo "three-option limit (SKILL.md, voting.md)"
   printf '## Phase 2: y\n\nDraft it with **at most\nthree options**.\n\n## Phase 3: z\n' >"$d/skill.md"
   rc=0; draft_ok "$d/skill.md" "Phase 2:" || rc=$?
   assert_eq "a limit wrapped over two lines passes the check" "0" "$rc"
-  printf '## What the user sees\n\n```\ndropped: X2 — no valid vote (x)\n```\n' >"$d/voting.md"
+  printf '## What the user sees\n\n```\ndropped: X2 — no vote (x)\n```\n' >"$d/voting.md"
   assert_eq "a dropped: line on the format passes the check" "" "$(bad_dropped "$d/voting.md")"
   rm -rf "$d"
 }

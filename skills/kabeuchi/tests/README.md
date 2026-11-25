@@ -175,7 +175,7 @@ Exit status is non-zero if any assertion fails; the last line reports
   `SKILL.md`'s Phase 2 section and *The flow for one question* in
   `references/voting.md` must say the main session drafts **at most three
   options**; both Phase 2 and *What the user sees* must state the
-  `dropped: <option-id> — no valid vote (<reason>)` line format; *Grouping and
+  `dropped: <option-id> — no vote (<reason>)` line format; *Grouping and
   tallying* must hold the *At most three options shown* subsection; no fenced
   example under *What the user sees* may list more than three option rows; and
   every example `dropped:` line there must follow the format. Each section is
