@@ -180,16 +180,23 @@ timing and signal tests waiting on a real scheduler.
   `[ ]` to `[x]` in the box and keep each line's own marker (`-`, `*`, `+`,
   or an ordered `1.`;
   the old wording that named only `- [ ]` fails the run), and fetch the body
-  before each edit, then, last, the fixed instruction to
+  before each edit, then the fixed instruction to
   keep `.jikkyo/progress.md` in its fixed shape, updating, committing, and
   pushing it after every todo, keeping secrets, environment values, and
   command output out of it, and deleting it in one pushed commit right before
-  the PR; the appended prompt holds no `https://` and no goal sentence),
+  the PR, then, last, the pull request instruction (issue #84); the appended
+  prompt holds no `https://` and no goal sentence),
   `--worktree jikkyo-<N>-<timestamp>`, `--output-format stream-json`,
-  `--verbose`, `--permission-mode auto`, and `--disallowedTools` with every
-  rule for force pushes, remote-branch deletion, comment edits and deletes,
-  and closing or deleting issues — and no rule that blocks a plain
-  `git push`. The worktree name, path, and branch are printed before the child
+  `--verbose`, `--permission-mode auto`, `--allowedTools` with exactly the
+  three allow rules (`Bash(git push -u origin <run branch>)` naming the run's
+  branch, `Bash(gh pr create *)`, `Bash(gh pr ready *)`; issue #84), and
+  `--disallowedTools`, still last, with every rule for force pushes,
+  remote-branch deletion, comment edits and deletes, and closing or deleting
+  issues — and no rule that blocks the run's own push. The log and pull
+  request instructions name the run's branch in the exact push command, and
+  the PR is opened with `gh pr create --head <run branch>` and
+  `--body-file`; a resumed run is checked for the same, naming the resumed
+  branch. The worktree name, path, and branch are printed before the child
   starts, and the path is under the repository root even from a subdirectory.
   That branch is passed to `report.sh`, so it ends up in the comment's
   marker and `Branch` row. A fresh run gets no resume instruction and no
