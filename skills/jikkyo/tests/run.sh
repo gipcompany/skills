@@ -1356,8 +1356,8 @@ echo "launch.sh"
     "$(printf '%s\n' "$system" | sed -n '1p')"
   assert_eq "...then a blank line, then the todo instruction (#81)" "|Todos: " \
     "$(printf '%s\n' "$system" | sed -n '2p')|$(printf '%s\n' "$system" | sed -n '3p' | cut -c1-7)"
-  assert_eq "...four paragraphs: lead-in, todo, tick, log, a blank line between each (#81)" \
-    "These|Todos:|Task-list|Progress" "$(printf '%s\n' "$system" | awk 'NR % 2 == 1 { print $1 } NR % 2 == 0 && $0 != "" { print "NOT-BLANK" }' | paste -sd '|' -)"
+  assert_eq "...five paragraphs: lead-in, todo, tick, log, pull request, a blank line between each (#81, #84)" \
+    "These|Todos:|Task-list|Progress|Pull" "$(printf '%s\n' "$system" | awk 'NR % 2 == 1 { print $1 } NR % 2 == 0 && $0 != "" { print "NOT-BLANK" }' | paste -sd '|' -)"
   assert_lacks "the appended prompt carries no URL (#81)" "https://" "$system"
   assert_lacks "...and no goal sentence: TICK lost its last sentence to the condition (#81)" "The goal is met only" "$system"
   assert_has "the prompt asks for todos up front with TaskCreate" "before starting the work, break it into small steps with TaskCreate, one todo per step of a few minutes each" "$system"
@@ -1386,10 +1386,14 @@ echo "launch.sh"
   log_at="${system%%Progress log: *}"
   if [ "${#tick_at}" -lt "${#log_at}" ] && [ "${#log_at}" -lt "${#system}" ]; then ok "the log instruction comes after the tick instruction"
   else bad "the log instruction comes after the tick instruction"; fi
-  tail_want="so the log never reaches the base branch."
-  assert_eq "the appended prompt ends with the log instruction" "$tail_want" "${system: -${#tail_want}}"
+  pr_at="${system%%Pull request: *}"
+  if [ "${#log_at}" -lt "${#pr_at}" ] && [ "${#pr_at}" -lt "${#system}" ]; then ok "the pull request instruction comes after the log instruction (#84)"
+  else bad "the pull request instruction comes after the log instruction (#84)"; fi
+  tail_want="is not covered by this run's permissions and may be refused."
+  assert_eq "the appended prompt ends with the pull request instruction (#84)" "$tail_want" "${system: -${#tail_want}}"
   assert_has "the prompt asks for a progress log on the branch" "keep a progress log in .jikkyo/progress.md on this branch" "$system"
-  assert_has "...updated, committed, and pushed after every todo" "Each time you mark a todo completed, update the log, commit it, and run a plain git push." "$system"
+  assert_lacks "...no longer a plain git push (#84)" "run a plain git push" "$system"
+  assert_lacks "...every run value is filled in (#84)" "@" "$system"
   assert_has "...with the key: value header" '"issue: <issue URL>", "branch: <this branch>", "updated: <ISO 8601 time>", and "next: <the next step, one line>"' "$system"
   assert_has "...a Todos task list with commits" '"## Todos" section with one task-list line per todo, "- [x] <todo> (<short commit hash>)"' "$system"
   assert_has "...a Verified task-list items section" '"## Verified task-list items" section' "$system"
@@ -1397,7 +1401,7 @@ echo "launch.sh"
   assert_lacks "...not only boxes already ticked" "per box you ticked on the issue" "$system"
   assert_has "...a Dead ends and decisions section" '"## Dead ends and decisions" section' "$system"
   assert_has "...and nothing secret or verbose in it" "Never put tokens, secrets, environment values, or command output in the log." "$system"
-  assert_has "...deleted in one commit and pushed right before the PR" "right before you open the pull request (or mark it ready for review), delete .jikkyo/progress.md in one ordinary commit and push it" "$system"
+  assert_has "...deleted in one commit and pushed right before the PR" "right before you open the pull request (or mark it ready for review), delete .jikkyo/progress.md in one ordinary commit and push it with that same command" "$system"
   assert_eq "the appended prompt is one argument on one recorded line (--worktree follows it)" "--worktree" "$(printf '%s\n' "$args" | sed -n '5p')"
   name="$(printf '%s\n' "$args" | awk 'prev == "--worktree" { print; exit } { prev = $0 }')"
   if [[ "$name" =~ ^jikkyo-12-[0-9]{8}-[0-9]{6}$ ]]; then ok "--worktree jikkyo-<N>-<timestamp> ($name)"
@@ -1405,6 +1409,23 @@ echo "launch.sh"
   assert_has "--output-format stream-json" "$(printf -- '--output-format\nstream-json')" "$args"
   assert_has "--verbose" "--verbose" "$args"
   assert_has "--permission-mode auto" "$(printf -- '--permission-mode\nauto')" "$args"
+  # The push command, the allow rules, and the prompt all name this run's
+  # branch (#84).
+  assert_has "...updated, committed, and pushed after every todo with the exact push command (#84)" \
+    "Each time you mark a todo completed, update the log, commit it, and push it with git push -u origin worktree-$name (exactly that, on one line)." "$system"
+  assert_has "the pull request instruction names the exact push as the only one (#84)" \
+    "Pull request: git push -u origin worktree-$name, typed exactly like that, is the only push this run is allowed; never run a bare git push" "$system"
+  assert_has "...opens the PR with --head naming the branch (#84)" "Open the pull request with gh pr create --head worktree-$name and its other arguments on one line" "$system"
+  assert_has "...passes the body with --body-file, never inline or by heredoc (#84)" \
+    "pass it with --body-file <that file>, never as an argument, through \"-\", or with a heredoc" "$system"
+  assert_has "...and marks a draft ready with gh pr ready (#84)" "To mark a draft ready for review, run gh pr ready." "$system"
+  allowl="$(printf '%s\n' "$args" | sed -n '/^--allowedTools$/,/^--disallowedTools$/p' | sed '1d;$d')"
+  assert_eq "--allowedTools has exactly the three rules, the push naming this run's branch (#84)" \
+    "$(printf '%s\n' "Bash(git push -u origin worktree-$name)" 'Bash(gh pr create *)' 'Bash(gh pr ready *)')" "$allowl"
+  assert_eq "...right after --permission-mode auto, right before --disallowedTools (#84)" \
+    "--permission-mode|auto|--allowedTools|Bash(git push -u origin worktree-$name)|Bash(gh pr create *)|Bash(gh pr ready *)|--disallowedTools" \
+    "$(printf '%s\n' "$args" | sed -n '/^--permission-mode$/,/^--disallowedTools$/p' | paste -sd '|' -)"
+  assert_eq "--disallowedTools is still last (#84)" "--disallowedTools" "$(printf '%s\n' "$args" | grep -E '^--' | tail -n 1)"
   deny="$(printf '%s\n' "$args" | sed -n '/^--disallowedTools$/,$p' | sed '1d')"
   for rule in \
     'Bash(git push*--force*)' 'Bash(git push -f*)' 'Bash(git push * -f*)' 'Bash(git push * +*)' \
@@ -1562,8 +1583,8 @@ EOF
   assert_eq "resume: ...then the same flags as a fresh run" "--output-format" "$(printf '%s\n' "$args" | sed -n '7p')"
   assert_has "resume: the child is told the project configuration is not loaded and git hooks are off" \
     "The project's settings, hooks, MCP servers, skills, and CLAUDE.md files are not loaded in a resumed run, and git hooks are off" "$system"
-  assert_eq "resume: the appended prompt is lead-in, todo, tick, log, resume, a blank line between each (#81)" \
-    "These|Todos:|Task-list|Progress|Resuming:" "$(printf '%s\n' "$system" | awk 'NR % 2 == 1 { print $1 } NR % 2 == 0 && $0 != "" { print "NOT-BLANK" }' | paste -sd '|' -)"
+  assert_eq "resume: the appended prompt is lead-in, todo, tick, log, pull request, resume, a blank line between each (#81, #84)" \
+    "These|Todos:|Task-list|Progress|Pull|Resuming:" "$(printf '%s\n' "$system" | awk 'NR % 2 == 1 { print $1 } NR % 2 == 0 && $0 != "" { print "NOT-BLANK" }' | paste -sd '|' -)"
   log_at="${system%%Progress log: *}"; res_at="${system%%Resuming: *}"
   if [ "${#log_at}" -lt "${#res_at}" ] && [ "${#res_at}" -lt "${#system}" ]; then ok "resume: the resume instruction comes after the log instruction"
   else bad "resume: the resume instruction comes after the log instruction"; fi
@@ -1579,13 +1600,23 @@ EOF
   assert_has "resume: ...an item done earlier is completed once re-verified (#72)" \
     "Mark the todo for an item done in an earlier run completed with TaskUpdate once you have re-verified it, so a resume with nothing left can still end with every todo completed." "$system"
   assert_lacks "resume: no longer todos for what is left only (#72)" "recreate todos with TaskCreate for what is left" "$system"
-  assert_has "resume: the other instructions are all still there" "$(printf 'so the log never reaches the base branch.\n\nResuming: ')" "$system"
+  assert_has "resume: the other instructions are all still there" "$(printf "is not covered by this run's permissions and may be refused.\n\nResuming: ")" "$system"
+  assert_has "resume: the log instruction pushes the resumed branch with the exact command (#84)" \
+    "update the log, commit it, and push it with git push -u origin $BR (exactly that, on one line)." "$system"
+  assert_has "resume: the pull request instruction names the resumed branch (#84)" \
+    "Pull request: git push -u origin $BR, typed exactly like that, is the only push this run is allowed" "$system"
+  assert_has "resume: ...and opens the PR with --head naming it (#84)" "gh pr create --head $BR and its other arguments on one line" "$system"
+  assert_lacks "resume: every run value is filled in (#84)" "@" "$system"
   assert_eq "resume: the child gets CLAUDE_CODE_ENABLE_TODO_TOOLS=1" "1" "$(cat "$CLAUDE_ARGS.env" 2>/dev/null)"
   assert_eq "resume: the child runs with git hooks pointed at /dev/null and auto memory off" \
     "$(printf '1\ncore.hooksPath\n/dev/null\n1')" "$(cat "$CLAUDE_ARGS.resume-env" 2>/dev/null)"
   assert_eq "resume: the child's stdin is /dev/null" "" "$(cat "$CLAUDE_ARGS.stdin" 2>/dev/null)"
   deny="$(printf '%s\n' "$args" | sed -n '/^--disallowedTools$/,$p' | sed '1d')"
   assert_eq "resume: the same 20 deny rules, last on the line" "20" "$(printf '%s\n' "$deny" | grep -c .)"
+  assert_eq "resume: --allowedTools has exactly the three rules, the push naming the resumed branch, right before --disallowedTools (#84)" \
+    "--permission-mode|auto|--allowedTools|Bash(git push -u origin $BR)|Bash(gh pr create *)|Bash(gh pr ready *)|--disallowedTools" \
+    "$(printf '%s\n' "$args" | sed -n '/^--permission-mode$/,/^--disallowedTools$/p' | paste -sd '|' -)"
+  assert_eq "resume: --disallowedTools is still last (#84)" "--disallowedTools" "$(printf '%s\n' "$args" | grep -E '^--' | tail -n 1)"
   assert_has "resume: --permission-mode auto" "$(printf -- '--permission-mode\nauto')" "$args"
   # Nothing from the log or the branch's files reaches any command line.
   assert_lacks "resume: nothing from the log reaches the child's command line" "SENTINEL" "$args"
@@ -2637,9 +2668,9 @@ echo "SKILL.md"
   skill="$(cat "$SKILL_MD")"
   assert_has "SKILL.md: the summary is in the status comment's language" "Write it in the same language as the status comment" "$skill"
   assert_has "SKILL.md: the parent reads the language line" "jikkyo: language ja|en" "$skill"
-  assert_has "SKILL.md: the appended prompt includes the log instruction" "<tick instruction> <log instruction>" "$skill"
+  assert_has "SKILL.md: the appended prompt includes the log instruction" "<tick instruction> <log instruction> <pull request instruction>" "$skill"
   sflat="$(tr -s ' \n' '  ' <<<"$skill")"
-  assert_has "SKILL.md: the goal condition is the URL and the done criterion (#81)" "claude -p '/goal <URL> <done criterion>' --append-system-prompt '<lead-in> <todo instruction> <tick instruction> <log instruction>'" "$sflat"
+  assert_has "SKILL.md: the goal condition is the URL and the done criterion (#81)" "claude -p '/goal <URL> <done criterion>' --append-system-prompt '<lead-in> <todo instruction> <tick instruction> <log instruction> <pull request instruction>'" "$sflat"
   assert_has "SKILL.md: says where each instruction goes (#81)" "**Where the instructions go.**" "$skill"
   assert_has "SKILL.md: ...and that the evaluator judges only the goal condition (#81)" "The \`/goal\` evaluator judges only the goal condition and the conversation" "$sflat"
   assert_lacks "SKILL.md: no line says the evaluator judges only the goal condition, without the conversation (#81)" "evaluator judges only the goal condition, so" "$sflat"
@@ -2916,13 +2947,18 @@ echo "launch.sh --chrome: the child command line (#76)"
   TODO_I="$(instr TODO_INSTRUCTION)"
   TICK_I="$(instr TICK_INSTRUCTION)"
   LOG_I="$(instr LOG_INSTRUCTION)"
+  PR_I="$(instr PR_INSTRUCTION)"
   RESUME_I="$(instr RESUME_INSTRUCTION)"
   GOAL_I="$(instr GOAL_SENTENCE)"
   RGOAL_I="$(instr RESUME_GOAL_SENTENCE)"
   CGOAL_I="$(instr CHROME_GOAL_SENTENCE)"
   LEAD_I="$(instr LEAD_IN)"
   P=$'\n\n'
-  for v in BROWSER_I TABS_I LOGIN_I COMMENTS_I GOAL_I RGOAL_I CGOAL_I LEAD_I; do
+  fill() {  # <text> <branch>: the text with the run's push target filled in (#84)
+    local t="${1//@REMOTE@/origin}"
+    printf '%s' "${t//@BRANCH@/$2}"
+  }
+  for v in BROWSER_I TABS_I LOGIN_I COMMENTS_I GOAL_I RGOAL_I CGOAL_I LEAD_I PR_I; do
     if [ -n "${!v}" ]; then ok "launch.sh defines $v"; else bad "launch.sh defines $v"; fi
   done
   assert_has "the browser instruction makes the tab listing the first step" \
@@ -2965,21 +3001,25 @@ EOF2
   rm -f "$CLAUDE_ARGS" "$REPORT_ARGS" "$REPORT_ARGS.pid"
   (cd "$repo" && bash "$cw/launch.sh" "$SID" "$URL") >/dev/null 2>&1 < /dev/null
   off_args="$(cat "$CLAUDE_ARGS")"
+  FB="worktree-$(printf '%s\n' "$off_args" | awk 'prev == "--worktree" { print; exit } { prev = $0 }')"
+  BASE="$LEAD_I$P$TODO_I$P$TICK_I$P$(fill "$LOG_I" "$FB")$P$(fill "$PR_I" "$FB")"
   assert_lacks "Chrome off (fresh): no --chrome" "--chrome" "$off_args"
   assert_eq "Chrome off (fresh): the goal is the URL and the done criterion (#81)" \
     "/goal $URL $GOAL_I" "$(child_arg 2)"
-  assert_eq "Chrome off (fresh): the appended prompt is the lead-in and three instructions, no browser ones (#81)" \
-    "$LEAD_I$P$TODO_I$P$TICK_I$P$LOG_I" "$(child_arg 4)"
+  assert_eq "Chrome off (fresh): the appended prompt is the lead-in and four instructions, no browser ones (#81, #84)" \
+    "$BASE" "$(child_arg 4)"
   assert_eq "Chrome off (fresh): report.sh gets no --watch" "--session" "$(sed -n 1p "$REPORT_ARGS")"
 
   rm -f "$CLAUDE_ARGS" "$REPORT_ARGS" "$REPORT_ARGS.pid"
   (cd "$repo" && bash "$cw/launch.sh" --chrome "$SID" "$URL") >/dev/null 2>&1 < /dev/null
   on_args="$(cat "$CLAUDE_ARGS")"
+  FB="worktree-$(printf '%s\n' "$on_args" | awk 'prev == "--worktree" { print; exit } { prev = $0 }')"
+  BASE="$LEAD_I$P$TODO_I$P$TICK_I$P$(fill "$LOG_I" "$FB")$P$(fill "$PR_I" "$FB")"
   assert_eq "Chrome on (fresh): the goal adds the Chrome goal sentence after the done criterion (#81)" \
     "/goal $URL $GOAL_I $CGOAL_I" "$(child_arg 2)"
   assert_eq "Chrome on (fresh): the appended prompt adds the browser, tabs, login, and comments instructions after the log one" \
-    "$LEAD_I$P$TODO_I$P$TICK_I$P$LOG_I$P$BROWSER_I$P$TABS_I$P$LOGIN_I$P$COMMENTS_I" "$(child_arg 4)"
-  norm() { sed -n '5,$p' | sed -e "s/^jikkyo-12-[0-9]\{8\}-[0-9]\{6\}$/<name>/"; }
+    "$BASE$P$BROWSER_I$P$TABS_I$P$LOGIN_I$P$COMMENTS_I" "$(child_arg 4)"
+  norm() { sed -n '5,$p' | sed -e "s/jikkyo-12-[0-9]\{8\}-[0-9]\{6\}/<name>/g"; }
   assert_eq "Chrome on (fresh): the only other change is --chrome after --worktree <name>" \
     "$(printf '%s\n' "$off_args" | norm | sed -n '1,2p'; echo --chrome; printf '%s\n' "$off_args" | norm | sed -n '3,$p')" \
     "$(printf '%s\n' "$on_args" | norm)"
@@ -2997,10 +3037,11 @@ EOF2
     rm -f "$CLAUDE_ARGS" "$REPORT_ARGS" "$REPORT_ARGS.pid"; rc=0
     flag=(); [ "$mode" = on ] && flag=(--chrome)
     out="$(cd "$rs/repo" && PATH="$rs/bin:$PATH" bash "$cw/launch.sh" ${flag[@]+"${flag[@]}"} --resume "$BRC" 4242 "$SID" "$URL" 2>&1 < /dev/null)" || rc=$?
+    BASE="$LEAD_I$P$TODO_I$P$TICK_I$P$(fill "$LOG_I" "$BRC")$P$(fill "$PR_I" "$BRC")"
     if [ "$mode" = off ]; then
       assert_eq "Chrome off (resumed): the goal adds the re-verification sentence (#81)" "/goal $URL $GOAL_I $RGOAL_I" "$(child_arg 2)"
       assert_eq "Chrome off (resumed): the appended prompt ends with the whole resume instruction (#81)" \
-        "$LEAD_I$P$TODO_I$P$TICK_I$P$LOG_I$P$RESUME_I" "$(child_arg 4)"
+        "$BASE$P$RESUME_I" "$(child_arg 4)"
       assert_eq "Chrome off (resumed): --setting-sources user and no --chrome" \
         "--setting-sources|user|--output-format" "$(sed -n '5,7p' "$CLAUDE_ARGS" | paste -sd '|' -)"
       assert_lacks "Chrome off (resumed): no --chrome anywhere" "--chrome" "$(cat "$CLAUDE_ARGS")"
@@ -3008,7 +3049,7 @@ EOF2
     else
       assert_eq "Chrome on (resumed): the goal has the Chrome goal sentence before the re-verification one (#81)" "/goal $URL $GOAL_I $CGOAL_I $RGOAL_I" "$(child_arg 2)"
       assert_eq "Chrome on (resumed): the browser instructions come before the resume instruction" \
-        "$LEAD_I$P$TODO_I$P$TICK_I$P$LOG_I$P$BROWSER_I$P$TABS_I$P$LOGIN_I$P$COMMENTS_I$P$RESUME_I" "$(child_arg 4)"
+        "$BASE$P$BROWSER_I$P$TABS_I$P$LOGIN_I$P$COMMENTS_I$P$RESUME_I" "$(child_arg 4)"
       assert_eq "Chrome on (resumed): --chrome alongside --setting-sources user" \
         "--setting-sources|user|--chrome|--output-format" "$(sed -n '5,8p' "$CLAUDE_ARGS" | paste -sd '|' -)"
       assert_eq "Chrome on (resumed): report.sh gets --watch, then the resume arguments" \

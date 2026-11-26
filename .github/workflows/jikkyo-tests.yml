@@ -16,10 +16,11 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    # Four shell scripts on a preinstalled toolchain; under a minute. The cap
-    # matters because `pull_request` runs a fork's code on the runner, and
-    # the default is six hours of someone else's compute.
-    timeout-minutes: 5
+    # The helper-script tests take about five minutes on ubuntu-latest, so the
+    # cap is ten: at five, a slow runner cancelled runs whose tests had all
+    # passed. The cap matters because `pull_request` runs a fork's code on the
+    # runner, and the default is six hours of someone else's compute.
+    timeout-minutes: 10
     steps:
       # Pinned to a commit, not a tag: a tag is a movable pointer, so `@v4`
       # means "whatever actions/checkout points v4 at the moment this runs".

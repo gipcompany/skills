@@ -25,7 +25,8 @@ happen.
 You are the **reporter's parent**, not the worker. The work is done by a
 headless child that `scripts/launch.sh` starts, `claude -p '/goal <URL>
 <done criterion>' --append-system-prompt '<lead-in> <todo instruction>
-<tick instruction> <log instruction>'` (plus a Chrome goal sentence and the
+<tick instruction> <log instruction> <pull request instruction>'` (plus a
+Chrome goal sentence and the
 browser instructions with `--chrome`, and a resume goal sentence and a
 resume instruction on `--resume`), and the live status is written by
 `scripts/report.sh`, which reads the child's stream. Your jobs are the ones
@@ -299,7 +300,8 @@ The arguments are: $ARGUMENTS
    Do not wrap it, pipe it, or add an environment assignment: `launch.sh`
    builds the child pipeline itself (todo tools on, `--worktree` for a fresh
    run or, for a resumed one, `--setting-sources user` with git hooks and
-   auto memory off; stream-json, `--permission-mode auto`, the deny list;
+   auto memory off; stream-json, `--permission-mode auto`, the allow and
+   deny lists;
    with `--chrome`, the child's `--chrome`, the browser instructions, and
    `report.sh`'s watcher) because that pipeline cannot be pre-approved as
    written.
@@ -567,11 +569,13 @@ needed because this session is idle while the run goes.
   Everything else goes to the child inline, as one `--append-system-prompt`
   argument: a fixed lead-in paragraph (these instructions are for the
   `/goal` run on the GitHub issue named in the goal condition, and "this
-  issue" means that issue), then the todo, tick, and log instructions, then
-  with Claude in Chrome the browser, tabs, login, and comments instructions,
-  then on resume the resume instruction, each its own paragraph with a blank
-  line between. The appended prompt is constants only and carries no value
-  from the run, not even the URL. The `/goal` evaluator judges only the goal
+  issue" means that issue), then the todo, tick, log, and pull request
+  instructions, then with Claude in Chrome the browser, tabs, login, and
+  comments instructions, then on resume the resume instruction, each its own
+  paragraph with a blank line between. The appended prompt is constants
+  only, not even the URL, except for one value from the run: the remote and
+  branch the child pushes to, which `launch.sh` fills into the push and PR
+  commands (issue #84; see *What the deny list covers*). The `/goal` evaluator judges only the goal
   condition and the conversation: it never sees the appended prompt, so the
   tick order (complete, push, tick), the log rules, and the rest are a way of
   working the child is asked to follow, not done criteria the evaluator
@@ -667,7 +671,8 @@ needed because this session is idle while the run goes.
   run can resume from, `launch.sh` puts a third fixed instruction in the
   appended system prompt after the todo and tick instructions, the log
   instruction: keep a progress log in `.jikkyo/progress.md` on the run's own branch, and each time a todo is
-  completed, update it, commit, and run a plain `git push`, so a crash loses
+  completed, update it, commit, and push it with exactly
+  `git push -u <remote> <run branch>`, so a crash loses
   at most the one step between a commit and its push. Only after that push
   does the child tick the todo's box on the issue (complete, push, tick).
   The log has a fixed
@@ -685,13 +690,39 @@ needed because this session is idle while the run goes.
   log-deletion commit that was never pushed keeps the worktree, because
   `cleanup.sh` keeps any worktree whose HEAD is not on a remote-tracking
   branch.
+- **The pull request instruction.** A fourth fixed instruction, after the
+  log instruction, on every run (issue #84): `git push -u <remote> <run
+  branch>`, typed exactly so, is the only push the run may make; the PR is
+  opened with `gh pr create --head <run branch>` on one line, with the body
+  in a file passed by `--body-file` (never inline, through `-`, or by
+  heredoc: a line break in a command makes Claude Code read it as more than
+  one command, and it would no longer match the allow rule); a draft is
+  marked ready with `gh pr ready`. `launch.sh` fills the remote and the run's
+  branch into this instruction and the log instruction, so the commands the
+  child is told to type are exactly the ones the allow list allows.
 - **What the deny list covers.** On top of auto mode the child runs with a
   `--disallowedTools` list that blocks the plain forms of force pushes,
   deleting remote branches, editing or deleting issue comments (so the child
-  cannot overwrite the status comment), and closing or deleting issues. Plain
-  `git push` stays allowed, so the child can push its branch and open a PR.
+  cannot overwrite the status comment), and closing or deleting issues.
   Deny rules match only the command as written; the list is a limit on the
   obvious, not a sandbox.
+- **What the allow list covers.** The auto mode classifier refused every
+  push a child made, so the child could not reach its PR (issue #84). So
+  `launch.sh` also passes `--allowedTools` with exactly three rules, which
+  Claude Code applies before the classifier runs:
+  `Bash(git push -u <remote> <run branch>)`, with that run's remote and
+  branch filled in and no `*`, so it matches that one command only (not a
+  bare `git push`, which goes wherever the upstream and `push.default` send
+  it, nor `git push <remote> <run branch>:main`); and `Bash(gh pr create *)`
+  and `Bash(gh pr ready *)`, whose arguments the child picks. Deny rules
+  still win over all three. The branch never comes from the issue
+  (`launch.sh` names it on a fresh run and checks it against a regex on
+  resume), and the remote's name must be plain letters, digits, `.`, `_`,
+  and `-`, or `launch.sh` exits 2. Known limit: with
+  `autoMode.classifyAllShell` set to `true` in user or managed settings,
+  Claude Code suspends shell allow rules in auto mode, the rules do nothing,
+  and the push goes to the classifier again; `launch.sh` leaves that setting
+  alone.
 - **Which language.** `report.sh` decides once, at the start, before its
   first write: it reads the issue's title and body with `gh api` and pipes
   them to `jq`, which answers `ja` if they contain any hiragana, katakana, or
@@ -747,8 +778,7 @@ needed because this session is idle while the run goes.
   `interrupted` first. `claude --worktree` cannot start on an existing
   branch, so `launch.sh --resume` fetches the branch from the issue's
   remote, adds a worktree `jikkyo-<N>-<new timestamp>` on it with
-  `git worktree add`, tracking the remote branch so a plain `git push`
-  works, and starts `claude -p` inside it; a local branch of that name
+  `git worktree add`, tracking the remote branch, and starts `claude -p` inside it; a local branch of that name
   that is only behind the remote is moved up to the pushed tip. It refuses
   (exit 2) if the branch is not on the remote, is already checked out in
   another worktree, or exists locally with commits the remote lacks,
